@@ -248,20 +248,20 @@ function renderCases() {
       ${caseDiagrams[c.id]}
       <div class="row3">
         <div class="field">
-          <label>l<sub>s</sub> &mdash; length of source area (${lenUnitLabel()})</label>
+          <label>l<sub>s</sub> &mdash; length of source area (${lenUnitLabel()})${infoBtnHtml('caseLs')}</label>
           <input type="number" step="any" class="case-input" data-idx="${idx}" data-field="ls" data-unit="length" value="${fromSILength(c.ls).toFixed(2)}">
         </div>
         <div class="field">
-          <label>w<sub>s</sub> &mdash; width of source area (${lenUnitLabel()})</label>
+          <label>w<sub>s</sub> &mdash; width of source area (${lenUnitLabel()})${infoBtnHtml('caseWs')}</label>
           <input type="number" step="any" class="case-input" data-idx="${idx}" data-field="ws" data-unit="length" value="${fromSILength(c.ws).toFixed(2)}">
         </div>
         <div class="field">
-          <label>h<sub>p</sub> &mdash; lower-roof parapet, this side (${lenUnitLabel()})</label>
+          <label>h<sub>p</sub> &mdash; lower-roof parapet, this side (${lenUnitLabel()})${infoBtnHtml('caseHp')}</label>
           <input type="number" step="any" class="case-input" data-idx="${idx}" data-field="hp" data-unit="length" value="${fromSILength(c.hp).toFixed(2)}">
         </div>
       </div>
       <div class="field" style="max-width:160px;">
-        <label>&beta; (1.0 for Case I; 0.67 for Cases II &amp; III &mdash; Commentary G, &para;37)</label>
+        <label>&beta; (1.0 for Case I; 0.67 for Cases II &amp; III &mdash; Commentary G, &para;37)${infoBtnHtml('caseBeta')}</label>
         <input type="number" step="any" class="case-input" data-idx="${idx}" data-field="beta" data-unit="none" value="${c.beta}">
       </div>
     </div>
@@ -302,20 +302,20 @@ function renderCornerFaces() {
       <div class="case-title"><strong>${label}</strong></div>
       <div class="row3">
         <div class="field">
-          <label>l<sub>s</sub> &mdash; source-area length (${lenUnitLabel()})</label>
+          <label>l<sub>s</sub> &mdash; source-area length (${lenUnitLabel()})${infoBtnHtml('cornerLs')}</label>
           <input type="number" step="any" class="corner-input" data-face="${key}" data-field="ls" data-unit="length" value="${fromSILength(c.ls).toFixed(2)}">
         </div>
         <div class="field">
-          <label>w<sub>s</sub> &mdash; source-area width (${lenUnitLabel()})</label>
+          <label>w<sub>s</sub> &mdash; source-area width (${lenUnitLabel()})${infoBtnHtml('cornerWs')}</label>
           <input type="number" step="any" class="corner-input" data-face="${key}" data-field="ws" data-unit="length" value="${fromSILength(c.ws).toFixed(2)}">
         </div>
         <div class="field">
-          <label>h<sub>p</sub> &mdash; parapet, this face (${lenUnitLabel()})</label>
+          <label>h<sub>p</sub> &mdash; parapet, this face (${lenUnitLabel()})${infoBtnHtml('cornerHp')}</label>
           <input type="number" step="any" class="corner-input" data-face="${key}" data-field="hp" data-unit="length" value="${fromSILength(c.hp).toFixed(2)}">
         </div>
       </div>
       <div class="field" style="max-width:160px;">
-        <label>&beta; (1.0 or 0.67 &mdash; Commentary G, &para;37)</label>
+        <label>&beta; (1.0 or 0.67 &mdash; Commentary G, &para;37)${infoBtnHtml('cornerBeta')}</label>
         <input type="number" step="any" class="corner-input" data-face="${key}" data-field="beta" data-unit="none" value="${c.beta}">
       </div>
     </div>`;
@@ -657,6 +657,164 @@ function setUnits(sys) {
   update();
 }
 
+// ============================================================================
+// "Learn More" info modal + Print/Export report
+// All citations below reproduce the exact src-tag references already listed
+// in the "Where these formulas come from" Sources section at the bottom of
+// this page (footer.sources) — no new clauses are introduced here.
+// ============================================================================
+
+function infoBtnHtml(key) {
+  return `<button type="button" class="info-btn" data-info="${key}" aria-label="Learn more">i</button>`;
+}
+
+const INFO_CONTENT = {
+  Ss: {
+    title: 'Ground snow load, S<sub>s</sub>',
+    html: `<p>Tabulated 1-in-50-year ground snow load by location, from <strong>NBCC 2015 Appendix C, Table C-2</strong> (referenced in the field hint). Enter the value (kPa) for your project's location.</p>
+      <p>S<sub>s</sub> is the base input to the design snow load equation, <span class="src-tag">NBC Sentence 4.1.6.2.(1)</span>: S = I<sub>s</sub>[S<sub>s</sub>(C<sub>b</sub>C<sub>w</sub>C<sub>s</sub>C<sub>a</sub>) + S<sub>r</sub>], and to the specific weight of snow, <span class="src-tag">NBC Sentence 4.1.6.13.(1)</span>: &gamma; = min(0.43&middot;S<sub>s</sub> + 2.2, 4.0) kN/m&sup3;.</p>`
+  },
+  Sr: {
+    title: 'Associated rain load, S<sub>r</sub>',
+    html: `<p>Tabulated 1-in-50-year associated rainfall load by location, from <strong>NBCC 2015 Appendix C, Table C-2</strong> (same source table as S<sub>s</sub>).</p>
+      <p>S<sub>r</sub> is added directly in the design snow load equation, <span class="src-tag">NBC Sentence 4.1.6.2.(1)</span>: S = I<sub>s</sub>[S<sub>s</sub>(C<sub>b</sub>C<sub>w</sub>C<sub>s</sub>C<sub>a</sub>) + S<sub>r</sub>].</p>`
+  },
+  Is: {
+    title: 'Importance factor, I<sub>s</sub>',
+    html: `<p>Snow-load importance factor by Importance Category, per <strong>NBC Table 4.1.6.2.-A</strong> (which in turn references <strong>Table 4.1.2.1.</strong> for the category assignment). Values shown in the dropdown are the standard ULS/SLS values; confirm against your copy of Division B before final design.</p>
+      <p>I<sub>s</sub> multiplies the entire bracketed term in <span class="src-tag">NBC Sentence 4.1.6.2.(1)</span>: S = I<sub>s</sub>[S<sub>s</sub>(C<sub>b</sub>C<sub>w</sub>C<sub>s</sub>C<sub>a</sub>) + S<sub>r</sub>].</p>`
+  },
+  Cb: {
+    title: 'Basic roof snow load factor, C<sub>b</sub>',
+    html: `<p>C<sub>b</sub> is the basic roof snow load factor used in the design snow load equation, <span class="src-tag">NBC Sentence 4.1.6.2.(1)</span>: S = I<sub>s</sub>[S<sub>s</sub>(C<sub>b</sub>C<sub>w</sub>C<sub>s</sub>C<sub>a</sub>) + S<sub>r</sub>].</p>
+      <p>It also appears throughout the drift calculations: in <span class="src-tag">NBC Sentence 4.1.6.5.(3)</span> (h<sub>p</sub>' and F), <span class="src-tag">NBC Eq. (2) &amp; (3)</span> (C<sub>a0</sub> = min(&beta;&gamma;h/(C<sub>b</sub>S<sub>s</sub>), F/C<sub>b</sub>)), <span class="src-tag">NBC Sentence 4.1.6.5.(2)</span> (drift length x<sub>d</sub>), and the parapet check <span class="src-tag">NBC Cl. 4.1.6.7.(1)(a)</span>.</p>`
+  },
+  Cw: {
+    title: 'Wind exposure factor, C<sub>w</sub>',
+    html: `<p>C<sub>w</sub> is the wind exposure factor in the design snow load equation, <span class="src-tag">NBC Sentence 4.1.6.2.(1)</span>: S = I<sub>s</sub>[S<sub>s</sub>(C<sub>b</sub>C<sub>w</sub>C<sub>s</sub>C<sub>a</sub>) + S<sub>r</sub>].</p>
+      <p>It also defines the "sheltered zone" near a roof step in <span class="src-tag">NBC Fig. 4.1.6.5.-A</span>: h' = h &minus; C<sub>b</sub>C<sub>w</sub>S<sub>s</sub>/&gamma;, x = 10h' &mdash; the distance over which C<sub>w</sub> = 1.0 must be used for adjoining roof areas.</p>`
+  },
+  Cs: {
+    title: 'Roof slope factor, C<sub>s</sub> (lower roof)',
+    html: `<p>C<sub>s</sub> is the roof slope factor for the lower roof, applied in the design snow load equation, <span class="src-tag">NBC Sentence 4.1.6.2.(1)</span>: S = I<sub>s</sub>[S<sub>s</sub>(C<sub>b</sub>C<sub>w</sub>C<sub>s</sub>C<sub>a</sub>) + S<sub>r</sub>]. C<sub>a</sub> is the drift accumulation factor computed in Section 2.</p>`
+  },
+  h: {
+    title: 'Height of roof step, h',
+    html: `<p>The vertical difference in elevation between the lower roof surface and the top of the upper roof / parapet, as shown in <span class="src-tag">NBC Fig. 4.1.6.5.-A</span>.</p>
+      <p>h is used directly in the accumulation factor formula, <span class="src-tag">NBC Eq. (2) &amp; (3)</span>: C<sub>a0</sub> = min(&beta;&gamma;h/(C<sub>b</sub>S<sub>s</sub>), F/C<sub>b</sub>), and in the sheltered-zone formula h' = h &minus; C<sub>b</sub>C<sub>w</sub>S<sub>s</sub>/&gamma; (<span class="src-tag">NBC Fig. 4.1.6.5.-A</span>).</p>`
+  },
+  parapetCheck: {
+    title: 'Lower-Roof Parapet Check',
+    html: `<p>A separate check required by <span class="src-tag">NBC Cl. 4.1.6.7.(1)(a)</span>, which gives:</p>
+      <p>C<sub>a0</sub> = min(0.67&gamma;h<sub>p,lower</sub>/(C<sub>b</sub>S<sub>s</sub>), 1 + &gamma;l<sub>0</sub>/(7.5C<sub>b</sub>S<sub>s</sub>))</p>
+      <p>This is reproduced in <em>NBC 2015 Structural Commentaries</em>, Commentary G, Sample Calculation 1, Step 10, and confirmed directly against <em>NBCC 2015, Division B</em>, Sentence 4.1.6.7.(1) (p. 4-20).</p>
+      <p>If the resulting C<sub>a0</sub> &lt; 1, the parapet drift is not significant and may be ignored per the Commentary. If C<sub>a0</sub> &ge; 1, combine with the roof-step drift using engineering judgement.</p>`
+  },
+  hpLower: {
+    title: 'Lower-roof parapet height, h<sub>p,lower</sub>',
+    html: `<p>The height of the parapet on the <em>lower</em> roof, used in the parapet check term 0.67&gamma;h<sub>p,lower</sub>/(C<sub>b</sub>S<sub>s</sub>) of <span class="src-tag">NBC Cl. 4.1.6.7.(1)(a)</span>.</p>`
+  },
+  l0: {
+    title: 'Plan dimension along the parapet, l<sub>0</sub>',
+    html: `<p>The plan dimension used in the second term of the parapet check, 1 + &gamma;l<sub>0</sub>/(7.5C<sub>b</sub>S<sub>s</sub>), from <span class="src-tag">NBC Cl. 4.1.6.7.(1)(a)</span>. Take l<sub>0</sub> from the roof plan as the dimension associated with this parapet run.</p>`
+  },
+  corners: {
+    title: 'Snow Drift at Corners',
+    html: `<p><span class="src-tag">NBC Sentence 4.1.6.8.(1)</span> (outside corner) and <span class="src-tag">NBC Sentence 4.1.6.8.(2)</span> (inside corner) govern how drift loads on the lower roof against the two faces of a corner are combined and laid out in plan &mdash; Article 4.1.6.8 itself defines no new C<sub>a0</sub>/x<sub>d</sub> formula.</p>
+      <p>This calculator runs the same Section-2 method (<span class="src-tag">NBC Sentence 4.1.6.5.(3)</span>, <span class="src-tag">NBC Eq. (2) &amp; (3)</span>) independently for "Face A" and "Face B" using the roof-step height h entered in Section 2, then applies:</p>
+      <ul>
+        <li><strong>Outside corner</strong> (Sentence 4.1.6.8.(1), Fig. 4.1.6.8.-A): the drift "may be taken as the least severe of the drift loads lying against the two faces of the corner," swept radially with radius x<sub>d</sub>.</li>
+        <li><strong>Inside corner</strong> (Sentence 4.1.6.8.(2), Fig. 4.1.6.8.-B): each face keeps its own profile (per Sentence 4.1.6.5.(1)), applied out to the bisector of the corner angle &mdash; a plan-geometry quantity not given by any formula in the Code.</li>
+      </ul>
+      <p>Source: <em>NBCC 2015, Division B</em>, Article 4.1.6.8, pp. 4-20&ndash;4-21.</p>`
+  },
+  cornerType: {
+    title: 'Corner type — outside vs. inside',
+    html: `<p><strong>Outside corner</strong> &mdash; <span class="src-tag">NBC Sentence 4.1.6.8.(1)</span>, Fig. 4.1.6.8.-A: the governing drift is the <em>least severe</em> of the two faces (min C<sub>a0</sub>), extended radially around the corner with radius x<sub>d</sub>.</p>
+      <p><strong>Inside corner</strong> &mdash; <span class="src-tag">NBC Sentence 4.1.6.8.(2)</span>, Fig. 4.1.6.8.-B: each face's drift profile is calculated per <span class="src-tag">NBC Sentence 4.1.6.5.(1)</span> and applied out to the bisector of the corner angle.</p>
+      <p>Source: <em>NBCC 2015, Division B</em>, Article 4.1.6.8, pp. 4-20&ndash;4-21.</p>`
+  },
+  xQuery: {
+    title: 'Evaluate at a specific x',
+    html: `<p>Evaluates the drift accumulation factor and design snow load at a chosen distance x from the roof step, using:</p>
+      <p><span class="src-tag">NBC Sentence 4.1.6.5.(1)</span>: C<sub>a</sub>(x) = C<sub>a0</sub> &minus; (C<sub>a0</sub>&minus;1)&middot;x/x<sub>d</sub> for 0&le;x&le;x<sub>d</sub>, and C<sub>a</sub>(x) = 1 for x &gt; x<sub>d</sub>.</p>
+      <p><span class="src-tag">NBC Sentence 4.1.6.2.(1)</span>: S(x) = I<sub>s</sub>[S<sub>s</sub>(C<sub>b</sub>C<sub>w</sub>C<sub>s</sub>C<sub>a</sub>(x)) + S<sub>r</sub>].</p>`
+  },
+  caseLs: {
+    title: 'l<sub>s</sub> — length of source area',
+    html: `<p>The plan length of the upper roof / source area contributing snow to the drift, used in <span class="src-tag">NBC Sentence 4.1.6.5.(3)</span>: l<sub>cs</sub> = 2w<sub>s</sub> &minus; w<sub>s</sub>&sup2;/l<sub>s</sub>, which feeds the factor F and accumulation factor C<sub>a0</sub> (<span class="src-tag">NBC Eq. (2) &amp; (3)</span>). From Commentary G, Sample Calculation 1, Steps 2&ndash;4.</p>`
+  },
+  caseWs: {
+    title: 'w<sub>s</sub> — width of source area',
+    html: `<p>The plan width of the upper roof / source area, used in <span class="src-tag">NBC Sentence 4.1.6.5.(3)</span>: l<sub>cs</sub> = 2w<sub>s</sub> &minus; w<sub>s</sub>&sup2;/l<sub>s</sub>, which feeds the factor F and accumulation factor C<sub>a0</sub> (<span class="src-tag">NBC Eq. (2) &amp; (3)</span>). From Commentary G, Sample Calculation 1, Steps 2&ndash;4.</p>`
+  },
+  caseHp: {
+    title: 'h<sub>p</sub> — lower-roof parapet, this side',
+    html: `<p>The parapet height on the lower roof for this drift case, used in <span class="src-tag">NBC Sentence 4.1.6.5.(3)</span>: h<sub>p</sub>' = clamp(h<sub>p</sub> &minus; C<sub>b</sub>S<sub>s</sub>/&gamma;, 0, l<sub>cs</sub>/5), which in turn feeds the factor F = 0.35&beta;&radic;(&gamma;(l<sub>cs</sub>&minus;5h<sub>p</sub>')/S<sub>s</sub>) + C<sub>b</sub>. From Commentary G, Sample Calculation 1, Steps 2&ndash;4.</p>`
+  },
+  caseBeta: {
+    title: '&beta; — case factor',
+    html: `<p>&beta; = 1.0 for Case I and 0.67 for Cases II &amp; III, per <span class="src-tag">NBC Eq. (2) &amp; (3)</span> (Commentary G, paragraph 37). It scales the factor F = 0.35&beta;&radic;(&gamma;(l<sub>cs</sub>&minus;5h<sub>p</sub>')/S<sub>s</sub>) + C<sub>b</sub> (<span class="src-tag">NBC Sentence 4.1.6.5.(3)</span>) and the first term of C<sub>a0</sub> = min(&beta;&gamma;h/(C<sub>b</sub>S<sub>s</sub>), F/C<sub>b</sub>).</p>`
+  },
+  cornerLs: {
+    title: 'l<sub>s</sub> — source-area length (corner face)',
+    html: `<p>Same quantity as Section 2's l<sub>s</sub>, evaluated for this corner face: used in <span class="src-tag">NBC Sentence 4.1.6.5.(3)</span> (l<sub>cs</sub> = 2w<sub>s</sub> &minus; w<sub>s</sub>&sup2;/l<sub>s</sub>) as part of the per-face C<sub>a0</sub>/x<sub>d</sub> calculation required by <span class="src-tag">NBC Sentence 4.1.6.8.(1)</span> / <span class="src-tag">NBC Sentence 4.1.6.8.(2)</span>.</p>`
+  },
+  cornerWs: {
+    title: 'w<sub>s</sub> — source-area width (corner face)',
+    html: `<p>Same quantity as Section 2's w<sub>s</sub>, evaluated for this corner face: used in <span class="src-tag">NBC Sentence 4.1.6.5.(3)</span> (l<sub>cs</sub> = 2w<sub>s</sub> &minus; w<sub>s</sub>&sup2;/l<sub>s</sub>) as part of the per-face C<sub>a0</sub>/x<sub>d</sub> calculation required by <span class="src-tag">NBC Sentence 4.1.6.8.(1)</span> / <span class="src-tag">NBC Sentence 4.1.6.8.(2)</span>.</p>`
+  },
+  cornerHp: {
+    title: 'h<sub>p</sub> — parapet, this face',
+    html: `<p>Same quantity as Section 2's h<sub>p</sub>, evaluated for this corner face: used in <span class="src-tag">NBC Sentence 4.1.6.5.(3)</span> (h<sub>p</sub>' = clamp(h<sub>p</sub> &minus; C<sub>b</sub>S<sub>s</sub>/&gamma;, 0, l<sub>cs</sub>/5)) as part of the per-face C<sub>a0</sub>/x<sub>d</sub> calculation required by <span class="src-tag">NBC Sentence 4.1.6.8.(1)</span> / <span class="src-tag">NBC Sentence 4.1.6.8.(2)</span>.</p>`
+  },
+  cornerBeta: {
+    title: '&beta; — factor (corner face)',
+    html: `<p>Same quantity as Section 2's &beta; (1.0 or 0.67, per <span class="src-tag">NBC Eq. (2) &amp; (3)</span>, Commentary G &para;37), evaluated for this corner face as part of the per-face C<sub>a0</sub>/x<sub>d</sub> calculation required by <span class="src-tag">NBC Sentence 4.1.6.8.(1)</span> / <span class="src-tag">NBC Sentence 4.1.6.8.(2)</span>.</p>`
+  }
+};
+
+let infoModalEl, modalContentEl;
+
+function openInfoModal(key) {
+  const entry = INFO_CONTENT[key];
+  if (!entry || !infoModalEl || !modalContentEl) return;
+  modalContentEl.innerHTML = '<h3>' + entry.title + '</h3>' + entry.html;
+  infoModalEl.classList.add('open');
+}
+
+function closeInfoModal() {
+  if (infoModalEl) infoModalEl.classList.remove('open');
+}
+
+function bindInfoModal() {
+  infoModalEl = document.getElementById('infoModal');
+  modalContentEl = document.getElementById('modalContent');
+  if (!infoModalEl) return;
+  // Event delegation so dynamically-rendered info buttons (Cases I-III,
+  // corner faces A/B) work without re-binding after every renderCases()/
+  // renderCornerFaces() call.
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.info-btn');
+    if (btn) { e.preventDefault(); openInfoModal(btn.dataset.info); }
+  });
+  const closeBtn = document.getElementById('infoModalClose');
+  if (closeBtn) closeBtn.addEventListener('click', closeInfoModal);
+  infoModalEl.addEventListener('click', (e) => { if (e.target === infoModalEl) closeInfoModal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeInfoModal(); });
+}
+
+function bindPrintButton() {
+  const btn = document.getElementById('printBtn');
+  const dateEl = document.getElementById('printDate');
+  if (dateEl) {
+    dateEl.textContent = 'Generated ' + new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) + ' — values reflect the inputs and computed results shown below at the time of printing.';
+  }
+  if (btn) {
+    btn.addEventListener('click', () => window.print());
+  }
+}
+
 // ---- Init -------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('unitSI').addEventListener('click', () => setUnits('SI'));
@@ -665,6 +823,8 @@ document.addEventListener('DOMContentLoaded', () => {
   renderMainInputs();
   renderCases();
   bindCornerInputs();
+  bindInfoModal();
+  bindPrintButton();
   update();
 });
 

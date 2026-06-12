@@ -125,6 +125,48 @@
   .loc-row{display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;}
   .loc-row .field{flex:1; min-width:200px;}
   .loc-row .field.addr{flex:3; min-width:280px;}
+
+  /* ---- "Learn more" info buttons & modal --------------------------------- */
+  .field label{display:flex; align-items:center; gap:0;}
+  .info-btn{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:17px; height:17px; border-radius:50%; flex:0 0 auto;
+    background:var(--brand-light); color:var(--brand); border:1px solid var(--line);
+    font-size:.7rem; font-weight:700; font-style:normal; cursor:pointer;
+    margin-left:6px; padding:0; line-height:1;
+  }
+  .info-btn:hover{background:var(--brand); color:#fff;}
+  .panel h2 .info-btn{margin-left:8px; vertical-align:middle;}
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(28,39,51,.5); display:none;
+    align-items:center; justify-content:center; z-index:1000; padding:20px;
+  }
+  .modal-overlay.open{display:flex;}
+  .modal-box{
+    background:#fff; border-radius:8px; max-width:600px; width:100%; max-height:82vh;
+    overflow:auto; padding:20px 24px; position:relative; box-shadow:0 10px 40px rgba(0,0,0,.25);
+  }
+  .modal-box h3{color:var(--brand); margin:0 0 10px; font-size:1.05rem; padding-right:26px;}
+  .modal-box p, .modal-box li{font-size:.88rem; color:var(--ink);}
+  .modal-box ul{padding-left:20px;}
+  .modal-close{
+    position:absolute; top:10px; right:10px; width:28px; height:28px; border-radius:50%;
+    background:var(--bg); border:1px solid var(--line); font-size:1.1rem; line-height:1;
+    cursor:pointer; color:var(--muted);
+  }
+  .modal-close:hover{color:var(--ink); background:var(--brand-light);}
+
+  /* ---- Print report ------------------------------------------------------- */
+  .print-only{display:none;}
+  @media print{
+    header.topbar, nav.modulenav, #map, #locateBtn, #fetchSeismicBtn,
+    .info-btn, footer.sources, .btn, #printBtn{display:none !important;}
+    .grid{display:block;}
+    .panel{break-inside:avoid; border:1px solid #ccc; box-shadow:none;}
+    .print-only{display:block;}
+    body{background:#fff;}
+    main{max-width:100%;}
+  }
 </style>
 </head>
 <body>
@@ -142,6 +184,7 @@
       <button id="unitSI" data-units="SI">SI (kPa, m)</button>
       <button id="unitUS" data-units="US" class="active">US / Imperial (psf, ft)</button>
     </div>
+    <button type="button" id="printBtn" class="btn" style="background:transparent; border:1px solid #9fc6ea;">Print / Export Report</button>
   </div>
 </header>
 
@@ -155,6 +198,11 @@
 
 <main>
 
+  <div class="print-only" style="margin-bottom:12px;">
+    <h1 style="color:var(--brand); margin:0;">Roof Snow Load Report &mdash; ASCE/SEI 7-22, Chapter 7</h1>
+    <p style="color:var(--muted); font-size:.85rem;" id="printDate"></p>
+  </div>
+
   <div class="intro">
     <h1>Roof Snow Loads &mdash; ASCE/SEI 7-22, Chapter 7</h1>
     <p><span class="badge">Eq. 7.3-1 &mdash; Flat Roof Snow Load</span><span class="badge">Fig. 7.4-1 &mdash; Slope Factor</span><span class="badge">Sec. 7.3.3 &mdash; Minimum Snow Load</span><span class="badge">Sec. 7.9 &mdash; Sliding Snow</span><span class="badge">Sec. 7.10 &mdash; Rain-on-Snow</span></p>
@@ -164,7 +212,7 @@
   </div>
 
   <div class="panel">
-    <h2>Site Location <span class="ref">optional &mdash; map display &amp; automatic seismic data</span></h2>
+    <h2>Site Location <span class="ref">optional &mdash; map display &amp; automatic seismic data</span><button type="button" class="info-btn" data-info="siteLocation" aria-label="Learn more">i</button></h2>
     <p class="hint">Enter a project address to show it on a map and automatically pull <strong>Seismic Design Parameters (ASCE/SEI 7-22 Chapter 11)</strong> &mdash; S<sub>S</sub>, S<sub>1</sub>, S<sub>MS</sub>, S<sub>M1</sub>, S<sub>DS</sub>, S<sub>D1</sub>, PGA<sub>M</sub>, and Seismic Design Category &mdash; from the USGS Design Maps service. <strong>This does not provide p<sub>g</sub> or wind speed V</strong>: the official ASCE 7 Hazard Tool API that supplies those requires a registered account/API key, so p<sub>g</sub> above must still be entered manually from <a href="https://ascehazardtool.org" target="_blank" rel="noopener">ascehazardtool.org</a> for these coordinates.</p>
 
     <div class="loc-row">
@@ -199,7 +247,7 @@
         <span class="hint">From Section 1 below (Sec. 1.5 / Table 1.5-1).</span>
       </div>
       <div class="field">
-        <label for="siteClass">Site Class</label>
+        <label for="siteClass">Site Class<button type="button" class="info-btn" data-info="siteClass" aria-label="Learn more">i</button></label>
         <select id="siteClass"></select>
         <span class="hint">Ch. 20. "Default" applies Sec. 11.4.3 default site class. Site Class F requires a site-specific procedure (Sec. 11.4.8) and isn&rsquo;t covered by this service.</span>
       </div>
@@ -232,23 +280,23 @@
         <h2>1. Site &amp; Exposure <span class="ref">ASCE 7-22 Sec. 7.2, Table 7.3-1</span></h2>
         <div class="row2">
           <div class="field">
-            <label for="riskCategory">Risk Category</label>
+            <label for="riskCategory">Risk Category<button type="button" class="info-btn" data-info="riskCategory" aria-label="Learn more">i</button></label>
             <select id="riskCategory"></select>
             <span class="hint">Determines p<sub>m,max</sub> from Table 7.3-4. See Sec. 1.5 / Table 1.5-1 for Risk Category assignment.</span>
           </div>
           <div class="field">
-            <label for="pg">Ground snow load, p<sub>g</sub> <span class="unit-pressure">(psf)</span></label>
+            <label for="pg">Ground snow load, p<sub>g</sub> <span class="unit-pressure">(psf)</span><button type="button" class="info-btn" data-info="pg" aria-label="Learn more">i</button></label>
             <input type="number" id="pg" step="any">
             <span class="hint">From the <a href="https://ascehazardtool.org" target="_blank" rel="noopener">ASCE 7 Hazard Tool</a> (ascehazardtool.org) for your site &amp; Risk Category &mdash; Figures 7.2-1A&ndash;D (Table 7.2-1 for Alaska).</span>
           </div>
         </div>
         <div class="row2">
           <div class="field">
-            <label for="surfaceCat">Surface roughness / terrain category</label>
+            <label for="surfaceCat">Surface roughness / terrain category<button type="button" class="info-btn" data-info="surfaceCat" aria-label="Learn more">i</button></label>
             <select id="surfaceCat"></select>
           </div>
           <div class="field">
-            <label for="exposure">Exposure of roof</label>
+            <label for="exposure">Exposure of roof<button type="button" class="info-btn" data-info="exposure" aria-label="Learn more">i</button></label>
             <select id="exposure">
               <option value="fully">Fully Exposed</option>
               <option value="partial">Partially Exposed</option>
@@ -262,16 +310,16 @@
       <div class="panel">
         <h2>2. Thermal Factor &amp; Flat Roof Snow Load <span class="ref">Tables 7.3-2/7.3-3, Eq. 7.3-1</span></h2>
         <div class="field">
-          <label for="ctMethod">Thermal condition</label>
+          <label for="ctMethod">Thermal condition<button type="button" class="info-btn" data-info="ctMethod" aria-label="Learn more">i</button></label>
           <select id="ctMethod"></select>
         </div>
         <div class="field" id="rroofField">
-          <label for="rroof">Roof thermal resistance, R<sub>roof</sub> (h&middot;ft&sup2;&middot;&deg;F/Btu)</label>
+          <label for="rroof">Roof thermal resistance, R<sub>roof</sub> (h&middot;ft&sup2;&middot;&deg;F/Btu)<button type="button" class="info-btn" data-info="rroof" aria-label="Learn more">i</button></label>
           <input type="number" id="rroof" step="any">
           <span class="hint">Table 7.3-3 is tabulated in US units; enter R<sub>roof</sub> in h&middot;ft&sup2;&middot;&deg;F/Btu (1 h&middot;ft&sup2;&middot;&deg;F/Btu = 0.176 m&sup2;&middot;K/W). For R<sub>roof</sub> &gt; 50, C<sub>t</sub> = 1.2 (Footnote b).</span>
         </div>
         <div class="field" id="ctCustomField">
-          <label for="ctCustom">Custom C<sub>t</sub></label>
+          <label for="ctCustom">Custom C<sub>t</sub><button type="button" class="info-btn" data-info="ctCustom" aria-label="Learn more">i</button></label>
           <input type="number" id="ctCustom" step="any">
         </div>
       </div>
@@ -280,12 +328,12 @@
         <h2>3. Sloped Roof Snow Load <span class="ref">Fig. 7.4-1, Commentary C7.4, Eq. 7.4-1</span></h2>
         <div class="row2">
           <div class="field">
-            <label for="slopeDeg">Roof slope (degrees)</label>
+            <label for="slopeDeg">Roof slope (degrees)<button type="button" class="info-btn" data-info="slopeDeg" aria-label="Learn more">i</button></label>
             <input type="number" id="slopeDeg" step="any" min="0" max="90">
             <span class="hint">Convert rise:run to degrees: slope&deg; = atan(rise/run) &times; 180/&pi;.</span>
           </div>
           <div class="field">
-            <label for="surfaceType">Roof surface</label>
+            <label for="surfaceType">Roof surface<button type="button" class="info-btn" data-info="surfaceType" aria-label="Learn more">i</button></label>
             <select id="surfaceType">
               <option value="other">Other (non-slippery)</option>
               <option value="slippery">Unobstructed &amp; slippery (metal, slate, glass, smooth membrane)</option>
@@ -297,7 +345,7 @@
       <div class="panel">
         <h2>4. Minimum Snow Load for Low-Slope Roofs, p<sub>m</sub> <span class="ref">Sec. 7.3.3, Table 7.3-4</span></h2>
         <div class="field">
-          <label for="roofType">Roof type / applicability</label>
+          <label for="roofType">Roof type / applicability<button type="button" class="info-btn" data-info="roofType" aria-label="Learn more">i</button></label>
           <select id="roofType">
             <option value="lowslope">Monoslope, hip, or gable roof</option>
             <option value="curved">Curved roof</option>
@@ -306,7 +354,7 @@
           <span class="hint">p<sub>m</sub> applies only to monoslope/hip/gable roofs with slope &lt; 15&deg;, and to curved roofs with eave-to-crown vertical angle &lt; 10&deg; (Sec. 7.3.3).</span>
         </div>
         <div class="field" id="curvedAngleField">
-          <label for="curvedAngle">Eave-to-crown vertical angle (degrees)</label>
+          <label for="curvedAngle">Eave-to-crown vertical angle (degrees)<button type="button" class="info-btn" data-info="curvedAngle" aria-label="Learn more">i</button></label>
           <input type="number" id="curvedAngle" step="any" min="0" max="90">
         </div>
       </div>
@@ -315,12 +363,12 @@
         <h2>5. Rain-on-Snow &amp; Sliding Snow <span class="ref">Sec. 7.9, Sec. 7.10</span></h2>
         <div class="row2">
           <div class="field">
-            <label for="W">Eave-to-ridge horizontal distance, W <span class="unit-length">(ft)</span></label>
+            <label for="W">Eave-to-ridge horizontal distance, W <span class="unit-length">(ft)</span><button type="button" class="info-btn" data-info="W" aria-label="Learn more">i</button></label>
             <input type="number" id="W" step="any">
             <span class="hint">Used for the Sec. 7.10 rain-on-snow slope check (slope &lt; W/50, W in ft) and the Sec. 7.9 sliding load (0.4&middot;p<sub>f</sub>&middot;W).</span>
           </div>
           <div class="field">
-            <label for="lowerRoofWidth">Lower roof width <span class="unit-length">(ft)</span></label>
+            <label for="lowerRoofWidth">Lower roof width <span class="unit-length">(ft)</span><button type="button" class="info-btn" data-info="lowerRoofWidth" aria-label="Learn more">i</button></label>
             <input type="number" id="lowerRoofWidth" step="any">
             <span class="hint">Width over which the sliding load is distributed (15 ft / 4.6 m maximum; reduced proportionally if the lower roof is narrower &ndash; Sec. 7.9). Set to 15 ft / 4.6 m or more if not applicable.</span>
           </div>
@@ -372,4 +420,51 @@
     <ul>
       <li><span class="src-tag">ASCE/SEI 7-22, Sec. 7.2</span> &mdash; Ground snow load, p<sub>g</sub>, is Risk-Category-specific (no separate snow importance factor in 7-22). Determined from Figures 7.2-1A&ndash;D, or Table 7.2-1 for Alaska. Use the official <a href="https://ascehazardtool.org" target="_blank" rel="noopener">ASCE 7 Hazard Tool</a> for your site coordinates.</li>
       <li><span class="src-tag">Table 7.3-1</span> &mdash; Exposure Factor, C<sub>e</sub>: Surface Roughness B/C/D &times; Fully/Partially Exposed/Sheltered (B: 0.9/1.0/1.2; C: 0.9/1.0/1.1; D: 0.8/0.9/1.0), Above tree line and Alaska (no trees within 2 mi): 0.7/0.8/N&#47;A.</li>
-      <li><span class="src-tag">Table 7.3-2</span> &mdash; Thermal Factor, C<sub>t</sub>: "All structures except as indicated" &rarr; Table 7.3-3; Unheated/open-air/cold ventilated roo
+      <li><span class="src-tag">Table 7.3-2</span> &mdash; Thermal Factor, C<sub>t</sub>: "All structures except as indicated" &rarr; Table 7.3-3; Unheated/open-air/cold ventilated roofs meeting energy code &rarr; C<sub>t</sub>=1.2; Freezer buildings &rarr; C<sub>t</sub>=1.3; Continuously heated greenhouses (R&lt;2.0) &rarr; C<sub>t</sub>=0.85.</li>
+      <li><span class="src-tag">Table 7.3-3</span> &mdash; Thermal Factor, C<sub>t</sub>, for heated structures with unventilated roofs, as a function of R<sub>roof</sub> (20/30/40/&ge;50 h&middot;ft&sup2;&middot;&deg;F/Btu) and p<sub>g</sub> (&le;10&hellip;&ge;70 psf), ranging 1.00&ndash;1.20; linear interpolation per Note (a); R<sub>roof</sub> &gt; 50 &rarr; C<sub>t</sub>=1.2 per Footnote (b). This calculator performs bilinear interpolation on the full table.</li>
+      <li><span class="src-tag">Eq. 7.3-1</span> &mdash; Flat roof snow load: p<sub>f</sub> = 0.7&middot;C<sub>e</sub>&middot;C<sub>t</sub>&middot;p<sub>g</sub>.</li>
+      <li><span class="src-tag">Sec. 7.4.1, Fig. 7.4-1, Commentary C7.4</span> &mdash; Slope factor C<sub>s</sub>, reproduced mathematically in Commentary C7.4 (ASCE/SEI 7-22, p.592): for C<sub>t</sub>&lt;1.1, single "all other surfaces" curve (1.0 for slope&le;30&deg;, linear to 0 at 70&deg;, denominator 40&deg;); for 1.1&le;C<sub>t</sub>&lt;1.2, slippery curve (1.0 to 10&deg;, denom 60&deg;) and "all other" curve (1.0 to 37.5&deg;, denom 32.5&deg;); for C<sub>t</sub>&ge;1.2, slippery curve (1.0 to 15&deg;, denom 55&deg;) and "all other" curve (1.0 to 45&deg;, denom 25&deg;). Per C7.4, Figure 7.4-1(a) has no slippery-surface curve (ice damming assumed) when C<sub>t</sub>&lt;1.1.</li>
+      <li><span class="src-tag">Eq. 7.4-1</span> &mdash; Sloped (balanced) roof snow load: p<sub>s</sub> = C<sub>s</sub>&middot;p<sub>f</sub>.</li>
+      <li><span class="src-tag">Sec. 7.3.3, Table 7.3-4</span> &mdash; Minimum snow load for low-slope roofs, p<sub>m</sub>: applies only to monoslope/hip/gable roofs with slope &lt;15&deg;, or curved roofs with eave-to-crown angle &lt;10&deg;. p<sub>m</sub> = p<sub>g</sub> if p<sub>g</sub>&le;p<sub>m,max</sub>, else p<sub>m,max</sub> (i.e., p<sub>m</sub>=min(p<sub>g</sub>,p<sub>m,max</sub>)). p<sub>m,max</sub> by Risk Category: I=25 psf (1.20 kPa), II=30 psf (1.44 kPa), III=35 psf (1.68 kPa), IV=40 psf (1.92 kPa). p<sub>m</sub> is a separate uniform load case, not combined with drift, sliding, unbalanced, or partial loads.</li>
+      <li><span class="src-tag">Sec. 7.9</span> &mdash; Sliding snow: applies for slippery upper roofs with slope &gt;1/4 on 12 (1.19&deg;), and for other (non-slippery) upper roofs with slope &gt;2 on 12 (9.46&deg;). Total sliding load per unit length of eave = 0.4&middot;p<sub>f</sub>&middot;W, where W is the horizontal eave-to-ridge distance, distributed over 15 ft (4.6 m) of the lower roof (reduced proportionally if the lower roof is narrower).</li>
+      <li><span class="src-tag">Sec. 7.10</span> &mdash; Rain-on-snow surcharge: for sites where 0&lt;p<sub>g</sub>&le;p<sub>m,max</sub> (Table 7.3-4) and roof slope (degrees) &lt; W/50 (W in ft; W/15.2 with W in m), add an 8 psf (0.38 kPa) surcharge to the sloped-roof balanced load p<sub>s</sub> only &mdash; not combined with drift, sliding, unbalanced, minimum, or partial loads.</li>
+    </ul>
+
+    <h3>Site Location &amp; Seismic Design Parameters panel</h3>
+    <ul>
+      <li><span class="src-tag">Open-Meteo Geocoding API</span> (<a href="https://open-meteo.com/en/docs/geocoding-api" target="_blank" rel="noopener">geocoding-api.open-meteo.com/v1/search</a>) &mdash; converts the entered address to latitude/longitude (and elevation). Free, no API key, CORS-enabled for direct browser use; results are derived from OpenStreetMap place data.</li>
+      <li><span class="src-tag">Leaflet.js + OpenStreetMap tiles</span> &mdash; renders the located point on a map. No API key required.</li>
+      <li><span class="src-tag">USGS Design Maps web service</span> (<a href="https://earthquake.usgs.gov/ws/designmaps/asce7-22.html" target="_blank" rel="noopener">earthquake.usgs.gov/ws/designmaps/asce7-22.json</a>) &mdash; for the given latitude/longitude, Risk Category, and Site Class, returns S<sub>S</sub>, S<sub>1</sub>, S<sub>MS</sub>, S<sub>M1</sub>, S<sub>DS</sub>, S<sub>D1</sub>, PGA<sub>M</sub>, T<sub>L</sub>, T<sub>S</sub>, T<sub>0</sub>, and Seismic Design Category, per <span class="src-tag">ASCE/SEI 7-22 Sec. 11.4</span> (site coefficients F<sub>a</sub>/F<sub>v</sub> and the S<sub>DS</sub>=(2/3)S<sub>MS</sub>, S<sub>D1</sub>=(2/3)S<sub>M1</sub> relations) and <span class="src-tag">Tables 11.6-1/11.6-2</span> (Seismic Design Category). This is the same USGS service referenced by the ASCE Hazard Tool and most third-party seismic design software.</li>
+      <li><span class="src-tag">Site Class, Ch. 20</span> &mdash; ASCE/SEI 7-22 added intermediate Site Classes BC, CD, DE to Table 20.2-1 alongside A&ndash;F. Site Class must be determined by a geotechnical investigation per Ch. 20; "Default" applies the Sec. 11.4.3 default when site soil properties are not known in sufficient detail. Site Class F (requiring a site response analysis, Sec. 11.4.8) is not provided by the USGS service.</li>
+      <li>This panel supplies <strong>seismic design parameters only</strong>. It does not perform a seismic base shear or lateral force analysis (ASCE 7-22 Ch. 12) &mdash; that remains a future module. If the USGS request fails (e.g., a network/CORS restriction in your browser), the parameters can be looked up manually at <a href="https://earthquake.usgs.gov/ws/designmaps/" target="_blank" rel="noopener">earthquake.usgs.gov/ws/designmaps</a> or via the <a href="https://ascehazardtool.org" target="_blank" rel="noopener">ASCE 7 Hazard Tool</a>.</li>
+    </ul>
+
+    <div class="alert info">
+      <strong>About R<sub>roof</sub> and Table 7.3-3:</strong> ASCE 7-22 changed Table 7.3-2 so that ordinary heated structures ("all structures except as indicated") no longer get a flat C<sub>t</sub>=1.0 &mdash; instead, C<sub>t</sub> is read from Table 7.3-3 as a function of the roof&rsquo;s thermal resistance R<sub>roof</sub> and the ground snow load p<sub>g</sub>, ranging from 1.00 (well-insulated, low p<sub>g</sub>) to 1.20 (poorly insulated, high p<sub>g</sub>, or R<sub>roof</sub>&gt;50). This calculator implements the full Table 7.3-3 grid with bilinear interpolation, exactly as printed.
+    </div>
+
+    <h3>Not yet included (planned next)</h3>
+    <ul>
+      <li><strong>Partial loading</strong> (Sec. 7.5) &mdash; alternating full/half balanced load patterns on continuous-beam systems.</li>
+      <li><strong>Unbalanced snow loads</strong> (Sec. 7.6) &mdash; hip/gable and curved-roof unbalanced load cases, which require the winter wind parameter W2 from the ASCE Hazard Tool.</li>
+      <li><strong>Snowdrifts on lower roofs and at projections/parapets</strong> (Sec. 7.7, 7.8) &mdash; analogous to the drift module already built for NBCC 2015 Art. 4.1.6.5/4.1.6.8, including the snow density equation (Eq. 7.7-1).</li>
+      <li><strong>Slope factor for curved roofs, multiple folded-plate/sawtooth/barrel-vault roofs, and ice dams/icicles</strong> (Sec. 7.4.2&ndash;7.4.4).</li>
+      <li><strong>Ponding instability, existing roofs, and open-frame equipment</strong> (Sec. 7.11&ndash;7.13).</li>
+      <li><strong>Wind loads</strong> (ASCE 7-22 Ch. 26&ndash;30) and <strong>seismic loads</strong> (ASCE 7-22 Ch. 11&ndash;12, with USGS Design Maps lookup) &mdash; separate modules.</li>
+    </ul>
+
+    <p>Site and calculations by StructCalc (working title) &mdash; built for Serhii. This is a working engineering tool: always verify Risk Category assignment, p<sub>g</sub> from the ASCE Hazard Tool for the exact site coordinates, and which of Sections 7.5&ndash;7.13 govern for your specific roof geometry before use in design.</p>
+  </div>
+</footer>
+
+<div class="modal-overlay" id="infoModal">
+  <div class="modal-box">
+    <button type="button" class="modal-close" id="infoModalClose" aria-label="Close">&times;</button>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="engine.js"></script>
+</body>
+</html>

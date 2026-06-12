@@ -672,6 +672,179 @@ function setUnitSystem(sys) {
 }
 
 /* =====================================================================
+   "LEARN MORE" INFO MODAL
+   Every entry below quotes/paraphrases the exact clause, table, or
+   equation already cited in the Sources footer of index.html — no new
+   citations are introduced here.
+   ===================================================================== */
+const INFO_CONTENT = {
+  siteLocation: {
+    title: 'Site Location & Seismic Design Parameters',
+    html: `<p>This panel is optional. It geocodes the project address, shows it on a map, and pulls <strong>Seismic Design Parameters (ASCE/SEI 7-22 Ch. 11)</strong> from the USGS Design Maps service.</p>
+    <ul>
+      <li><span class="src-tag">Open-Meteo Geocoding API</span> &mdash; converts the address to latitude/longitude. Free, no key, OpenStreetMap-derived; matches city/town names rather than exact street addresses.</li>
+      <li><span class="src-tag">Leaflet.js + OpenStreetMap tiles</span> &mdash; renders the point on the map.</li>
+      <li><span class="src-tag">USGS Design Maps web service (earthquake.usgs.gov/ws/designmaps/asce7-22.json)</span> &mdash; returns S<sub>S</sub>, S<sub>1</sub>, S<sub>MS</sub>, S<sub>M1</sub>, S<sub>DS</sub>, S<sub>D1</sub>, PGA<sub>M</sub>, T<sub>L</sub>, T<sub>S</sub>, T<sub>0</sub> and Seismic Design Category per <span class="src-tag">ASCE/SEI 7-22 Sec. 11.4</span> and <span class="src-tag">Tables 11.6-1/11.6-2</span>.</li>
+    </ul>
+    <p><strong>This panel does NOT provide p<sub>g</sub> or wind speed V.</strong> Those require the official <a href="https://ascehazardtool.org" target="_blank" rel="noopener">ASCE 7 Hazard Tool</a> (registered account/API key) &mdash; enter p<sub>g</sub> manually in Section 1.</p>`
+  },
+  siteClass: {
+    title: 'Site Class — ASCE/SEI 7-22 Ch. 20, Table 20.2-1',
+    html: `<p><span class="src-tag">Site Class, Ch. 20</span> &mdash; ASCE/SEI 7-22 added intermediate Site Classes BC, CD, DE to Table 20.2-1 alongside A&ndash;F. Site Class should be determined by a geotechnical investigation per Ch. 20.</p>
+    <p>"Default" applies the <span class="src-tag">Sec. 11.4.3</span> default site class used when site soil properties are not known in sufficient detail.</p>
+    <p>Site Class F requires a site-specific procedure (<span class="src-tag">Sec. 11.4.8</span>) and is not provided by the USGS service used here.</p>`
+  },
+  riskCategory: {
+    title: 'Risk Category — Sec. 1.5 / Table 1.5-1; Table 7.3-4',
+    html: `<p>Risk Category is assigned per <span class="src-tag">Sec. 1.5 / Table 1.5-1</span>, based on the consequences of structural failure (occupancy, hazard to life, essential-facility status, etc.) &mdash; it is not calculated by this tool.</p>
+    <p>Here it is used to look up the minimum-snow-load ceiling <strong>p<sub>m,max</sub></strong> from <span class="src-tag">Table 7.3-4</span>: Risk Category I = 25 psf (1.20 kPa), II = 30 psf (1.44 kPa), III = 35 psf (1.68 kPa), IV = 40 psf (1.92 kPa).</p>
+    <p>It is also displayed in the Site Location panel as the Risk Category used for the Seismic Design Category lookup (<span class="src-tag">Tables 11.6-1/11.6-2</span>).</p>`
+  },
+  pg: {
+    title: 'Ground Snow Load, pg — Sec. 7.2',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, Sec. 7.2</span> &mdash; Ground snow load, p<sub>g</sub>, is Risk-Category-specific (ASCE 7-22 has no separate snow importance factor). It is read from <strong>Figures 7.2-1A&ndash;D</strong>, or <strong>Table 7.2-1</strong> for Alaska, for the project location and the Risk Category selected above.</p>
+    <p>Use the official <a href="https://ascehazardtool.org" target="_blank" rel="noopener">ASCE 7 Hazard Tool</a> (ascehazardtool.org) for your site coordinates and enter the resulting p<sub>g</sub> here. This calculator does not look p<sub>g</sub> up automatically &mdash; the Hazard Tool API requires a registered ASCE account/API key.</p>`
+  },
+  surfaceCat: {
+    title: 'Surface Roughness / Terrain Category — Table 7.3-1',
+    html: `<p><span class="src-tag">Table 7.3-1</span> defines the exposure factor C<sub>e</sub> by Surface Roughness Category (from <span class="src-tag">Sec. 26.7</span>) combined with the roof's exposure condition:</p>
+    <ul>
+      <li><strong>B</strong> &mdash; urban/suburban terrain (Sec. 26.7)</li>
+      <li><strong>C</strong> &mdash; open terrain with scattered obstructions (Sec. 26.7)</li>
+      <li><strong>D</strong> &mdash; flat, unobstructed terrain (Sec. 26.7)</li>
+      <li><strong>Above the tree line, windswept mountainous areas</strong></li>
+      <li><strong>Alaska</strong> &mdash; no trees within a 2 mi (3 km) radius of the site</li>
+    </ul>
+    <p>C<sub>e</sub> values by row &times; exposure (Fully/Partially Exposed/Sheltered): B &mdash; 0.9/1.0/1.2; C &mdash; 0.9/1.0/1.1; D &mdash; 0.8/0.9/1.0; Above tree line &amp; Alaska &mdash; 0.7/0.8/N&#47;A (Sheltered is not applicable for these two rows).</p>`
+  },
+  exposure: {
+    title: 'Exposure of Roof — Table 7.3-1',
+    html: `<p><span class="src-tag">Table 7.3-1</span> &mdash; the exposure factor C<sub>e</sub> depends on whether the roof is Fully Exposed, Partially Exposed, or Sheltered, combined with the Surface Roughness Category selected above.</p>
+    <p>"Sheltered" is N/A for the "Above tree line" and "Alaska" rows of Table 7.3-1 &mdash; the dropdown is restricted accordingly when one of those terrain categories is selected.</p>`
+  },
+  ctMethod: {
+    title: 'Thermal Condition — Tables 7.3-2 / 7.3-3',
+    html: `<p><span class="src-tag">Table 7.3-2</span> &mdash; for "all structures except as indicated", C<sub>t</sub> is determined from <span class="src-tag">Table 7.3-3</span> as a function of R<sub>roof</sub> and p<sub>g</sub> (this is the change from ASCE 7-16, which used a flat C<sub>t</sub>=1.0 for heated structures).</p>
+    <p>The other Table 7.3-2 categories are fixed values:</p>
+    <ul>
+      <li>Unheated structure, open-air structure, or cold ventilated roof meeting minimum energy-code requirements &mdash; C<sub>t</sub> = 1.2</li>
+      <li>Freezer building &mdash; C<sub>t</sub> = 1.3</li>
+      <li>Continuously heated greenhouse, R<sub>roof</sub> &lt; 2.0 h&middot;ft&sup2;&middot;&deg;F/Btu &mdash; C<sub>t</sub> = 0.85</li>
+      <li>Custom C<sub>t</sub> &mdash; enter your own value directly</li>
+    </ul>`
+  },
+  rroof: {
+    title: 'Roof Thermal Resistance, Rroof — Table 7.3-3',
+    html: `<p><span class="src-tag">Table 7.3-3</span> &mdash; for heated structures with unventilated roofs, C<sub>t</sub> is read from a grid of R<sub>roof</sub> (rows: 20, 30, 40, &ge;50 h&middot;ft&sup2;&middot;&deg;F/Btu) versus p<sub>g</sub> (columns: &le;10&hellip;&ge;70 psf), with values ranging 1.00&ndash;1.20.</p>
+    <p>This calculator performs <strong>bilinear interpolation</strong> across the full table per Note (a) (linear interpolation between tabulated values is permitted).</p>
+    <p><span class="src-tag">Footnote (b)</span>: for R<sub>roof</sub> &gt; 50 h&middot;ft&sup2;&middot;&deg;F/Btu (U<sub>roof</sub> &lt; 0.020), C<sub>t</sub> = 1.2 regardless of p<sub>g</sub>.</p>
+    <p>Table 7.3-3 is tabulated in US units; 1 h&middot;ft&sup2;&middot;&deg;F/Btu = 0.176 m&sup2;&middot;K/W.</p>`
+  },
+  ctCustom: {
+    title: 'Custom Ct — Table 7.3-2',
+    html: `<p>Used only when "Custom C<sub>t</sub> value" is selected as the thermal condition (<span class="src-tag">Table 7.3-2</span> allows the engineer to assign C<sub>t</sub> directly for conditions not covered by the listed categories or Table 7.3-3).</p>
+    <p>The value entered here is used directly as C<sub>t</sub> in <span class="src-tag">Eq. 7.3-1</span>: p<sub>f</sub> = 0.7&middot;C<sub>e</sub>&middot;C<sub>t</sub>&middot;p<sub>g</sub>.</p>`
+  },
+  slopeDeg: {
+    title: 'Roof Slope — Fig. 7.4-1 / Commentary C7.4',
+    html: `<p>Roof slope is entered in degrees. To convert rise:run to degrees: slope&deg; = atan(rise/run) &times; 180/&pi;.</p>
+    <p>The slope, together with C<sub>t</sub> and the roof surface type, determines the slope factor C<sub>s</sub> per <span class="src-tag">Sec. 7.4.1, Fig. 7.4-1, Commentary C7.4</span> (reproduced mathematically in Commentary C7.4, ASCE/SEI 7-22 p.592):</p>
+    <ul>
+      <li>C<sub>t</sub> &lt; 1.1: single "all other surfaces" curve (C<sub>s</sub>=1.0 for slope&le;30&deg;, linear to 0 at 70&deg;, denominator 40&deg;). No slippery-surface curve (ice damming assumed).</li>
+      <li>1.1 &le; C<sub>t</sub> &lt; 1.2: slippery curve (1.0 to 10&deg;, denom 60&deg;) and "all other" curve (1.0 to 37.5&deg;, denom 32.5&deg;).</li>
+      <li>C<sub>t</sub> &ge; 1.2: slippery curve (1.0 to 15&deg;, denom 55&deg;) and "all other" curve (1.0 to 45&deg;, denom 25&deg;).</li>
+    </ul>
+    <p>Sloped roof snow load: <span class="src-tag">Eq. 7.4-1</span> p<sub>s</sub> = C<sub>s</sub>&middot;p<sub>f</sub>.</p>`
+  },
+  surfaceType: {
+    title: 'Roof Surface — Fig. 7.4-1, Commentary C7.4',
+    html: `<p>"Unobstructed and slippery" (metal, slate, glass, smooth membrane roofs that allow snow to slide unobstructed) follows the slippery-surface curve of <span class="src-tag">Fig. 7.4-1</span>; "Other (non-slippery)" follows the "all other surfaces" curve.</p>
+    <p>Per Commentary C7.4, when C<sub>t</sub> &lt; 1.1 there is <strong>no slippery-surface curve</strong> &mdash; ice damming at the eave is assumed to prevent sliding, so both surface types use the single "all other surfaces" curve in that case.</p>
+    <p>This selection also affects <span class="src-tag">Sec. 7.9</span> sliding-snow applicability: slippery upper roofs slide at slope &gt; 1/4 on 12 (1.19&deg;); other roofs slide at slope &gt; 2 on 12 (9.46&deg;).</p>`
+  },
+  roofType: {
+    title: 'Roof Type / Applicability — Sec. 7.3.3, Table 7.3-4',
+    html: `<p><span class="src-tag">Sec. 7.3.3, Table 7.3-4</span> &mdash; the minimum snow load p<sub>m</sub> applies only to:</p>
+    <ul>
+      <li>Monoslope, hip, or gable roofs with slope &lt; 15&deg;, or</li>
+      <li>Curved roofs with eave-to-crown vertical angle &lt; 10&deg;.</li>
+    </ul>
+    <p>For "Other" roof types (multiple folded plate, sawtooth, barrel vault, steep roofs, etc.), p<sub>m</sub> does not apply and is not included in the governing balanced load.</p>
+    <p>Where applicable, p<sub>m</sub> = min(p<sub>g</sub>, p<sub>m,max</sub>), and is a <strong>separate uniform load case</strong> &mdash; not combined with drift, sliding, unbalanced, or partial loads.</p>`
+  },
+  curvedAngle: {
+    title: 'Eave-to-Crown Vertical Angle — Sec. 7.3.3',
+    html: `<p>Used only when "Curved roof" is selected above. Per <span class="src-tag">Sec. 7.3.3</span>, the minimum snow load p<sub>m</sub> applies to curved roofs only when the eave-to-crown vertical angle is <strong>less than 10&deg;</strong>.</p>
+    <p>If the entered angle is &ge; 10&deg;, p<sub>m</sub> does not apply to this roof and is excluded from the governing balanced load, per <span class="src-tag">Table 7.3-4</span>.</p>`
+  },
+  W: {
+    title: 'Eave-to-Ridge Horizontal Distance, W — Sec. 7.9 & Sec. 7.10',
+    html: `<p>W is used in two checks:</p>
+    <ul>
+      <li><span class="src-tag">Sec. 7.9</span> &mdash; Sliding snow: the total sliding load per unit length of eave = <strong>0.4&middot;p<sub>f</sub>&middot;W</strong>, where W is the horizontal eave-to-ridge distance of the upper (sliding) roof.</li>
+      <li><span class="src-tag">Sec. 7.10</span> &mdash; Rain-on-snow surcharge applies only where roof slope (degrees) &lt; W/50 (W in ft; W/15.2 with W in m), in addition to 0 &lt; p<sub>g</sub> &le; p<sub>m,max</sub>.</li>
+    </ul>`
+  },
+  lowerRoofWidth: {
+    title: 'Lower Roof Width — Sec. 7.9',
+    html: `<p><span class="src-tag">Sec. 7.9</span> &mdash; the sliding snow load (0.4&middot;p<sub>f</sub>&middot;W from the upper roof) is distributed over <strong>15 ft (4.6 m)</strong> of the lower roof width, measured from the upper/lower roof intersection.</p>
+    <p>If the lower roof is <strong>narrower than 15 ft (4.6 m)</strong>, the total sliding load is reduced proportionally to the available width before being applied as a uniform load over that width.</p>
+    <p>Set this value to 15 ft / 4.6 m or more if the reduction does not apply.</p>`
+  }
+};
+
+let infoModalEl, modalContentEl;
+
+function openInfoModal(key) {
+  const entry = INFO_CONTENT[key];
+  if (!entry || !infoModalEl || !modalContentEl) return;
+  modalContentEl.innerHTML = '<h3>' + entry.title + '</h3>' + entry.html;
+  infoModalEl.classList.add('open');
+}
+
+function closeInfoModal() {
+  if (infoModalEl) infoModalEl.classList.remove('open');
+}
+
+function bindInfoModal() {
+  infoModalEl = document.getElementById('infoModal');
+  modalContentEl = document.getElementById('modalContent');
+  if (!infoModalEl) return;
+
+  document.querySelectorAll('.info-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      openInfoModal(btn.dataset.info);
+    });
+  });
+
+  const closeBtn = document.getElementById('infoModalClose');
+  if (closeBtn) closeBtn.addEventListener('click', closeInfoModal);
+
+  infoModalEl.addEventListener('click', (e) => {
+    if (e.target === infoModalEl) closeInfoModal();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeInfoModal();
+  });
+}
+
+/* =====================================================================
+   PRINT / EXPORT REPORT
+   ===================================================================== */
+function bindPrintButton() {
+  const btn = document.getElementById('printBtn');
+  const dateEl = document.getElementById('printDate');
+  if (dateEl) {
+    dateEl.textContent = 'Generated ' + new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) + ' — values reflect the inputs and computed results shown below at the time of printing.';
+  }
+  if (btn) {
+    btn.addEventListener('click', () => window.print());
+  }
+}
+
+/* =====================================================================
    INIT
    ===================================================================== */
 function init() {
@@ -728,6 +901,8 @@ function init() {
   updateUnitLabels();
   bindInputs();
   bindLocationInputs();
+  bindInfoModal();
+  bindPrintButton();
   renderResults();
 }
 

@@ -25,6 +25,7 @@ const MODULES = [
     key: 'snowASCE',
     title: 'Snow Loads',
     badge: 'ASCE 7-22',
+    group: 'ASCE 7-22',
     path: '../ASCE 7-22 Snow Load Calculator/index.html',
     status: 'ready'
   },
@@ -32,6 +33,7 @@ const MODULES = [
     key: 'snowDriftNBCC',
     title: 'Snow Drift',
     badge: 'NBCC 2015',
+    group: 'NBCC 2015',
     path: '../NBCC 2015 Snow Drift Calculator/index.html',
     status: 'ready'
   },
@@ -39,6 +41,7 @@ const MODULES = [
     key: 'windASCE',
     title: 'Wind Loads',
     badge: 'ASCE 7-22',
+    group: 'ASCE 7-22',
     status: 'planned',
     roadmap: {
       summary: 'Main Wind Force Resisting System (MWFRS) and Components & Cladding (C&C) pressures for low-rise buildings.',
@@ -56,6 +59,7 @@ const MODULES = [
     key: 'windNBCC',
     title: 'Wind Loads',
     badge: 'NBCC 2015',
+    group: 'NBCC 2015',
     status: 'planned',
     roadmap: {
       summary: 'External wind pressures p = Iᵥ · q · Cₑ · Cᵍ · Cₚ per NBC 2015 Sentence 4.1.7.1.',
@@ -73,6 +77,7 @@ const MODULES = [
     key: 'seismicASCE',
     title: 'Seismic',
     badge: 'ASCE 7-22',
+    group: 'ASCE 7-22',
     status: 'planned',
     roadmap: {
       summary: 'Equivalent Lateral Force base shear and design parameters per ASCE 7-22 Ch. 11 &amp; 12, building on the Site Class / Sₛ / S₁ lookup already available in the Snow module.',
@@ -89,6 +94,7 @@ const MODULES = [
     key: 'seismicNBCC',
     title: 'Seismic',
     badge: 'NBCC 2015',
+    group: 'NBCC 2015',
     status: 'planned',
     roadmap: {
       summary: 'Equivalent static base shear V per NBC 2015 Sentence 4.1.8.11, using design spectral acceleration values Sₐ(T).',
@@ -104,6 +110,17 @@ const MODULES = [
 ];
 
 const MODULE_BY_KEY = Object.fromEntries(MODULES.map(m => [m.key, m]));
+
+// Sidebar groups, in display order — grouped by code/norm first (ASCE 7-22
+// group, then NBCC 2015 group), per the project tree redesign.
+const GROUP_ORDER = ['ASCE 7-22', 'NBCC 2015'];
+
+// Default/first module for each design code — used by the New Project
+// dialog to pick a sensible starting module based on the chosen code.
+const DEFAULT_MODULE_BY_CODE = {
+  'ASCE 7-22': 'snowASCE',
+  'NBCC 2015': 'snowDriftNBCC'
+};
 
 /* ---- Persistence helpers ------------------------------------------------ */
 function loadProjects() {
@@ -139,24 +156,34 @@ function makeId() {
   return 'p_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
 }
 
-function newProject(name) {
+function newProject(name, settings) {
+  settings = settings || { code: 'ASCE 7-22', units: 'US' };
   return {
     id: makeId(),
     name: name,
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    activeModule: 'snowASCE',
+    activeModule: DEFAULT_MODULE_BY_CODE[settings.code] || 'snowASCE',
+    settings: settings,
     modules: {}
   };
 }
 
 /* ---- DOM refs ------------------------------------------------------------ */
 const elProjectSelect = document.getElementById('projectSelect');
-const elTabs = document.getElementById('tabs');
+const elSidebar = document.getElementById('sidebar');
 const elFrame = document.getElementById('moduleFrame');
 const elPlaceholder = document.getElementById('modulePlaceholder');
 const elStatus = document.getElementById('statusbar');
 const elImportFile = document.getElementById('importFile');
+
+/* ---- New Project dialog --------------------------------------------------- */
+const elNewProjectModal = document.getElementById('newProjectModal');
+const elNpName = document.getElementById('npName');
+const elNpCode = document.getElementById('npCode');
+const elNpUnits = document.getElementById('npUnits');
+const elNpCreate = document.getElementById('npCreate');
+const elNewProjectClose = document.getElementById('newProjectClose');
 
 /* ---- State -------------------------------------------------------------- */
 let projects = loadProjects();
@@ -211,20 +238,50 @@ function switchProject(id) {
   if (!MODULE_BY_KEY[activeModule]) activeModule = 'snowASCE';
   localStorage.setItem(LS_ACTIVE_TAB, activeModule);
   renderProjectSelect();
-  renderTabs();
+  renderSidebar();
   renderContent(true); // force reload so the module starts clean before we push saved state
   setStatus('Switched to project "' + projects[activeProjectId].name + '".', true);
 }
 
 /* ---- Project CRUD buttons --------------------------------------------------- */
 document.getElementById('btnNewProject').addEventListener('click', () => {
-  const name = prompt('Name for the new project:', 'Project ' + (Object.keys(projects).length + 1));
-  if (!name) return;
-  const p = newProject(name.trim() || 'Untitled project');
+  openNewProjectModal();
+});
+
+/* ---- New Project dialog: pick design code + unit system upfront ------------- */
+function openNewProjectModal() {
+  elNpName.value = 'Project ' + (Object.keys(projects).length + 1);
+  elNpCode.value = 'ASCE 7-22';
+  elNpUnits.value = 'US';
+  elNewProjectModal.classList.add('open');
+  elNpName.focus();
+}
+
+function closeNewProjectModal() {
+  elNewProjectModal.classList.remove('open');
+}
+
+elNewProjectClose.addEventListener('click', closeNewProjectModal);
+elNewProjectModal.addEventListener('click', (e) => {
+  if (e.target === elNewProjectModal) closeNewProjectModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && elNewProjectModal.classList.contains('open')) closeNewProjectModal();
+});
+
+elNpCreate.addEventListener('click', () => {
+  const name = (elNpName.value || '').trim() || 'Untitled project';
+  const settings = { code: elNpCode.value, units: elNpUnits.value };
+  const p = newProject(name, settings);
   projects[p.id] = p;
   scheduleSave();
+  closeNewProjectModal();
   switchProject(p.id);
   renderProjectSelect();
+});
+
+elNpName.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') elNpCreate.click();
 });
 
 document.getElementById('btnDuplicateProject').addEventListener('click', () => {
@@ -268,7 +325,7 @@ document.getElementById('btnDeleteProject').addEventListener('click', () => {
   if (!MODULE_BY_KEY[activeModule]) activeModule = 'snowASCE';
   localStorage.setItem(LS_ACTIVE_TAB, activeModule);
   renderProjectSelect();
-  renderTabs();
+  renderSidebar();
   renderContent(true);
   setStatus('Project deleted.', true);
 });
@@ -324,17 +381,44 @@ elImportFile.addEventListener('change', () => {
   reader.readAsText(file);
 });
 
-/* ---- Tabs ------------------------------------------------------------------------ */
-function renderTabs() {
-  elTabs.innerHTML = '';
-  MODULES.forEach(m => {
-    const tab = document.createElement('div');
-    tab.className = 'tab' + (m.key === activeModule ? ' active' : '');
-    tab.dataset.key = m.key;
-    tab.innerHTML = '<span>' + m.title + '</span><span class="tab-badge">' + m.badge +
-      (m.status === 'planned' ? ' · planned' : '') + '</span>';
-    tab.addEventListener('click', () => switchModule(m.key));
-    elTabs.appendChild(tab);
+/* ---- Sidebar project tree ---------------------------------------------------------- */
+// Grouped by design code/norm first (ASCE 7-22, then NBCC 2015), with each
+// group's modules listed underneath — replaces the old top tab strip.
+function renderSidebar() {
+  elSidebar.innerHTML = '';
+  GROUP_ORDER.forEach(group => {
+    const groupMods = MODULES.filter(m => m.group === group);
+    if (!groupMods.length) return;
+
+    const groupEl = document.createElement('div');
+    groupEl.className = 'tree-group';
+
+    const header = document.createElement('div');
+    header.className = 'tree-group-header';
+    header.textContent = group;
+    groupEl.appendChild(header);
+
+    groupMods.forEach(m => {
+      const item = document.createElement('div');
+      item.className = 'tree-item' + (m.key === activeModule ? ' active' : '') + (m.status === 'planned' ? ' planned' : '');
+      item.dataset.key = m.key;
+
+      const label = document.createElement('span');
+      label.textContent = m.title;
+      item.appendChild(label);
+
+      if (m.status === 'planned') {
+        const badge = document.createElement('span');
+        badge.className = 'tree-badge';
+        badge.textContent = 'planned';
+        item.appendChild(badge);
+      }
+
+      item.addEventListener('click', () => switchModule(m.key));
+      groupEl.appendChild(item);
+    });
+
+    elSidebar.appendChild(groupEl);
   });
 }
 
@@ -344,7 +428,7 @@ function switchModule(key) {
   projects[activeProjectId].activeModule = key;
   localStorage.setItem(LS_ACTIVE_TAB, key);
   scheduleSave();
-  renderTabs();
+  renderSidebar();
   renderContent(false);
 }
 
@@ -355,7 +439,7 @@ function plannedHtml(mod) {
     '<p>' + mod.roadmap.summary + '</p>' +
     '<ul>' + items + '</ul>' +
     '<div class="roadmap-note">This module is on the roadmap and not built yet. ' +
-    'Your other modules and project data are unaffected — switch tabs above to use them.</div>';
+    'Your other modules and project data are unaffected — pick another module from the sidebar to use them.</div>';
 }
 
 function renderContent(forceReload) {
@@ -388,14 +472,23 @@ function renderContent(forceReload) {
 
 function pushStateToFrame() {
   const mod = MODULE_BY_KEY[activeModule];
-  if (mod.status !== 'ready') return;
-  const saved = projects[activeProjectId].modules[mod.key];
-  if (!saved || !elFrame.contentWindow) return;
-  elFrame.contentWindow.postMessage({
-    type: 'loadState',
-    state: saved.state,
-    unitSystem: saved.unitSystem
-  }, '*');
+  if (mod.status !== 'ready' || !elFrame.contentWindow) return;
+  const proj = projects[activeProjectId];
+  const saved = proj.modules[mod.key];
+  if (saved) {
+    elFrame.contentWindow.postMessage({
+      type: 'loadState',
+      state: saved.state,
+      unitSystem: saved.unitSystem
+    }, '*');
+  } else if (proj.settings && proj.settings.units) {
+    // No saved state yet for this module — at least apply the unit system
+    // chosen for this project in the New Project dialog.
+    elFrame.contentWindow.postMessage({
+      type: 'loadState',
+      unitSystem: proj.settings.units
+    }, '*');
+  }
 }
 
 elFrame.addEventListener('load', () => {
@@ -424,6 +517,6 @@ window.addEventListener('message', e => {
 
 /* ---- Init ------------------------------------------------------------------------------ */
 renderProjectSelect();
-renderTabs();
+renderSidebar();
 renderContent(true);
 setStatus('Ready.', true);

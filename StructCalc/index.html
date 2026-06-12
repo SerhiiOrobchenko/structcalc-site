@@ -29,14 +29,45 @@
     </div>
   </header>
 
-  <nav class="tabs" id="tabs"></nav>
+  <div class="shell-body">
+    <nav class="sidebar" id="sidebar"></nav>
 
-  <main class="content">
-    <iframe id="moduleFrame" title="Calculation module"></iframe>
-    <div id="modulePlaceholder" class="placeholder" style="display:none"></div>
-  </main>
+    <main class="content">
+      <iframe id="moduleFrame" title="Calculation module"></iframe>
+      <div id="modulePlaceholder" class="placeholder" style="display:none"></div>
+    </main>
+  </div>
 
   <footer class="statusbar" id="statusbar"></footer>
+
+  <!-- New project dialog: pick design code + unit system upfront (stored in project settings) -->
+  <div class="modal-overlay" id="newProjectModal">
+    <div class="modal-box">
+      <button type="button" class="modal-close" id="newProjectClose" aria-label="Close">&times;</button>
+      <h3>New project</h3>
+      <div class="field">
+        <label for="npName">Project name</label>
+        <input type="text" id="npName" placeholder="Project name">
+      </div>
+      <div class="field">
+        <label for="npCode">Design code / standard</label>
+        <select id="npCode">
+          <option value="ASCE 7-22">ASCE 7-22 (United States)</option>
+          <option value="NBCC 2015">NBCC 2015 (Canada)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="npUnits">Unit system</label>
+        <select id="npUnits">
+          <option value="US">US / Imperial (psf, ft)</option>
+          <option value="SI">SI (kPa, m)</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" id="npCreate">Create project</button>
+      </div>
+    </div>
+  </div>
 
   <script src="shell.js"></script>
 </body>

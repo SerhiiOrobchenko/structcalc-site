@@ -123,6 +123,53 @@
   .alert{border-radius:6px; padding:8px 12px; font-size:.84rem; margin:8px 0;}
   .alert.warn{background:#fff8ec; border:1px solid #f0d9a8; color:#8a5a00;}
   .alert.info{background:#eef5fc; border:1px solid #c9dff2; color:#1f4e79;}
+
+  /* ---- "Learn more" info buttons & modal --------------------------------- */
+  .field label{display:flex; align-items:center; gap:0;}
+  .info-btn{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:17px; height:17px; border-radius:50%; flex:0 0 auto;
+    background:var(--brand-light); color:var(--brand); border:1px solid var(--line);
+    font-size:.7rem; font-weight:700; font-style:normal; cursor:pointer;
+    margin-left:6px; padding:0; line-height:1;
+  }
+  .info-btn:hover{background:var(--brand); color:#fff;}
+  .panel h2 .info-btn{margin-left:8px; vertical-align:middle;}
+  .case-block .case-title strong .info-btn{margin-left:4px;}
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(28,39,51,.5); display:none;
+    align-items:center; justify-content:center; z-index:1000; padding:20px;
+  }
+  .modal-overlay.open{display:flex;}
+  .modal-box{
+    background:#fff; border-radius:8px; max-width:600px; width:100%; max-height:82vh;
+    overflow:auto; padding:20px 24px; position:relative; box-shadow:0 10px 40px rgba(0,0,0,.25);
+  }
+  .modal-box h3{color:var(--brand); margin:0 0 10px; font-size:1.05rem; padding-right:26px;}
+  .modal-box p, .modal-box li{font-size:.88rem; color:var(--ink);}
+  .modal-box ul{padding-left:20px;}
+  .modal-close{
+    position:absolute; top:10px; right:10px; width:28px; height:28px; border-radius:50%;
+    background:var(--bg); border:1px solid var(--line); font-size:1.1rem; line-height:1;
+    cursor:pointer; color:var(--muted);
+  }
+  .modal-close:hover{color:var(--ink); background:var(--brand-light);}
+  .btn{
+    background:var(--brand); color:#fff; border:none; border-radius:5px; padding:8px 16px;
+    font-size:.88rem; cursor:pointer; font-weight:600;
+  }
+  .btn:hover{background:#163a5c;}
+
+  /* ---- Print report ------------------------------------------------------- */
+  .print-only{display:none;}
+  @media print{
+    header.topbar, nav.modulenav, .info-btn, footer.sources, #printBtn{display:none !important;}
+    .grid{display:block;}
+    .panel{break-inside:avoid; border:1px solid #ccc; box-shadow:none;}
+    .print-only{display:block;}
+    body{background:#fff;}
+    main{max-width:100%;}
+  }
 </style>
 </head>
 <body>
@@ -140,6 +187,7 @@
       <button id="unitSI" data-units="SI">SI (kPa, m)</button>
       <button id="unitUS" data-units="US" class="active">US / Imperial (psf, ft)</button>
     </div>
+    <button type="button" id="printBtn" class="btn" style="background:transparent; border:1px solid #9fc6ea;">Print / Export Report</button>
   </div>
 </header>
 
@@ -152,6 +200,11 @@
 </nav>
 
 <main>
+
+  <div class="print-only" style="margin-bottom:12px;">
+    <h1 style="color:var(--brand); margin:0;">Snow Drift Load Report &mdash; NBCC 2015, Art. 4.1.6.5</h1>
+    <p style="color:var(--muted); font-size:.85rem;" id="printDate"></p>
+  </div>
 
   <div class="intro">
     <h1>Snow Drift Load at a Change in Roof Elevation</h1>
@@ -168,19 +221,19 @@
         <h2>1. Snow Data &amp; Roof Factors <span class="ref">NBC 4.1.6.2.(1)</span></h2>
         <div class="row2">
           <div class="field">
-            <label for="Ss">Ground snow load, S<sub>s</sub> <span id="unitPress1">(psf)</span></label>
+            <label for="Ss">Ground snow load, S<sub>s</sub> <span id="unitPress1">(psf)</span><button type="button" class="info-btn" data-info="Ss" aria-label="Learn more">i</button></label>
             <input type="number" id="Ss" step="any">
             <span class="hint">From NBCC 2015 Appendix C, Table C-2 for your location.</span>
           </div>
           <div class="field">
-            <label for="Sr">Associated rain load, S<sub>r</sub> <span id="unitPress2">(psf)</span></label>
+            <label for="Sr">Associated rain load, S<sub>r</sub> <span id="unitPress2">(psf)</span><button type="button" class="info-btn" data-info="Sr" aria-label="Learn more">i</button></label>
             <input type="number" id="Sr" step="any">
             <span class="hint">From NBCC 2015 Appendix C, Table C-2.</span>
           </div>
         </div>
         <div class="row3">
           <div class="field">
-            <label for="Is">Importance factor, I<sub>s</sub></label>
+            <label for="Is">Importance factor, I<sub>s</sub><button type="button" class="info-btn" data-info="Is" aria-label="Learn more">i</button></label>
             <select id="Is">
               <option value="0.8">Low (0.8) &ndash; ULS</option>
               <option value="1.0" selected>Normal (1.0) &ndash; ULS</option>
@@ -193,18 +246,18 @@
             <span class="hint">NBCC 2015 Table 4.1.6.2.&ndash;A (Importance Categories per Table 4.1.2.1.). Verify against your copy.</span>
           </div>
           <div class="field">
-            <label for="Cb">Basic roof snow load factor, C<sub>b</sub></label>
+            <label for="Cb">Basic roof snow load factor, C<sub>b</sub><button type="button" class="info-btn" data-info="Cb" aria-label="Learn more">i</button></label>
             <input type="number" id="Cb" step="any" value="0.8">
             <span class="hint">0.8 for typical roofs (Cw=1). Larger roofs may need a higher value per NBC Cl. 4.1.6.2.(2) &ndash; not yet automated here.</span>
           </div>
           <div class="field">
-            <label for="Cw">Wind exposure factor, C<sub>w</sub></label>
+            <label for="Cw">Wind exposure factor, C<sub>w</sub><button type="button" class="info-btn" data-info="Cw" aria-label="Learn more">i</button></label>
             <input type="number" id="Cw" step="any" value="1.0">
             <span class="hint">Use 1.0 wherever drift accumulation is being checked (Commentary G, para. 11).</span>
           </div>
         </div>
         <div class="field">
-          <label for="Cs">Roof slope factor, C<sub>s</sub> (lower roof)</label>
+          <label for="Cs">Roof slope factor, C<sub>s</sub> (lower roof)<button type="button" class="info-btn" data-info="Cs" aria-label="Learn more">i</button></label>
           <input type="number" id="Cs" step="any" value="1.0" style="max-width:180px;">
           <span class="hint">1.0 for flat or low-slope roofs (NBC Sentence 4.1.6.2.(5)). Sloped-roof Cs is a separate module &ndash; see roadmap.</span>
         </div>
@@ -213,7 +266,7 @@
       <div class="panel">
         <h2>2. Roof Step Geometry <span class="ref">NBC Fig. 4.1.6.5.-A</span></h2>
         <div class="field">
-          <label for="h">Height of roof step, h <span id="unitLen1">(ft)</span></label>
+          <label for="h">Height of roof step, h <span id="unitLen1">(ft)</span><button type="button" class="info-btn" data-info="h" aria-label="Learn more">i</button></label>
           <input type="number" id="h" step="any">
           <span class="hint">Difference in elevation between the lower roof surface and the top of the upper roof / parapet (NBC Fig. 4.1.6.5.-A).</span>
         </div>
@@ -226,29 +279,29 @@
       </div>
 
       <div class="panel">
-        <h2>3. Lower-Roof Parapet Check <span class="ref">NBC Cl. 4.1.6.7.(1)(a)</span></h2>
+        <h2>3. Lower-Roof Parapet Check <span class="ref">NBC Cl. 4.1.6.7.(1)(a)</span><button type="button" class="info-btn" data-info="parapetCheck" aria-label="Learn more">i</button></h2>
         <p class="hint">If the lower roof itself has a parapet, this check determines whether the parapet&rsquo;s own drift (independent of the roof step) governs near that wall. Set h<sub>p,lower</sub> = 0 to skip.</p>
         <div class="row2">
           <div class="field">
-            <label for="hpLower">Lower-roof parapet height, h<sub>p,lower</sub> <span id="unitLen2">(ft)</span></label>
+            <label for="hpLower">Lower-roof parapet height, h<sub>p,lower</sub> <span id="unitLen2">(ft)</span><button type="button" class="info-btn" data-info="hpLower" aria-label="Learn more">i</button></label>
             <input type="number" id="hpLower" step="any">
           </div>
           <div class="field">
-            <label for="l0">Plan dimension along that parapet, l<sub>0</sub> <span id="unitLen3">(ft)</span></label>
+            <label for="l0">Plan dimension along that parapet, l<sub>0</sub> <span id="unitLen3">(ft)</span><button type="button" class="info-btn" data-info="l0" aria-label="Learn more">i</button></label>
             <input type="number" id="l0" step="any">
           </div>
         </div>
       </div>
 
       <div class="panel">
-        <h2>4. Snow Drift at Corners <span class="ref">NBC Art. 4.1.6.8</span></h2>
+        <h2>4. Snow Drift at Corners <span class="ref">NBC Art. 4.1.6.8</span><button type="button" class="info-btn" data-info="corners" aria-label="Learn more">i</button></h2>
         <p class="hint">Where the roof step in Section 2 occurs at an outside or inside corner in plan, Sentences 4.1.6.8.(1)/(2) govern how the drift loads on the <strong>two faces</strong> of the corner are combined and applied &mdash; this Article defines no new C<sub>a0</sub>/x<sub>d</sub> formula. Each face below is evaluated with the same method as Section 2 (Sentence 4.1.6.5.(3), Eq.(2)&amp;(3)), using the roof-step height h entered above.</p>
         <label style="display:flex;align-items:center;gap:6px;font-size:.88rem;font-weight:600;">
           <input type="checkbox" id="cornerEnabled"> Include a corner condition
         </label>
         <div id="cornerBlock" style="display:none; margin-top:10px;">
           <div class="field" style="max-width:360px;">
-            <label for="cornerType">Corner type</label>
+            <label for="cornerType">Corner type<button type="button" class="info-btn" data-info="cornerType" aria-label="Learn more">i</button></label>
             <select id="cornerType">
               <option value="outside">Outside corner &mdash; Sentence 4.1.6.8.(1), Fig. 4.1.6.8.-A</option>
               <option value="inside">Inside corner &mdash; Sentence 4.1.6.8.(2), Fig. 4.1.6.8.-B</option>
@@ -275,7 +328,7 @@
         <h3>Snow load distribution, S(x)</h3>
         <table id="profileTable"><thead><tr><th>x</th><th>C<sub>a</sub>(x)</th><th>S(x)</th></tr></thead><tbody></tbody></table>
         <div class="field" style="max-width:240px;">
-          <label for="xQuery">Evaluate at a specific x <span id="unitLen4">(ft)</span></label>
+          <label for="xQuery">Evaluate at a specific x <span id="unitLen4">(ft)</span><button type="button" class="info-btn" data-info="xQuery" aria-label="Learn more">i</button></label>
           <input type="number" id="xQuery" step="any" value="0">
         </div>
         <table><tbody>
@@ -343,6 +396,13 @@
     <p>Site and calculations by StructCalc (working title) &mdash; built for Serhii. This is a working engineering tool: always verify governing-case selection, drift truncation against actual roof edges (NBC 4.1.6.5, drift should be truncated at the lower-roof edge if x<sub>d</sub> exceeds it), and corner conditions per NBC 4.1.6.8. before use in design.</p>
   </div>
 </footer>
+
+<div class="modal-overlay" id="infoModal">
+  <div class="modal-box">
+    <button type="button" class="modal-close" id="infoModalClose" aria-label="Close">&times;</button>
+    <div id="modalContent"></div>
+  </div>
+</div>
 
 <script src="engine.js"></script>
 </body>

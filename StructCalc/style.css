@@ -96,36 +96,63 @@ body {
   margin: 0 4px;
 }
 
-/* ---- Tabs ------------------------------------------------------------ */
-.tabs {
+/* ---- Shell body / sidebar project tree -------------------------------- */
+.shell-body {
+  flex: 1;
+  min-height: 0;
   display: flex;
-  flex-wrap: wrap;
-  background: #fff;
-  border-bottom: 1px solid var(--border);
-  padding: 0 8px;
 }
 
-.tab {
-  padding: 10px 16px;
+.sidebar {
+  width: 250px;
+  flex: 0 0 250px;
+  overflow-y: auto;
+  background: #fff;
+  border-right: 1px solid var(--border);
+  padding: 10px 0;
+}
+
+.tree-group {
+  margin-bottom: 6px;
+}
+
+.tree-group-header {
+  padding: 10px 14px 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-light);
+}
+
+.tree-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 14px 8px 22px;
   font-size: 0.9rem;
   cursor: pointer;
-  border-bottom: 3px solid transparent;
-  color: var(--text-light);
-  white-space: nowrap;
+  color: var(--text);
+  border-left: 3px solid transparent;
 }
 
-.tab:hover { color: var(--text); background: #f0f3f6; }
+.tree-item:hover { color: var(--text); background: #f0f3f6; }
 
-.tab.active {
+.tree-item.active {
+  background: #eaf1f8;
+  border-left-color: var(--accent);
   color: var(--accent);
   font-weight: 600;
-  border-bottom-color: var(--accent);
 }
 
-.tab .tab-badge {
+.tree-item.planned {
+  color: var(--text-light);
+}
+
+.tree-item .tree-badge {
   display: inline-block;
-  margin-left: 6px;
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -133,7 +160,39 @@ body {
   border-radius: 10px;
   background: #e3e8ec;
   color: var(--text-light);
+  white-space: nowrap;
 }
+
+/* ---- Modal (New Project dialog) ---------------------------------------- */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(28,39,51,.5);
+  display: none; align-items: center; justify-content: center;
+  z-index: 1000; padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+.modal-box {
+  background: #fff; border-radius: 8px; max-width: 420px; width: 100%;
+  padding: 20px 24px; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,.25);
+}
+.modal-box h3 { color: var(--accent); margin: 0 0 14px; font-size: 1.05rem; padding-right: 26px; }
+.modal-close {
+  position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--bg); border: 1px solid var(--border); font-size: 1.1rem; line-height: 1;
+  cursor: pointer; color: var(--text-light);
+}
+.modal-close:hover { color: var(--text); background: #eaf1f8; }
+.modal-box .field { margin-bottom: 14px; }
+.modal-box .field label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; color: var(--text); }
+.modal-box .field input, .modal-box .field select {
+  width: 100%; padding: 7px 9px; border-radius: 4px; border: 1px solid var(--border); font-size: 0.9rem;
+  font-family: inherit; color: var(--text); background: #fff;
+}
+.modal-actions { text-align: right; margin-top: 6px; }
+.btn-primary {
+  background: var(--accent); color: #fff; border: 1px solid var(--accent);
+  padding: 7px 16px; border-radius: 4px; font-size: 0.88rem; cursor: pointer; font-weight: 600;
+}
+.btn-primary:hover { background: #163a5c; }
 
 /* ---- Content ----------------------------------------------------------- */
 .content {
