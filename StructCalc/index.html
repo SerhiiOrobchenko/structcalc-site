@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>StructCalc — Structural Load Workspace</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-name">StructCalc</span>
+      <span class="brand-sub">Structural load workspace — ASCE 7-22 &amp; NBCC 2015</span>
+    </div>
+
+    <div class="project-bar">
+      <label for="projectSelect" class="sr-only">Project</label>
+      <select id="projectSelect" title="Active project"></select>
+      <button id="btnNewProject" class="btn" title="Create a new project">+ New</button>
+      <button id="btnDuplicateProject" class="btn" title="Duplicate the active project">Duplicate</button>
+      <button id="btnRenameProject" class="btn" title="Rename the active project">Rename</button>
+      <button id="btnDeleteProject" class="btn btn-danger" title="Delete the active project">Delete</button>
+      <span class="sep"></span>
+      <button id="btnExportProject" class="btn" title="Download the active project as a .json file">Export .json</button>
+      <button id="btnImportProject" class="btn" title="Load a project from a .json file">Import .json</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none">
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs"></nav>
+
+  <main class="content">
+    <iframe id="moduleFrame" title="Calculation module"></iframe>
+    <div id="modulePlaceholder" class="placeholder" style="display:none"></div>
+  </main>
+
+  <footer class="statusbar" id="statusbar"></footer>
+
+  <script src="shell.js"></script>
+</body>
+</html>

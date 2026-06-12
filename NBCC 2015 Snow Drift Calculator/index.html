@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>StructCalc &mdash; Snow Drift Load (NBCC 2015)</title>
+<style>
+  :root{
+    --bg:#f4f6f9;
+    --panel:#ffffff;
+    --ink:#1c2733;
+    --muted:#5b6b7c;
+    --line:#dde3ea;
+    --brand:#1f4e79;
+    --brand-light:#eaf1f8;
+    --accent:#c0571f;
+    --ok:#2e7d32;
+    --warn:#9a6700;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.5;
+  }
+  header.topbar{
+    background:var(--brand); color:#fff; padding:10px 20px;
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
+  }
+  header.topbar .brand{font-weight:700; font-size:1.25rem; letter-spacing:.5px;}
+  header.topbar .brand span{color:#9fc6ea;}
+  .topbar-controls{display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:.92rem;}
+  .topbar-controls label{display:flex; align-items:center; gap:6px;}
+  .topbar-controls select{
+    background:#fff; color:var(--ink); border:1px solid var(--line); border-radius:4px;
+    padding:4px 8px; font-size:.9rem;
+  }
+  .seg{display:flex; border:1px solid #9fc6ea; border-radius:6px; overflow:hidden;}
+  .seg button{
+    background:transparent; color:#fff; border:none; padding:5px 12px; cursor:pointer; font-size:.88rem;
+  }
+  .seg button.active{background:#fff; color:var(--brand); font-weight:600;}
+
+  nav.modulenav{
+    background:#16384f; color:#cfe2f3; padding:8px 20px; display:flex; gap:18px; flex-wrap:wrap; font-size:.88rem;
+  }
+  nav.modulenav a{color:#cfe2f3; text-decoration:none; padding:4px 2px; border-bottom:2px solid transparent;}
+  nav.modulenav a.active{color:#fff; border-color:var(--accent); font-weight:600;}
+  nav.modulenav a.disabled{color:#5f7f96; cursor:default;}
+
+  main{max-width:1180px; margin:0 auto; padding:18px 16px 60px;}
+
+  .intro{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px 20px; margin-bottom:18px;}
+  .intro h1{margin:0 0 6px; font-size:1.4rem; color:var(--brand);}
+  .intro p{margin:6px 0; color:var(--muted); font-size:.95rem;}
+  .badge{
+    display:inline-block; background:var(--brand-light); color:var(--brand); border-radius:4px;
+    padding:2px 8px; font-size:.78rem; font-weight:600; margin-right:6px;
+  }
+
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+  @media (max-width:900px){ .grid{grid-template-columns:1fr;} }
+
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px 18px; margin-bottom:18px;}
+  .panel h2{margin:0 0 4px; font-size:1.08rem; color:var(--brand); border-bottom:1px solid var(--line); padding-bottom:8px;}
+  .panel h3{margin:14px 0 8px; font-size:.95rem; color:var(--ink);}
+  .panel .ref{color:var(--muted); font-size:.78rem; font-weight:400;}
+
+  .field{display:flex; flex-direction:column; gap:3px; margin-bottom:10px;}
+  .field label{font-size:.85rem; font-weight:600;}
+  .field .hint{font-size:.76rem; color:var(--muted); font-weight:400;}
+  .field input, .field select{
+    border:1px solid var(--line); border-radius:5px; padding:6px 8px; font-size:.92rem; width:100%;
+    background:#fcfdfe;
+  }
+  .row3{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
+  .row2{display:grid; grid-template-columns:repeat(2,1fr); gap:10px;}
+  @media (max-width:560px){ .row3,.row2{grid-template-columns:1fr;} }
+
+  .case-block{border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:12px; background:#fafcfe;}
+  .case-block.disabled{opacity:.5;}
+  .case-block .case-title{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;}
+  .case-block .case-title strong{font-size:.92rem;}
+  .case-block .case-title label{display:flex; align-items:center; gap:6px; font-size:.82rem; font-weight:400;}
+
+  svg.diagram{width:100%; height:auto; max-height:170px; background:#fff; border:1px solid var(--line); border-radius:4px;}
+
+  table{width:100%; border-collapse:collapse; font-size:.86rem; margin:8px 0;}
+  table th, table td{border:1px solid var(--line); padding:5px 8px; text-align:right;}
+  table th{background:var(--brand-light); color:var(--brand); text-align:center; font-size:.8rem;}
+  table td:first-child, table th:first-child{text-align:left;}
+
+  .steps{font-size:.88rem;}
+  .steps .step{border-left:3px solid var(--brand-light); padding:6px 10px 6px 12px; margin-bottom:8px;}
+  .steps .step .lbl{font-weight:700; color:var(--brand); font-size:.82rem; display:block; margin-bottom:2px;}
+  .steps .step .clause{color:var(--muted); font-size:.74rem;}
+  .steps .formula{font-family:var(--mono); background:#f6f8fb; border:1px solid var(--line); border-radius:4px; padding:6px 8px; margin:4px 0; font-size:.82rem; overflow-x:auto;}
+  .steps .result{font-weight:700;}
+
+  .pill{display:inline-block; padding:1px 8px; border-radius:10px; font-size:.74rem; font-weight:700;}
+  .pill.gov{background:#e6f4ea; color:var(--ok);}
+  .pill.note{background:#fff4e0; color:var(--warn);}
+
+  .summary-cards{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:10px 0;}
+  @media (max-width:760px){ .summary-cards{grid-template-columns:repeat(2,1fr);} }
+  .scard{background:var(--brand-light); border-radius:6px; padding:10px; text-align:center;}
+  .scard .v{font-size:1.25rem; font-weight:700; color:var(--brand);}
+  .scard .k{font-size:.74rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em;}
+
+  details{border:1px solid var(--line); border-radius:6px; padding:8px 12px; margin:10px 0; background:#fcfdfe;}
+  details summary{cursor:pointer; font-weight:600; font-size:.88rem; color:var(--brand);}
+  details[open] summary{margin-bottom:8px;}
+
+  footer.sources{background:#fff; border-top:1px solid var(--line); margin-top:30px; padding:20px 16px;}
+  footer.sources .inner{max-width:1180px; margin:0 auto;}
+  footer.sources h2{color:var(--brand); font-size:1.05rem;}
+  footer.sources h3{font-size:.92rem; margin:14px 0 6px;}
+  footer.sources p, footer.sources li{font-size:.86rem; color:var(--muted);}
+  footer.sources ul{padding-left:20px;}
+  .src-tag{font-family:var(--mono); background:#f0f3f7; padding:1px 5px; border-radius:3px; font-size:.8rem; color:var(--ink);}
+
+  .alert{border-radius:6px; padding:8px 12px; font-size:.84rem; margin:8px 0;}
+  .alert.warn{background:#fff8ec; border:1px solid #f0d9a8; color:#8a5a00;}
+  .alert.info{background:#eef5fc; border:1px solid #c9dff2; color:#1f4e79;}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">StructCalc <span>&mdash; Engineering Calculations</span></div>
+  <div class="topbar-controls">
+    <label>Code:
+      <select id="codeSelect">
+        <option value="nbcc2015">Canada &mdash; NBCC 2015</option>
+        <option value="asce7" disabled>USA &mdash; ASCE/SEI 7 (coming soon)</option>
+      </select>
+    </label>
+    <div class="seg" role="group" aria-label="Unit system">
+      <button id="unitSI" data-units="SI">SI (kPa, m)</button>
+      <button id="unitUS" data-units="US" class="active">US / Imperial (psf, ft)</button>
+    </div>
+  </div>
+</header>
+
+<nav class="modulenav">
+  <a href="#" class="active">Snow &mdash; Drift Load (roof step)</a>
+  <a href="#" class="disabled">Snow &mdash; Uniform / Slope / Gable (soon)</a>
+  <a href="#" class="disabled">Wind Loads (soon)</a>
+  <a href="#" class="disabled">Seismic Loads (soon)</a>
+  <a href="#" class="disabled">Member Design: Joists, Lintels (soon)</a>
+</nav>
+
+<main>
+
+  <div class="intro">
+    <h1>Snow Drift Load at a Change in Roof Elevation</h1>
+    <p><span class="badge">NBCC 2015 Div. B, Art. 4.1.6.5</span><span class="badge">Cases I, II &amp; III</span><span class="badge">Cl. 4.1.6.7.(1)(a) parapet check</span><span class="badge">Art. 4.1.6.8 corner drifts</span></p>
+    <p>This module calculates the snow drift load that accumulates on a lower roof adjacent to a higher roof, projection or parapet (a "roof step"), following the method set out in NBC Article 4.1.6.5 and explained step-by-step in <strong>Commentary G &mdash; Snow Loads</strong> of the <em>NBC 2015 Structural Commentaries (User's Guide, Part 4 of Division B)</em>, paragraphs 36&ndash;38 and Sample Calculations 1 &amp; 2. Every coefficient below is calculated explicitly, with the clause/paragraph it comes from, so you can check it against your own copy of the Code.</p>
+    <p>All internal calculations are performed in SI units (the units used by NBCC 2015). Use the unit switch above to enter data and view results in US/Imperial units &mdash; the converted SI values used in the formulas are shown alongside so the calculation can still be checked directly against the Code.</p>
+  </div>
+
+  <div class="grid">
+
+    <!-- LEFT COLUMN: INPUTS -->
+    <div>
+      <div class="panel">
+        <h2>1. Snow Data &amp; Roof Factors <span class="ref">NBC 4.1.6.2.(1)</span></h2>
+        <div class="row2">
+          <div class="field">
+            <label for="Ss">Ground snow load, S<sub>s</sub> <span id="unitPress1">(psf)</span></label>
+            <input type="number" id="Ss" step="any">
+            <span class="hint">From NBCC 2015 Appendix C, Table C-2 for your location.</span>
+          </div>
+          <div class="field">
+            <label for="Sr">Associated rain load, S<sub>r</sub> <span id="unitPress2">(psf)</span></label>
+            <input type="number" id="Sr" step="any">
+            <span class="hint">From NBCC 2015 Appendix C, Table C-2.</span>
+          </div>
+        </div>
+        <div class="row3">
+          <div class="field">
+            <label for="Is">Importance factor, I<sub>s</sub></label>
+            <select id="Is">
+              <option value="0.8">Low (0.8) &ndash; ULS</option>
+              <option value="1.0" selected>Normal (1.0) &ndash; ULS</option>
+              <option value="1.15">High (1.15) &ndash; ULS</option>
+              <option value="1.25">Post-disaster (1.25) &ndash; ULS</option>
+              <option value="0.9">SLS (all categories, 0.9)</option>
+              <option value="custom">Custom&hellip;</option>
+            </select>
+            <input type="number" id="IsCustom" step="any" style="display:none; margin-top:4px;" placeholder="Custom Is">
+            <span class="hint">NBCC 2015 Table 4.1.6.2.&ndash;A (Importance Categories per Table 4.1.2.1.). Verify against your copy.</span>
+          </div>
+          <div class="field">
+            <label for="Cb">Basic roof snow load factor, C<sub>b</sub></label>
+            <input type="number" id="Cb" step="any" value="0.8">
+            <span class="hint">0.8 for typical roofs (Cw=1). Larger roofs may need a higher value per NBC Cl. 4.1.6.2.(2) &ndash; not yet automated here.</span>
+          </div>
+          <div class="field">
+            <label for="Cw">Wind exposure factor, C<sub>w</sub></label>
+            <input type="number" id="Cw" step="any" value="1.0">
+            <span class="hint">Use 1.0 wherever drift accumulation is being checked (Commentary G, para. 11).</span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="Cs">Roof slope factor, C<sub>s</sub> (lower roof)</label>
+          <input type="number" id="Cs" step="any" value="1.0" style="max-width:180px;">
+          <span class="hint">1.0 for flat or low-slope roofs (NBC Sentence 4.1.6.2.(5)). Sloped-roof Cs is a separate module &ndash; see roadmap.</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>2. Roof Step Geometry <span class="ref">NBC Fig. 4.1.6.5.-A</span></h2>
+        <div class="field">
+          <label for="h">Height of roof step, h <span id="unitLen1">(ft)</span></label>
+          <input type="number" id="h" step="any">
+          <span class="hint">Difference in elevation between the lower roof surface and the top of the upper roof / parapet (NBC Fig. 4.1.6.5.-A).</span>
+        </div>
+
+        <div class="alert info">
+          For each applicable case, enter the source-area dimensions <strong>l<sub>s</sub></strong> (length, parallel to drift) and <strong>w<sub>s</sub></strong> (width, perpendicular) of the roof area that supplies snow to the drift, and the parapet height <strong>h<sub>p</sub></strong> on the lower roof in that direction. See Commentary G, Figure G-2 for how l<sub>s</sub>/w<sub>s</sub> are measured for each case.
+        </div>
+
+        <div id="casesContainer"></div>
+      </div>
+
+      <div class="panel">
+        <h2>3. Lower-Roof Parapet Check <span class="ref">NBC Cl. 4.1.6.7.(1)(a)</span></h2>
+        <p class="hint">If the lower roof itself has a parapet, this check determines whether the parapet&rsquo;s own drift (independent of the roof step) governs near that wall. Set h<sub>p,lower</sub> = 0 to skip.</p>
+        <div class="row2">
+          <div class="field">
+            <label for="hpLower">Lower-roof parapet height, h<sub>p,lower</sub> <span id="unitLen2">(ft)</span></label>
+            <input type="number" id="hpLower" step="any">
+          </div>
+          <div class="field">
+            <label for="l0">Plan dimension along that parapet, l<sub>0</sub> <span id="unitLen3">(ft)</span></label>
+            <input type="number" id="l0" step="any">
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>4. Snow Drift at Corners <span class="ref">NBC Art. 4.1.6.8</span></h2>
+        <p class="hint">Where the roof step in Section 2 occurs at an outside or inside corner in plan, Sentences 4.1.6.8.(1)/(2) govern how the drift loads on the <strong>two faces</strong> of the corner are combined and applied &mdash; this Article defines no new C<sub>a0</sub>/x<sub>d</sub> formula. Each face below is evaluated with the same method as Section 2 (Sentence 4.1.6.5.(3), Eq.(2)&amp;(3)), using the roof-step height h entered above.</p>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.88rem;font-weight:600;">
+          <input type="checkbox" id="cornerEnabled"> Include a corner condition
+        </label>
+        <div id="cornerBlock" style="display:none; margin-top:10px;">
+          <div class="field" style="max-width:360px;">
+            <label for="cornerType">Corner type</label>
+            <select id="cornerType">
+              <option value="outside">Outside corner &mdash; Sentence 4.1.6.8.(1), Fig. 4.1.6.8.-A</option>
+              <option value="inside">Inside corner &mdash; Sentence 4.1.6.8.(2), Fig. 4.1.6.8.-B</option>
+            </select>
+          </div>
+          <div id="cornerDiagram"></div>
+          <div id="cornerFaces"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: RESULTS -->
+    <div>
+      <div class="panel">
+        <h2>Results Summary</h2>
+        <div class="summary-cards">
+          <div class="scard"><div class="v" id="outGamma">&ndash;</div><div class="k">&gamma; (kN/m&sup3;)</div></div>
+          <div class="scard"><div class="v" id="outCa0">&ndash;</div><div class="k">Governing C<sub>a0</sub></div></div>
+          <div class="scard"><div class="v" id="outXd">&ndash;</div><div class="k">Drift length x<sub>d</sub></div></div>
+          <div class="scard"><div class="v" id="outSmax">&ndash;</div><div class="k">Max. S at step</div></div>
+        </div>
+        <div id="govCaseNote" class="alert info"></div>
+        <svg class="diagram" id="profileSvg" viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg"></svg>
+        <h3>Snow load distribution, S(x)</h3>
+        <table id="profileTable"><thead><tr><th>x</th><th>C<sub>a</sub>(x)</th><th>S(x)</th></tr></thead><tbody></tbody></table>
+        <div class="field" style="max-width:240px;">
+          <label for="xQuery">Evaluate at a specific x <span id="unitLen4">(ft)</span></label>
+          <input type="number" id="xQuery" step="any" value="0">
+        </div>
+        <table><tbody>
+          <tr><td>C<sub>a</sub>(x)</td><td id="outCaX">&ndash;</td></tr>
+          <tr><td>S(x) <span id="unitPress3"></span></td><td id="outSX">&ndash;</td></tr>
+        </tbody></table>
+      </div>
+
+      <div class="panel" id="cornerResultsPanel" style="display:none;">
+        <h2>Corner Drift Result <span class="ref">NBC Art. 4.1.6.8</span></h2>
+        <table>
+          <thead><tr><th>Face</th><th>C<sub>a0</sub></th><th>x<sub>d</sub></th><th>S at C<sub>a0</sub></th></tr></thead>
+          <tbody id="cornerTable"></tbody>
+        </table>
+        <div id="cornerNote" class="alert info"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Step-by-Step Calculation</h2>
+        <p class="hint">Every value below is computed from the inputs on the left, in SI units (kPa, m, kN/m&sup3;) as used by the Code, with the equivalent value shown in brackets when US units are selected.</p>
+        <div id="stepsContainer" class="steps"></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer class="sources">
+  <div class="inner">
+    <h2>Sources, Assumptions &amp; Roadmap</h2>
+
+    <h3>Where these formulas come from</h3>
+    <ul>
+      <li><span class="src-tag">NBC Sentence 4.1.6.13.(1)</span> &mdash; specific weight of snow, &gamma; = min(0.43&middot;S<sub>s</sub> + 2.2, 4.0) kN/m&sup3;. Reproduced in <em>NBC 2015 Structural Commentaries</em>, Commentary G, Sample Calculation 1, Step 1.</li>
+      <li><span class="src-tag">NBC Sentence 4.1.6.5.(3)</span> &mdash; l<sub>cs</sub> = 2w<sub>s</sub> &minus; w<sub>s</sub>&sup2;/l<sub>s</sub>; h<sub>p</sub>' = clamp(h<sub>p</sub> &minus; C<sub>b</sub>S<sub>s</sub>/&gamma;, 0, l<sub>cs</sub>/5); F = 0.35&beta;&radic;(&gamma;(l<sub>cs</sub>&minus;5h<sub>p</sub>')/S<sub>s</sub>) + C<sub>b</sub>. From Commentary G, Sample Calculation 1, Steps 2&ndash;4.</li>
+      <li><span class="src-tag">NBC Eq. (2) &amp; (3)</span> &mdash; C<sub>a0</sub> = min(&beta;&gamma;h/(C<sub>b</sub>S<sub>s</sub>), F/C<sub>b</sub>), &beta; = 1.0 for Case I and 0.67 for Cases II &amp; III. Commentary G, paragraph 37 and Sample Calculation 1, Step 5.</li>
+      <li><span class="src-tag">NBC Sentence 4.1.6.5.(2)</span> &mdash; drift length x<sub>d</sub> = 5(C<sub>b</sub>S<sub>s</sub>/&gamma;)(C<sub>a0</sub>&minus;1). Commentary G, Sample Calculation 1, Step 6.</li>
+      <li><span class="src-tag">NBC Fig. 4.1.6.5.-A</span> &mdash; h' = h &minus; C<sub>b</sub>C<sub>w</sub>S<sub>s</sub>/&gamma;; x = 10h'. Commentary G, Sample Calculation 1, Steps 7&ndash;8 (this defines the extent over which C<sub>w</sub>=1.0 must be used for adjoining areas).</li>
+      <li><span class="src-tag">NBC Sentence 4.1.6.5.(1)</span> &mdash; C<sub>a</sub>(x) = C<sub>a0</sub> &minus; (C<sub>a0</sub>&minus;1)&middot;x/x<sub>d</sub> for 0&le;x&le;x<sub>d</sub>, C<sub>a</sub>=1 for x&gt;x<sub>d</sub>. Commentary G, Sample Calculation 1, Step 9.</li>
+      <li><span class="src-tag">NBC Cl. 4.1.6.7.(1)(a)</span> &mdash; lower-roof parapet check C<sub>a0</sub> = min(0.67&gamma;h<sub>p,lower</sub>/(C<sub>b</sub>S<sub>s</sub>), 1 + &gamma;l<sub>0</sub>/(7.5C<sub>b</sub>S<sub>s</sub>)). Reproduced in Commentary G, Sample Calculation 1, Step 10, and confirmed directly against <em>NBCC 2015, Division B</em>, Sentence 4.1.6.7.(1) (p. 4-20: "C<sub>a0</sub> shall be taken as the lesser of [0.67&gamma;h/(C<sub>b</sub>S<sub>s</sub>)] and [&gamma;l<sub>0</sub>/(7.5C<sub>b</sub>S<sub>s</sub>) + 1]").</li>
+      <li><span class="src-tag">NBC Sentence 4.1.6.2.(1)</span> &mdash; S = I<sub>s</sub>[S<sub>s</sub>(C<sub>b</sub>C<sub>w</sub>C<sub>s</sub>C<sub>a</sub>) + S<sub>r</sub>]. Commentary G, Sample Calculation 1, Step 11.</li>
+      <li><span class="src-tag">NBC Sentence 4.1.6.8.(1)</span> &mdash; <em>Snow Drift at Corners, outside corner</em>: the drift loads on the lower roof against the two faces of an outside corner of an upper roof or obstruction are extended radially around the corner (Fig. 4.1.6.8.-A) and "may be taken as the least severe of the drift loads lying against the two faces of the corner." Source: <em>NBCC 2015, Division B</em>, Article 4.1.6.8, p. 4-20.</li>
+      <li><span class="src-tag">NBC Sentence 4.1.6.8.(2)</span> &mdash; <em>Snow Drift at Corners, inside corner</em>: the drift loads against the two faces of an inside corner of an upper roof or a parapet are calculated for each face (per Sentence 4.1.6.5.(1)) and applied as far as the bisector of the corner angle (Fig. 4.1.6.8.-B). Source: <em>NBCC 2015, Division B</em>, Article 4.1.6.8, p. 4-21.</li>
+      <li>Importance factors I<sub>s</sub> listed in the dropdown are the standard NBCC 2015 ULS/SLS values by Importance Category (NBC Table 4.1.6.2.&ndash;A, referencing Table 4.1.2.1.). Please confirm against your copy of Division B before final design.</li>
+    </ul>
+
+    <div class="alert info">
+      <strong>How the corner-drift module (Section 4) works:</strong> Article 4.1.6.8 does not define its own C<sub>a0</sub>/x<sub>d</sub> formula &mdash; it only tells you how to <em>combine and lay out in plan</em> the drift loads already computed per Article 4.1.6.5 for each of the two faces meeting at the corner. This calculator therefore runs the same Section-2 calculation (l<sub>cs</sub>, h<sub>p</sub>', F, C<sub>a0</sub>, x<sub>d</sub>) independently for "Face A" and "Face B", then applies Sentence (1) (outside corner &mdash; governing face = the one with the <em>lower</em> C<sub>a0</sub>, drift swept radially with radius x<sub>d</sub>) or Sentence (2) (inside corner &mdash; each face keeps its own profile, applied out to the bisector of the corner angle). The bisector distance itself is a plan-geometry quantity not given by any formula in the Code &mdash; it must be taken from your roof plan.
+    </div>
+
+    <div class="alert warn">
+      <strong>Known discrepancy in the source document:</strong> Commentary G, Sample Calculation 2 (Dorval, gap effect), Step 4, Case I prints F = 1.61. Applying the Step-4 formula exactly as stated (0.35&times;1&times;&radic;(3.23&times;15.75/2.4) + 0.8) gives F = 2.41 &mdash; this appears to be an arithmetic typo in the commentary (the "+C<sub>b</sub>" term seems to have been omitted from that one printed result; Case II of the same example, F = 2.01, is correct). This calculator implements the formula exactly as defined in Step 4 and is verified against Sample Calculation 1, which is internally consistent. If you spot a different reading of the source, let us know and we'll re-check.
+    </div>
+
+    <h3>Not yet included (planned next)</h3>
+    <ul>
+      <li><strong>Increased C<sub>b</sub> for large roofs</strong> (NBC Clauses 4.1.6.2.(2)(a)/(b)) &mdash; currently C<sub>b</sub> is a direct input.</li>
+      <li><strong>Roof slope factor C<sub>s</sub></strong> for sloped/slippery roofs (NBC Sentences 4.1.6.2.(5)/(6)).</li>
+      <li><strong>Small lower roof / canopy</strong> alternative C<sub>a0</sub> formula (Commentary G, paragraph 40, for plan areas &le; 25 m&sup2; and 10 m &lt; h &lt; 20 m).</li>
+      <li><strong>Uniform, gable, arch/dome and valley snow loads</strong> (NBC Articles 4.1.6.3, 4.1.6.9&ndash;4.1.6.12), sliding snow (4.1.6.6/4.1.6.11), and a Table C-2 location lookup for S<sub>s</sub>/S<sub>r</sub>.</li>
+      <li><strong>USA module</strong>: ASCE/SEI 7 snow loads (incl. integration with ATC Hazards by Location for ground snow load), wind and seismic, once the US code documents are provided.</li>
+      <li><strong>Member design modules</strong>: joists, lintels/headers, beams, columns &mdash; for both NBCC/CSA and US/ASCE-NDS-AISC bases.</li>
+    </ul>
+
+    <p>Site and calculations by StructCalc (working title) &mdash; built for Serhii. This is a working engineering tool: always verify governing-case selection, drift truncation against actual roof edges (NBC 4.1.6.5, drift should be truncated at the lower-roof edge if x<sub>d</sub> exceeds it), and corner conditions per NBC 4.1.6.8. before use in design.</p>
+  </div>
+</footer>
+
+<script src="engine.js"></script>
+</body>
+</html>
