@@ -48,6 +48,14 @@
   .grid{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
   @media (max-width:900px){ .grid{grid-template-columns:1fr;} }
 
+  /* ---- MWFRS / C&C mode visibility -------------------------------------- */
+  body.mode-mwfrs [data-mode="cc"]{display:none;}
+  body.mode-cc [data-mode="mwfrs"]{display:none;}
+  .mode-badge{
+    display:inline-block; background:#fff; color:var(--brand); border-radius:4px;
+    padding:2px 10px; font-size:.8rem; font-weight:700; margin-left:8px; vertical-align:middle;
+  }
+
   .panel{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px 18px; margin-bottom:18px;}
   .panel h2{margin:0 0 4px; font-size:1.08rem; color:var(--brand); border-bottom:1px solid var(--line); padding-bottom:8px;}
   .panel h3{margin:14px 0 8px; font-size:.95rem; color:var(--ink);}
@@ -141,13 +149,21 @@
     .print-only{display:block;}
     body{background:#fff;}
     main{max-width:100%;}
+    #torsionDetails{display:block !important;}
   }
 </style>
 </head>
 <body>
 
 <header class="topbar">
-  <div class="topbar-controls" style="justify-content:flex-end; width:100%;">
+  <div class="topbar-controls">
+    <strong style="font-size:.9rem;">Calculation procedure:</strong>
+    <div class="seg" role="group" aria-label="Calculation procedure">
+      <button type="button" id="modeMWFRS" data-mode-btn="mwfrs" class="active">MWFRS</button>
+      <button type="button" id="modeCC" data-mode-btn="cc">Components &amp; Cladding</button>
+    </div>
+  </div>
+  <div class="topbar-controls">
     <div class="seg" role="group" aria-label="Unit system" style="display:none;">
       <button id="unitSI" data-units="SI">SI (kPa, m)</button>
       <button id="unitUS" data-units="US" class="active">US / Imperial (psf, ft)</button>
@@ -167,9 +183,26 @@
     <h1>Wind Loads on Low-Rise Buildings &mdash; ASCE/SEI 7-22, Chapters 26&ndash;30</h1>
     <p><span class="badge">Ch. 26 &mdash; Basic Parameters</span><span class="badge">Ch. 28 Envelope Procedure &mdash; MWFRS</span><span class="badge">Ch. 30 &mdash; Components &amp; Cladding</span></p>
     <p>This module calculates main wind force resisting system (MWFRS) and components &amp; cladding (C&amp;C) design wind pressures for <strong>enclosed or partially enclosed, low-rise rectangular buildings</strong> (mean roof height h &le; 60 ft, with h not exceeding the least horizontal dimension) using the <strong>Envelope Procedure</strong> of ASCE/SEI 7-22 Chapter 28 (MWFRS) and Chapter 30 (C&amp;C), per the applicability conditions of Sec. 28.3.1 / 30.3.1.</p>
+    <p>Use the <strong>MWFRS / Components &amp; Cladding</strong> switch at the top of the page to choose which procedure to run &mdash; only the inputs and results relevant to that procedure are shown.</p>
     <p>The calculation chain is: velocity pressure exposure coefficient K<sub>h</sub> (Table 26.10-1) &rarr; ground elevation factor K<sub>e</sub> (Table 26.9-1) &rarr; velocity pressure q<sub>h</sub> (Eq. 26.10-1) &rarr; internal pressure coefficient (GC<sub>pi</sub>) (Table 26.13-1) &rarr; external pressure coefficients (GC<sub>pf</sub>) for MWFRS (Fig. 28.3-1/28.3-2) and (GC<sub>p</sub>) for C&amp;C (Fig. 30.3-1/30.3-2A) &rarr; design pressures p (Eq. 28.3-1 / 30.3-1). Every value is computed explicitly with its clause/equation/table/figure reference.</p>
     <p><strong>Basic wind speed, V:</strong> read from Figures 26.5-1A&ndash;D for the project location and Risk Category using the official <a href="https://ascehazardtool.org" target="_blank" rel="noopener">ASCE 7 Hazard Tool</a> (ascehazardtool.org), then enter it below.</p>
     <p>Items not yet covered by this module are listed in the Roadmap in the footer below.</p>
+  </div>
+
+  <div class="panel" id="diagramPanel">
+    <h2>Building Schematic <span class="ref">Sec. 26.2; Fig. 28.3-1/30.3-1/30.3-2A Notation</span></h2>
+    <p class="muted" style="margin:0 0 10px;">Schematic only, updates live with the inputs below. The edge-zone width <strong>a</strong> shown is computed per the Notation under Figures 28.3-1/30.3-1/30.3-2A (<button type="button" class="info-btn" data-info="minDim" aria-label="Learn more">i</button> see "Least Horizontal Dimension"). For the exact pressure-zone layouts, see ASCE/SEI 7-22 Figure 28.3-1 (MWFRS) or Figures 30.3-1 / 30.3-2A (C&amp;C).</p>
+    <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start;">
+      <div style="flex:1; min-width:240px; max-width:340px;">
+        <div class="muted" style="font-size:.8rem; font-weight:600; margin-bottom:4px;">Elevation</div>
+        <svg id="elevSvg" viewBox="0 0 280 200" style="width:100%; background:#fff; border:1px solid var(--line); border-radius:6px;"></svg>
+      </div>
+      <div style="flex:1; min-width:240px; max-width:340px;">
+        <div class="muted" style="font-size:.8rem; font-weight:600; margin-bottom:4px;">Plan (roof / footprint)</div>
+        <svg id="planSvg" viewBox="0 0 280 200" style="width:100%; background:#fff; border:1px solid var(--line); border-radius:6px;"></svg>
+      </div>
+    </div>
+    <p class="muted" id="enclosureNote" style="margin-top:10px;"></p>
   </div>
 
   <div class="grid">
@@ -216,13 +249,22 @@
             <input type="number" id="minDim" step="any" min="0">
           </div>
           <div class="field">
+            <label for="roofType">Roof type<button type="button" class="info-btn" data-info="roofType" aria-label="Learn more">i</button></label>
+            <select id="roofType">
+              <option value="flat">Flat / low-slope (&theta; &le; 7&deg;)</option>
+              <option value="sloped">Gable, hip, or other sloped (&theta; &gt; 7&deg;)</option>
+            </select>
+          </div>
+        </div>
+        <div class="row3" id="thetaRow">
+          <div class="field" id="thetaField">
             <label for="theta">Roof angle, &theta; (degrees)<button type="button" class="info-btn" data-info="theta" aria-label="Learn more">i</button></label>
             <input type="number" id="theta" step="any" min="0" max="90">
           </div>
         </div>
       </div>
 
-      <div class="panel">
+      <div class="panel" data-mode="cc">
         <h2>3. Components &amp; Cladding &mdash; Effective Wind Areas <span class="ref">Sec. 26.2; Fig. 30.3-1/30.3-2A</span></h2>
         <div class="row2">
           <div class="field">
@@ -257,7 +299,7 @@
     </div>
   </div>
 
-  <div class="panel">
+  <div class="panel" data-mode="mwfrs">
     <h2>MWFRS Design Pressures &mdash; Envelope Procedure <span class="ref">Eq. 28.3-1, Fig. 28.3-1/28.3-2</span><button type="button" class="info-btn" data-info="mwfrs" aria-label="Learn more">i</button></h2>
     <h3>Load Case 1 (Zones 1&ndash;4, 1E&ndash;4E) &mdash; &theta;-dependent</h3>
     <div id="mwfrsLC1Table"></div>
@@ -265,13 +307,16 @@
     <div id="mwfrsLC2Table"></div>
     <h3>Torsional Load Cases 3 &amp; 4 (T-zones) <span class="ref">Fig. 28.3-2</span></h3>
     <div class="alert info" id="torsionNote"></div>
-    <p class="muted" style="margin-top:6px;">Load Case 3 = Load Case 1 zone pressures above, plus the following T-zones:</p>
-    <div id="mwfrsLC3Table"></div>
-    <p class="muted" style="margin-top:6px;">Load Case 4 = Load Case 2 zone pressures above, plus the following T-zones:</p>
-    <div id="mwfrsLC4Table"></div>
+    <div id="torsionDetails">
+      <p class="muted" style="margin-top:6px;">Load Case 3 = Load Case 1 zone pressures above, plus the following T-zones:</p>
+      <div id="mwfrsLC3Table"></div>
+      <p class="muted" style="margin-top:6px;">Load Case 4 = Load Case 2 zone pressures above, plus the following T-zones:</p>
+      <div id="mwfrsLC4Table"></div>
+    </div>
+    <button type="button" id="torsionToggle" class="btn" style="display:none; margin-top:8px; font-size:.8rem; padding:4px 10px;"></button>
   </div>
 
-  <div class="panel">
+  <div class="panel" data-mode="cc">
     <h2>Components &amp; Cladding Design Pressures <span class="ref">Eq. 30.3-1, Fig. 30.3-1/30.3-2A</span><button type="button" class="info-btn" data-info="cc" aria-label="Learn more">i</button></h2>
     <h3>Walls &mdash; Zones 4 &amp; 5 <span class="ref">Fig. 30.3-1</span></h3>
     <div id="ccWallTable"></div>

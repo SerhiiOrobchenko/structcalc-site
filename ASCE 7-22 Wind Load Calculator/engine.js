@@ -149,10 +149,17 @@ function logLerpA(A, Alo, Ahi, lo, hi) {
 }
 
 /* =====================================================================
+   UI-ONLY STATE (not persisted via shell bridge)
+   ===================================================================== */
+let torsionExpanded = false; // user toggle for "show T-zone pressures for reference" when h <= 30 ft
+
+/* =====================================================================
    STATE
    ===================================================================== */
 const state = {
   unitSystem: 'US',
+  mode: 'mwfrs',     // 'mwfrs' or 'cc' — which procedure's inputs/results are shown
+  roofType: 'sloped', // 'flat' (theta<=7, hides theta input, forces theta=0) or 'sloped'
   V: 115,            // basic wind speed, mph (Sec. 26.5)
   exposure: 'C',     // B / C / D (Sec. 26.7)
   kzt: 1.0,          // topographic factor (Sec. 26.8.2, Fig. 26.8-1)
@@ -421,12 +428,19 @@ function renderResults() {
   zoneTable('mwfrsLC1Table', r.mwfrsLC1, false);
   zoneTable('mwfrsLC2Table', r.mwfrsLC2, false);
 
-  const torsionWrap = document.getElementById('torsionWrap');
   const torsionNote = document.getElementById('torsionNote');
+  const torsionDetails = document.getElementById('torsionDetails');
+  const torsionToggle = document.getElementById('torsionToggle');
   if (torsionNote) {
     torsionNote.textContent = r.torsionApplies
       ? 'Mean roof height h = ' + fmt(lengthOut(state.h), 1) + ' ' + (state.unitSystem === 'SI' ? 'm' : 'ft') + ' > 30 ft → Load Cases 3 and 4 (Fig. 28.3-2) are required unless one of the exceptions in Sec. 28.3.2 applies (e.g., torsional sensitivity not significant per ASCE 7 Ch. 26 criteria).'
-      : 'Mean roof height h ≤ 30 ft — torsional Load Cases 3 and 4 (Fig. 28.3-2) are not required for this building per Sec. 28.3.2, but the T-zone pressures are shown below for reference.';
+      : 'Mean roof height h ≤ 30 ft — torsional Load Cases 3 and 4 (Fig. 28.3-2) are not required for this building per Sec. 28.3.2.';
+  }
+  if (torsionDetails && torsionToggle) {
+    const show = r.torsionApplies || torsionExpanded;
+    torsionDetails.style.display = show ? '' : 'none';
+    torsionToggle.style.display = r.torsionApplies ? 'none' : '';
+    torsionToggle.textContent = torsionExpanded ? 'Hide T-zone pressures' : 'Show T-zone pressures for reference';
   }
   zoneTable('mwfrsLC3Table', r.mwfrsLC3, false);
   zoneTable('mwfrsLC4Table', r.mwfrsLC4, false);
@@ -438,6 +452,106 @@ function renderResults() {
     roofNote.style.display = r.roofApplicable ? 'none' : '';
   }
   zoneTable('ccRoofTable', r.ccRoof, true);
+
+  renderDiagram(r);
+}
+
+/* =====================================================================
+   BUILDING SCHEMATIC (SVG)
+   Pure geometric schematic of the inputs (h, theta, roofType, minDim,
+   enclosure). Does NOT attempt to reproduce the pressure-zone polygons
+   of Figures 28.3-1 / 30.3-1 / 30.3-2A (those have figure-specific
+   shapes that vary by zone and are not redrawn here to avoid
+   misrepresenting the code figures). The edge-zone width "a" shown is
+   the same value computed in Step "a" below (Notation, Figs.
+   28.3-1/30.3-1/30.3-2A) and reported in the C&C / MWFRS tables.
+   ===================================================================== */
+function renderDiagram(r) {
+  const elev = document.getElementById('elevSvg');
+  const plan = document.getElementById('planSvg');
+  const note = document.getElementById('enclosureNote');
+  if (!elev || !plan) return;
+
+  const hFt = Math.max(state.h, 0);
+  const theta = Math.max(state.theta, 0);
+
+  // ---- Elevation -------------------------------------------------------
+  const groundY = 170;
+  const wallL = 60, wallR = 220; // wall x-extents
+  const meanHpx = Math.min(110, Math.max(10, hFt * 1.8));
+  const risePx = Math.min(70, ((wallR - wallL) / 2) * Math.tan(theta * Math.PI / 180));
+  const eaveHpx = Math.max(2, meanHpx - risePx / 2);
+  const ridgeHpx = meanHpx + risePx / 2;
+  const eaveY = groundY - eaveHpx;
+  const ridgeY = groundY - ridgeHpx;
+  const midX = (wallL + wallR) / 2;
+
+  let elevSvg = '';
+  // ground hatching
+  elevSvg += `<line x1="20" y1="${groundY}" x2="260" y2="${groundY}" stroke="var(--ink)" stroke-width="1.5"/>`;
+  for (let x = 20; x < 260; x += 10) {
+    elevSvg += `<line x1="${x}" y1="${groundY}" x2="${x - 6}" y2="${groundY + 6}" stroke="var(--line)" stroke-width="1"/>`;
+  }
+  // walls
+  elevSvg += `<rect x="${wallL}" y="${eaveY}" width="${wallR - wallL}" height="${groundY - eaveY}" fill="var(--brand-light)" stroke="var(--brand)" stroke-width="1.5"/>`;
+  // roof
+  if (risePx > 0.5) {
+    elevSvg += `<polygon points="${wallL},${eaveY} ${midX},${ridgeY} ${wallR},${eaveY}" fill="var(--accent)" fill-opacity="0.25" stroke="var(--brand)" stroke-width="1.5"/>`;
+  } else {
+    elevSvg += `<line x1="${wallL}" y1="${eaveY}" x2="${wallR}" y2="${eaveY}" stroke="var(--brand)" stroke-width="2"/>`;
+  }
+  // mean roof height dimension line (h)
+  const dimX = 35;
+  elevSvg += `<line x1="${dimX}" y1="${groundY}" x2="${dimX}" y2="${groundY - meanHpx}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3,2"/>`;
+  elevSvg += `<line x1="${dimX - 4}" y1="${groundY}" x2="${dimX + 4}" y2="${groundY}" stroke="var(--muted)" stroke-width="1"/>`;
+  elevSvg += `<line x1="${dimX - 4}" y1="${groundY - meanHpx}" x2="${dimX + 4}" y2="${groundY - meanHpx}" stroke="var(--muted)" stroke-width="1"/>`;
+  elevSvg += `<text x="${dimX - 6}" y="${groundY - meanHpx / 2}" font-size="9" fill="var(--muted)" text-anchor="end" dominant-baseline="middle">h = ${fmt(lengthOut(hFt), 1)} ${state.unitSystem === 'SI' ? 'm' : 'ft'}</text>`;
+  // theta label
+  if (risePx > 0.5) {
+    elevSvg += `<text x="${midX}" y="${ridgeY - 6}" font-size="9" fill="var(--ink)" text-anchor="middle">&#952; = ${fmt(theta, 1)}&deg;</text>`;
+  }
+  // wind arrow
+  elevSvg += `<line x1="6" y1="${groundY - 30}" x2="${wallL - 6}" y2="${groundY - 30}" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrowElev)"/>`;
+  elevSvg += `<text x="6" y="${groundY - 36}" font-size="9" fill="var(--accent)">Wind</text>`;
+  elevSvg += `<defs><marker id="arrowElev" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="var(--accent)"/></marker></defs>`;
+  // roof type label
+  elevSvg += `<text x="${midX}" y="14" font-size="9" fill="var(--muted)" text-anchor="middle">${state.roofType === 'flat' ? 'Flat / low-slope roof (&theta; &le; 7&deg;)' : 'Sloped roof'}</text>`;
+  elev.innerHTML = elevSvg;
+
+  // ---- Plan -------------------------------------------------------------
+  const px0 = 40, py0 = 40, pw = 200, ph = 120;
+  const minDimFt = Math.max(state.minDim, 0.001);
+  const aFt = r.a || 0;
+  const aPx = Math.min(60, Math.max(6, (aFt / minDimFt) * pw));
+
+  let planSvg = '';
+  planSvg += `<rect x="${px0}" y="${py0}" width="${pw}" height="${ph}" fill="var(--brand-light)" stroke="var(--brand)" stroke-width="1.5"/>`;
+  // ridge line for sloped roofs
+  if (risePx > 0.5) {
+    planSvg += `<line x1="${px0}" y1="${py0 + ph / 2}" x2="${px0 + pw}" y2="${py0 + ph / 2}" stroke="var(--brand)" stroke-width="1" stroke-dasharray="4,3"/>`;
+    planSvg += `<text x="${px0 + pw - 4}" y="${py0 + ph / 2 - 4}" font-size="8" fill="var(--muted)" text-anchor="end">ridge</text>`;
+  }
+  // edge-zone inset (width a), all four sides
+  planSvg += `<rect x="${px0 + aPx}" y="${py0 + aPx}" width="${pw - 2 * aPx}" height="${ph - 2 * aPx}" fill="none" stroke="var(--accent)" stroke-width="1" stroke-dasharray="3,2"/>`;
+  planSvg += `<text x="${px0 + aPx + 3}" y="${py0 + aPx + 11}" font-size="8" fill="var(--accent)">a = ${fmt(lengthOut(aFt), 2)} ${state.unitSystem === 'SI' ? 'm' : 'ft'}</text>`;
+  // least horizontal dimension label
+  planSvg += `<line x1="${px0}" y1="${py0 + ph + 8}" x2="${px0 + pw}" y2="${py0 + ph + 8}" stroke="var(--muted)" stroke-width="1"/>`;
+  planSvg += `<line x1="${px0}" y1="${py0 + ph + 4}" x2="${px0}" y2="${py0 + ph + 12}" stroke="var(--muted)" stroke-width="1"/>`;
+  planSvg += `<line x1="${px0 + pw}" y1="${py0 + ph + 4}" x2="${px0 + pw}" y2="${py0 + ph + 12}" stroke="var(--muted)" stroke-width="1"/>`;
+  planSvg += `<text x="${px0 + pw / 2}" y="${py0 + ph + 22}" font-size="9" fill="var(--muted)" text-anchor="middle">least horiz. dim. = ${fmt(lengthOut(minDimFt), 1)} ${state.unitSystem === 'SI' ? 'm' : 'ft'}</text>`;
+  // wind arrow
+  planSvg += `<line x1="6" y1="${py0 + ph / 2}" x2="${px0 - 6}" y2="${py0 + ph / 2}" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrowPlan)"/>`;
+  planSvg += `<text x="6" y="${py0 + ph / 2 - 6}" font-size="9" fill="var(--accent)">Wind</text>`;
+  planSvg += `<defs><marker id="arrowPlan" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="var(--accent)"/></marker></defs>`;
+  plan.innerHTML = planSvg;
+
+  // ---- Enclosure note ----------------------------------------------------
+  if (note) {
+    const g = GCPI[state.enclosure];
+    note.textContent = 'Enclosure classification: ' + (g ? g.label : state.enclosure) +
+      ' — (GC_pi) = ±' + fmt(g ? g.pos : 0, 2) + ' (Table 26.13-1). Procedure shown: ' +
+      (state.mode === 'mwfrs' ? 'MWFRS, Envelope Procedure (Ch. 28)' : 'Components & Cladding (Ch. 30)') + '.';
+  }
 }
 
 /* =====================================================================
@@ -496,6 +610,54 @@ function bindInputs() {
   // Unit toggle
   document.getElementById('unitSI').addEventListener('click', () => setUnitSystem('SI'));
   document.getElementById('unitUS').addEventListener('click', () => setUnitSystem('US'));
+
+  // Calculation procedure mode toggle (MWFRS / C&C)
+  document.getElementById('modeMWFRS').addEventListener('click', () => setMode('mwfrs'));
+  document.getElementById('modeCC').addEventListener('click', () => setMode('cc'));
+
+  // Roof type (progressive disclosure of theta input)
+  document.getElementById('roofType').addEventListener('change', e => {
+    state.roofType = e.target.value;
+    if (state.roofType === 'flat') {
+      state.theta = 0;
+      document.getElementById('theta').value = 0;
+    }
+    applyRoofTypeVisibility();
+    renderResults();
+  });
+
+  // Torsional T-zone reference toggle (progressive disclosure when h <= 30 ft)
+  const torsionToggle = document.getElementById('torsionToggle');
+  if (torsionToggle) {
+    torsionToggle.addEventListener('click', () => {
+      torsionExpanded = !torsionExpanded;
+      renderResults();
+    });
+  }
+}
+
+/* =====================================================================
+   MODE / PROGRESSIVE DISCLOSURE
+   ===================================================================== */
+function setMode(mode) {
+  if (state.mode === mode) return;
+  state.mode = mode;
+  applyModeVisibility();
+  renderResults();
+}
+
+function applyModeVisibility() {
+  document.body.classList.toggle('mode-mwfrs', state.mode === 'mwfrs');
+  document.body.classList.toggle('mode-cc', state.mode === 'cc');
+  const m = document.getElementById('modeMWFRS');
+  const c = document.getElementById('modeCC');
+  if (m) m.classList.toggle('active', state.mode === 'mwfrs');
+  if (c) c.classList.toggle('active', state.mode === 'cc');
+}
+
+function applyRoofTypeVisibility() {
+  const f = document.getElementById('thetaField');
+  if (f) f.style.display = state.roofType === 'flat' ? 'none' : '';
 }
 
 function updateUnitLabels() {
@@ -581,6 +743,11 @@ const INFO_CONTENT = {
     html: `<p>The smaller of the two plan dimensions of the building (in any orientation). Used only to compute the zone dimension <strong>a</strong> per the Notation under <span class="src-tag">Figures 28.3-1 and 30.3-1</span>:</p>
     <p>a = min[0.1 &times; (least horizontal dimension), 0.4h], not less than max[0.04 &times; (least horizontal dimension), 3 ft].</p>
     <p><span class="src-tag">Exception</span>: for &theta; = 0&ndash;7&deg; and a least horizontal dimension &gt; 300 ft, a is capped at 0.8h.</p>`
+  },
+  roofType: {
+    title: 'Roof Type — controls the &theta; input',
+    html: `<p>This selector is a convenience for progressive input &mdash; it does not add a new code parameter. Selecting <strong>"Flat / low-slope (&theta; &le; 7&deg;)"</strong> hides the roof angle field and sets &theta; = 0, which is the governing case for <span class="src-tag">Figure 30.3-2A</span> roof C&amp;C (applicable only for &theta; &le; 7&deg;) and the &theta; = 0&ndash;5&deg; row of <span class="src-tag">Figure 28.3-1</span>.</p>
+    <p>Selecting <strong>"Gable, hip, or other sloped roof"</strong> reveals the &theta; field so you can enter the actual roof angle for interpolation in <span class="src-tag">Figure 28.3-1</span> (Load Cases 1 &amp; 3). If &theta; &gt; 7&deg;, the roof C&amp;C tables (<span class="src-tag">Figure 30.3-2A</span>) do not apply &mdash; see the note above the roof C&amp;C table.</p>`
   },
   theta: {
     title: 'Roof Angle, θ',
@@ -694,11 +861,14 @@ function init() {
   document.getElementById('theta').value = state.theta;
   document.getElementById('areaWall').value = state.areaWall;
   document.getElementById('areaRoof').value = state.areaRoof;
+  document.getElementById('roofType').value = state.roofType;
 
   updateUnitLabels();
   bindInputs();
   bindInfoModal();
   bindPrintButton();
+  applyModeVisibility();
+  applyRoofTypeVisibility();
   renderResults();
 }
 
@@ -735,10 +905,14 @@ document.addEventListener('DOMContentLoaded', init);
     document.getElementById('theta').value = state.theta;
     document.getElementById('areaWall').value = fmt(areaOut(state.areaWall), 2);
     document.getElementById('areaRoof').value = fmt(areaOut(state.areaRoof), 2);
+    document.getElementById('roofType').value = state.roofType || (state.theta > 7 ? 'sloped' : 'flat');
+    state.roofType = document.getElementById('roofType').value;
 
     document.getElementById('unitSI').classList.toggle('active', state.unitSystem === 'SI');
     document.getElementById('unitUS').classList.toggle('active', state.unitSystem === 'US');
 
+    applyModeVisibility();
+    applyRoofTypeVisibility();
     updateUnitLabels();
     renderResults();
   }
