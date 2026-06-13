@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>StructCalc &mdash; Wind Loads (ASCE/SEI 7-22)</title>
+<style>
+  :root{
+    --bg:#f4f6f9;
+    --panel:#ffffff;
+    --ink:#1c2733;
+    --muted:#5b6b7c;
+    --line:#dde3ea;
+    --brand:#1f4e79;
+    --brand-light:#eaf1f8;
+    --accent:#c0571f;
+    --ok:#2e7d32;
+    --warn:#9a6700;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.5;
+  }
+  header.topbar{
+    background:var(--brand); color:#fff; padding:10px 20px;
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
+  }
+  .topbar-controls{display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:.92rem;}
+  .seg{display:flex; border:1px solid #9fc6ea; border-radius:6px; overflow:hidden;}
+  .seg button{
+    background:transparent; color:#fff; border:none; padding:5px 12px; cursor:pointer; font-size:.88rem;
+  }
+  .seg button.active{background:#fff; color:var(--brand); font-weight:600;}
+
+  main{max-width:1180px; margin:0 auto; padding:18px 16px 60px;}
+
+  .intro{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px 20px; margin-bottom:18px;}
+  .intro h1{margin:0 0 6px; font-size:1.4rem; color:var(--brand);}
+  .intro p{margin:6px 0; color:var(--muted); font-size:.95rem;}
+  .badge{
+    display:inline-block; background:var(--brand-light); color:var(--brand); border-radius:4px;
+    padding:2px 8px; font-size:.78rem; font-weight:600; margin-right:6px;
+  }
+
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+  @media (max-width:900px){ .grid{grid-template-columns:1fr;} }
+
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px 18px; margin-bottom:18px;}
+  .panel h2{margin:0 0 4px; font-size:1.08rem; color:var(--brand); border-bottom:1px solid var(--line); padding-bottom:8px;}
+  .panel h3{margin:14px 0 8px; font-size:.95rem; color:var(--ink);}
+  .panel .ref{color:var(--muted); font-size:.78rem; font-weight:400;}
+
+  .field{display:flex; flex-direction:column; gap:3px; margin-bottom:10px;}
+  .field label{font-size:.85rem; font-weight:600; display:flex; align-items:center; gap:0;}
+  .field .hint{font-size:.76rem; color:var(--muted); font-weight:400;}
+  .field input, .field select{
+    border:1px solid var(--line); border-radius:5px; padding:6px 8px; font-size:.92rem; width:100%;
+    background:#fcfdfe;
+  }
+  .row3{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
+  .row2{display:grid; grid-template-columns:repeat(2,1fr); gap:10px;}
+  @media (max-width:560px){ .row3,.row2{grid-template-columns:1fr;} }
+
+  table{width:100%; border-collapse:collapse; font-size:.86rem; margin:8px 0;}
+  table th, table td{border:1px solid var(--line); padding:5px 8px; text-align:right;}
+  table th{background:var(--brand-light); color:var(--brand); text-align:center; font-size:.8rem;}
+  table td:first-child, table th:first-child{text-align:left;}
+  table tr.na td{color:var(--muted); font-style:italic;}
+
+  .steps{font-size:.88rem;}
+  .steps .step{border-left:3px solid var(--brand-light); padding:6px 10px 6px 12px; margin-bottom:8px;}
+  .steps .step .step-label{font-weight:700; color:var(--brand); font-size:.82rem; display:block; margin-bottom:2px;}
+  .steps .formula{font-family:var(--mono); background:#f6f8fb; border:1px solid var(--line); border-radius:4px; padding:6px 8px; margin:4px 0; font-size:.82rem; overflow-x:auto;}
+  .steps .result{font-weight:700;}
+  .note-inline{color:var(--muted); font-size:.78rem; margin-top:4px; font-weight:400;}
+
+  .summary-cards{display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin:10px 0;}
+  @media (max-width:760px){ .summary-cards{grid-template-columns:repeat(2,1fr);} }
+  .scard{background:var(--brand-light); border-radius:6px; padding:10px; text-align:center;}
+  .scard .v{font-size:1.25rem; font-weight:700; color:var(--brand);}
+  .scard .k{font-size:.74rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em;}
+
+  .muted{color:var(--muted); font-size:.86rem;}
+
+  footer.sources{background:#fff; border-top:1px solid var(--line); margin-top:30px; padding:20px 16px;}
+  footer.sources .inner{max-width:1180px; margin:0 auto;}
+  footer.sources h2{color:var(--brand); font-size:1.05rem;}
+  footer.sources h3{font-size:.92rem; margin:14px 0 6px;}
+  footer.sources p, footer.sources li{font-size:.86rem; color:var(--muted);}
+  footer.sources ul{padding-left:20px;}
+  .src-tag{font-family:var(--mono); background:#f0f3f7; padding:1px 5px; border-radius:3px; font-size:.8rem; color:var(--ink);}
+
+  .alert{border-radius:6px; padding:8px 12px; font-size:.84rem; margin:8px 0;}
+  .alert.warn{background:#fff8ec; border:1px solid #f0d9a8; color:#8a5a00;}
+  .alert.info{background:#eef5fc; border:1px solid #c9dff2; color:#1f4e79;}
+
+  .btn{
+    background:var(--brand); color:#fff; border:none; border-radius:5px; padding:8px 16px;
+    font-size:.88rem; cursor:pointer; font-weight:600;
+  }
+  .btn:hover{background:#163a5c;}
+
+  /* ---- "Learn more" info buttons & modal --------------------------------- */
+  .info-btn{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:17px; height:17px; border-radius:50%; flex:0 0 auto;
+    background:var(--brand-light); color:var(--brand); border:1px solid var(--line);
+    font-size:.7rem; font-weight:700; font-style:normal; cursor:pointer;
+    margin-left:6px; padding:0; line-height:1;
+  }
+  .info-btn:hover{background:var(--brand); color:#fff;}
+  .panel h2 .info-btn{margin-left:8px; vertical-align:middle;}
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(28,39,51,.5); display:none;
+    align-items:center; justify-content:center; z-index:1000; padding:20px;
+  }
+  .modal-overlay.open{display:flex;}
+  .modal-box{
+    background:#fff; border-radius:8px; max-width:600px; width:100%; max-height:82vh;
+    overflow:auto; padding:20px 24px; position:relative; box-shadow:0 10px 40px rgba(0,0,0,.25);
+  }
+  .modal-box h3{color:var(--brand); margin:0 0 10px; font-size:1.05rem; padding-right:26px;}
+  .modal-box p, .modal-box li{font-size:.88rem; color:var(--ink);}
+  .modal-box ul{padding-left:20px;}
+  .modal-close{
+    position:absolute; top:10px; right:10px; width:28px; height:28px; border-radius:50%;
+    background:var(--bg); border:1px solid var(--line); font-size:1.1rem; line-height:1;
+    cursor:pointer; color:var(--muted);
+  }
+  .modal-close:hover{color:var(--ink); background:var(--brand-light);}
+
+  /* ---- Print report ------------------------------------------------------- */
+  .print-only{display:none;}
+  @media print{
+    header.topbar, .info-btn, footer.sources, .btn, #printBtn{display:none !important;}
+    .grid{display:block;}
+    .panel{break-inside:avoid; border:1px solid #ccc; box-shadow:none;}
+    .print-only{display:block;}
+    body{background:#fff;}
+    main{max-width:100%;}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-controls" style="justify-content:flex-end; width:100%;">
+    <div class="seg" role="group" aria-label="Unit system" style="display:none;">
+      <button id="unitSI" data-units="SI">SI (kPa, m)</button>
+      <button id="unitUS" data-units="US" class="active">US / Imperial (psf, ft)</button>
+    </div>
+    <button type="button" id="printBtn" class="btn" style="background:transparent; border:1px solid #9fc6ea;">Print / Export Report</button>
+  </div>
+</header>
+
+<main>
+
+  <div class="print-only" style="margin-bottom:12px;">
+    <h1 style="color:var(--brand); margin:0;">Wind Load Report &mdash; ASCE/SEI 7-22, Chapters 26&ndash;30</h1>
+    <p style="color:var(--muted); font-size:.85rem;" id="printDate"></p>
+  </div>
+
+  <div class="intro">
+    <h1>Wind Loads on Low-Rise Buildings &mdash; ASCE/SEI 7-22, Chapters 26&ndash;30</h1>
+    <p><span class="badge">Ch. 26 &mdash; Basic Parameters</span><span class="badge">Ch. 28 Envelope Procedure &mdash; MWFRS</span><span class="badge">Ch. 30 &mdash; Components &amp; Cladding</span></p>
+    <p>This module calculates main wind force resisting system (MWFRS) and components &amp; cladding (C&amp;C) design wind pressures for <strong>enclosed or partially enclosed, low-rise rectangular buildings</strong> (mean roof height h &le; 60 ft, with h not exceeding the least horizontal dimension) using the <strong>Envelope Procedure</strong> of ASCE/SEI 7-22 Chapter 28 (MWFRS) and Chapter 30 (C&amp;C), per the applicability conditions of Sec. 28.3.1 / 30.3.1.</p>
+    <p>The calculation chain is: velocity pressure exposure coefficient K<sub>h</sub> (Table 26.10-1) &rarr; ground elevation factor K<sub>e</sub> (Table 26.9-1) &rarr; velocity pressure q<sub>h</sub> (Eq. 26.10-1) &rarr; internal pressure coefficient (GC<sub>pi</sub>) (Table 26.13-1) &rarr; external pressure coefficients (GC<sub>pf</sub>) for MWFRS (Fig. 28.3-1/28.3-2) and (GC<sub>p</sub>) for C&amp;C (Fig. 30.3-1/30.3-2A) &rarr; design pressures p (Eq. 28.3-1 / 30.3-1). Every value is computed explicitly with its clause/equation/table/figure reference.</p>
+    <p><strong>Basic wind speed, V:</strong> read from Figures 26.5-1A&ndash;D for the project location and Risk Category using the official <a href="https://ascehazardtool.org" target="_blank" rel="noopener">ASCE 7 Hazard Tool</a> (ascehazardtool.org), then enter it below.</p>
+    <p>Items not yet covered by this module are listed in the Roadmap in the footer below.</p>
+  </div>
+
+  <div class="grid">
+
+    <!-- LEFT COLUMN: INPUTS -->
+    <div>
+      <div class="panel">
+        <h2>1. Basic Wind Parameters <span class="ref">ASCE 7-22 Ch. 26</span></h2>
+        <div class="row2">
+          <div class="field">
+            <label for="V">Basic wind speed, V (<span id="lblV">mph</span>)<button type="button" class="info-btn" data-info="V" aria-label="Learn more">i</button></label>
+            <input type="number" id="V" step="any" min="0">
+          </div>
+          <div class="field">
+            <label for="exposure">Exposure category<button type="button" class="info-btn" data-info="exposure" aria-label="Learn more">i</button></label>
+            <select id="exposure"></select>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="kzt">Topographic factor, K<sub>zt</sub><button type="button" class="info-btn" data-info="kzt" aria-label="Learn more">i</button></label>
+            <input type="number" id="kzt" step="any" min="1">
+          </div>
+          <div class="field">
+            <label for="groundElev">Ground elevation, z<sub>e</sub> (<span id="lblGroundElev">ft</span>)<button type="button" class="info-btn" data-info="groundElev" aria-label="Learn more">i</button></label>
+            <input type="number" id="groundElev" step="any">
+          </div>
+        </div>
+        <div class="field">
+          <label for="enclosure">Enclosure classification<button type="button" class="info-btn" data-info="enclosure" aria-label="Learn more">i</button></label>
+          <select id="enclosure"></select>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>2. Building Geometry <span class="ref">Sec. 26.2; Fig. 28.3-1/30.3-1 Notation</span></h2>
+        <div class="row3">
+          <div class="field">
+            <label for="h">Mean roof height, h (<span id="lblH">ft</span>)<button type="button" class="info-btn" data-info="h" aria-label="Learn more">i</button></label>
+            <input type="number" id="h" step="any" min="0">
+          </div>
+          <div class="field">
+            <label for="minDim">Least horizontal dimension (<span id="lblMinDim">ft</span>)<button type="button" class="info-btn" data-info="minDim" aria-label="Learn more">i</button></label>
+            <input type="number" id="minDim" step="any" min="0">
+          </div>
+          <div class="field">
+            <label for="theta">Roof angle, &theta; (degrees)<button type="button" class="info-btn" data-info="theta" aria-label="Learn more">i</button></label>
+            <input type="number" id="theta" step="any" min="0" max="90">
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>3. Components &amp; Cladding &mdash; Effective Wind Areas <span class="ref">Sec. 26.2; Fig. 30.3-1/30.3-2A</span></h2>
+        <div class="row2">
+          <div class="field">
+            <label for="areaWall">Wall C&amp;C effective wind area (<span id="lblAreaWall">ft&sup2;</span>)<button type="button" class="info-btn" data-info="areaWall" aria-label="Learn more">i</button></label>
+            <input type="number" id="areaWall" step="any" min="0">
+          </div>
+          <div class="field">
+            <label for="areaRoof">Roof C&amp;C effective wind area (<span id="lblAreaRoof">ft&sup2;</span>)<button type="button" class="info-btn" data-info="areaRoof" aria-label="Learn more">i</button></label>
+            <input type="number" id="areaRoof" step="any" min="0">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: RESULTS -->
+    <div>
+      <div class="panel">
+        <h2>Results Summary</h2>
+        <div class="summary-cards">
+          <div class="scard"><div class="v" id="cardQh">&ndash;</div><div class="k">q<sub>h</sub></div></div>
+          <div class="scard"><div class="v" id="cardKh">&ndash;</div><div class="k">K<sub>h</sub></div></div>
+          <div class="scard"><div class="v" id="cardKe">&ndash;</div><div class="k">K<sub>e</sub></div></div>
+          <div class="scard"><div class="v" id="cardGCpi">&ndash;</div><div class="k">(GC<sub>pi</sub>)</div></div>
+          <div class="scard"><div class="v" id="cardA">&ndash;</div><div class="k">Zone dim. a</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Velocity Pressure &mdash; Step by Step<button type="button" class="info-btn" data-info="stepsInfo" aria-label="Learn more">i</button></h2>
+        <div id="stepsContainer" class="steps"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>MWFRS Design Pressures &mdash; Envelope Procedure <span class="ref">Eq. 28.3-1, Fig. 28.3-1/28.3-2</span><button type="button" class="info-btn" data-info="mwfrs" aria-label="Learn more">i</button></h2>
+    <h3>Load Case 1 (Zones 1&ndash;4, 1E&ndash;4E) &mdash; &theta;-dependent</h3>
+    <div id="mwfrsLC1Table"></div>
+    <h3>Load Case 2 (Zones 1&ndash;6, 1E&ndash;6E) &mdash; all &theta;</h3>
+    <div id="mwfrsLC2Table"></div>
+    <h3>Torsional Load Cases 3 &amp; 4 (T-zones) <span class="ref">Fig. 28.3-2</span></h3>
+    <div class="alert info" id="torsionNote"></div>
+    <p class="muted" style="margin-top:6px;">Load Case 3 = Load Case 1 zone pressures above, plus the following T-zones:</p>
+    <div id="mwfrsLC3Table"></div>
+    <p class="muted" style="margin-top:6px;">Load Case 4 = Load Case 2 zone pressures above, plus the following T-zones:</p>
+    <div id="mwfrsLC4Table"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Components &amp; Cladding Design Pressures <span class="ref">Eq. 30.3-1, Fig. 30.3-1/30.3-2A</span><button type="button" class="info-btn" data-info="cc" aria-label="Learn more">i</button></h2>
+    <h3>Walls &mdash; Zones 4 &amp; 5 <span class="ref">Fig. 30.3-1</span></h3>
+    <div id="ccWallTable"></div>
+    <h3>Roof &mdash; Zones 1&prime;, 1, 2, 3 <span class="ref">Fig. 30.3-2A, &theta; &le; 7&deg;</span></h3>
+    <div class="alert warn" id="ccRoofNote">Roof angle &theta; &gt; 7&deg;: Figure 30.3-2A does not apply. Roof C&amp;C pressures for 7&deg; &lt; &theta; &le; 45&deg; require Figures 30.3-2B&ndash;G, which are not yet implemented in this calculator (see Roadmap below). MWFRS results above remain valid for all &theta;.</div>
+    <div id="ccRoofTable"></div>
+  </div>
+
+</main>
+
+<footer class="sources">
+  <div class="inner">
+    <h2>Sources, Assumptions &amp; Roadmap</h2>
+
+    <h3>Where these formulas come from</h3>
+    <ul>
+      <li><span class="src-tag">Sec. 26.5</span> &mdash; Basic wind speed V (3-second gust, Exposure C, Risk-Category-dependent MRI), Figures 26.5-1A&ndash;D. Use the <a href="https://ascehazardtool.org" target="_blank" rel="noopener">ASCE 7 Hazard Tool</a> for your site coordinates and Risk Category.</li>
+      <li><span class="src-tag">Sec. 26.7</span> &mdash; Exposure Category B/C/D definitions.</li>
+      <li><span class="src-tag">Table 26.6-1</span> &mdash; Wind Directionality Factor K<sub>d</sub> = 0.85 for buildings (MWFRS and C&amp;C).</li>
+      <li><span class="src-tag">Sec. 26.8, Eq. 26.8-1, Fig. 26.8-1</span> &mdash; Topographic Factor K<sub>zt</sub>; K<sub>zt</sub> = 1.0 unless the site meets the Sec. 26.8.1 hill/ridge/escarpment criteria, in which case K<sub>zt</sub> = (1+K<sub>1</sub>K<sub>2</sub>K<sub>3</sub>)&sup2; from Fig. 26.8-1 (entered directly by the user; Fig. 26.8-1 is not reproduced here).</li>
+      <li><span class="src-tag">Table 26.9-1, Note 2</span> &mdash; Ground Elevation Factor K<sub>e</sub> = exp(-0.0000362&middot;z<sub>e</sub>), z<sub>e</sub> in ft (K<sub>e</sub>=1.0 always permitted per Note 1).</li>
+      <li><span class="src-tag">Table 26.10-1, Note 1 &amp; footnote *</span> &mdash; Velocity pressure exposure coefficient K<sub>h</sub>: K<sub>h</sub>=2.41(15/z<sub>g</sub>)<sup>2/&alpha;</sup> for h&lt;15 ft, K<sub>h</sub>=2.41(h/z<sub>g</sub>)<sup>2/&alpha;</sup> for 15&le;h&le;z<sub>g</sub>, K<sub>h</sub>=2.41 for h&gt;z<sub>g</sub>; &alpha;/z<sub>g</sub> from Table 26.11-1 (Exposure B: &alpha;=7.5, z<sub>g</sub>=3280 ft; C: &alpha;=9.8, z<sub>g</sub>=2460 ft; D: &alpha;=11.5, z<sub>g</sub>=1935 ft). Footnote *: for Exposure B and h&lt;30 ft, use K<sub>h</sub>=0.70 in Chapter 28.</li>
+      <li><span class="src-tag">Eq. 26.10-1</span> &mdash; q<sub>h</sub> = 0.00256&middot;K<sub>h</sub>&middot;K<sub>zt</sub>&middot;K<sub>e</sub>&middot;V&sup2; (psf, V in mph).</li>
+      <li><span class="src-tag">Sec. 26.2, Table 26.13-1</span> &mdash; Enclosure classification (Enclosed/Partially Enclosed/Partially Open/Open, per Sec. 26.2 definitions) and Internal Pressure Coefficient (GC<sub>pi</sub>): Open = 0.00; Partially Open &amp; Enclosed = &plusmn;0.18; Partially Enclosed = &plusmn;0.55. Both signs must be checked (Table 26.13-1, Note 1).</li>
+      <li><span class="src-tag">Eq. 28.3-1</span> &mdash; MWFRS design pressure: p = q<sub>h</sub>K<sub>d</sub>[(GC<sub>pf</sub>)&minus;(GC<sub>pi</sub>)]. Applicable to enclosed/partially enclosed buildings, h&le;60 ft, per Sec. 28.3.1.</li>
+      <li><span class="src-tag">Figure 28.3-1, Notation</span> &mdash; Zone dimension a = min[0.1&times;(least horizontal dimension), 0.4h], not less than max[0.04&times;(least horizontal dimension), 3 ft]; capped at 0.8h for &theta;=0&ndash;7&deg; with least horizontal dimension &gt;300 ft.</li>
+      <li><span class="src-tag">Figure 28.3-1</span> &mdash; (GC<sub>pf</sub>) for Load Cases 1 (Zones 1&ndash;4, 1E&ndash;4E, &theta;-dependent at &theta;=0&ndash;5&deg;, 20&deg;, 30&ndash;45&deg;, 90&deg;, linear interpolation permitted between) and 2 (Zones 1&ndash;6, 1E&ndash;6E, all &theta;), per Sec. 28.3.2.1, evaluated with each corner as the windward corner.</li>
+      <li><span class="src-tag">Figure 28.3-2, Sec. 28.3.2</span> &mdash; Torsional Load Cases 3 (LC1 zones + T-zones 1T&ndash;4T) and 4 (LC2 zones + T-zones 5T,6T), required when h&gt;30 ft unless a Sec. 28.3.2 exception applies. T-zone (GC<sub>pf</sub>) values are &theta;-dependent for 1T&ndash;4T and constant for 5T/6T.</li>
+      <li><span class="src-tag">Eq. 30.3-1</span> &mdash; C&amp;C design pressure: p = q<sub>h</sub>K<sub>d</sub>[(GC<sub>p</sub>)&minus;(GC<sub>pi</sub>)]. Applicable to enclosed/partially enclosed low-rise buildings per Sec. 30.3.1.</li>
+      <li><span class="src-tag">Figure 30.3-1</span> &mdash; Wall C&amp;C (GC<sub>p</sub>), Zones 4 &amp; 5, tabulated at effective wind area A&le;10 ft&sup2; and A&ge;500 ft&sup2;, log-linear interpolation between (Zone 4: &minus;1.1&rarr;&minus;0.8; Zone 5: &minus;1.4&rarr;&minus;0.8; positive both zones: +1.0&rarr;+0.7). Applies for all &theta;.</li>
+      <li><span class="src-tag">Figure 30.3-2A</span> &mdash; Roof C&amp;C (GC<sub>p</sub>) for &theta;&le;7&deg;, Zones 1&prime;, 1, 2, 3, tabulated at A&le;10 ft&sup2; and A&ge;500 ft&sup2;, log-linear interpolation between (Zone 1&prime;: &minus;0.9&rarr;&minus;1.0; Zone 1: &minus;1.7&rarr;&minus;0.4; Zone 2: &minus;2.3&rarr;&minus;1.0; Zone 3: &minus;3.2&rarr;&minus;1.4; positive all zones: +0.3&rarr;+0.2).</li>
+      <li>For each zone, p<sub>min</sub> (outward/suction) and p<sub>max</sub> (inward/positive) pair the (GC<sub>pf</sub>)/(GC<sub>p</sub>) value with whichever sign of (GC<sub>pi</sub>) produces the larger-magnitude net pressure &mdash; both signs of (GC<sub>pi</sub>) must be evaluated per Table 26.13-1, Note 1.</li>
+    </ul>
+
+    <div class="alert info">
+      <strong>Applicability:</strong> this module implements the Envelope Procedure (Chapters 28 &amp; 30, Part 1) for enclosed or partially enclosed buildings with a flat, gable, or hip roof, mean roof height h &le; 60 ft, and h not exceeding the least horizontal dimension (Sec. 28.3.1 / 30.3.1 conditions). Open and partially open buildings with K<sub>zt</sub>&gt;1 inputs are computed arithmetically but the underlying figures (28.3-1/30.3-1/30.3-2A) are derived for enclosed/partially enclosed buildings &mdash; verify applicability for your specific case.
+    </div>
+
+    <h3>Not yet included (planned next)</h3>
+    <ul>
+      <li><strong>Roof C&amp;C for 7&deg; &lt; &theta; &le; 45&deg; and hip roofs</strong> (Figures 30.3-2B&ndash;G) &mdash; not yet digitized from the Standard's graphical figures.</li>
+      <li><strong>Overhangs</strong> (Figure 30.3-2, overhang GC<sub>p</sub> values) &mdash; not yet included.</li>
+      <li><strong>Parapets</strong> (Sec. 28.3.4 / 30.9), <strong>roof corner downdraft / Zone 3&prime; high-suction corners</strong>, and <strong>rooftop equipment / appurtenances</strong> (Sec. 29.4&ndash;29.5) &mdash; not yet included.</li>
+      <li><strong>Directional Procedure</strong> (Chapter 27) for buildings of any height, and <strong>Chapter 27/30 Parts 2&ndash;6</strong> (open buildings, stepped/sawtooth/monoslope roofs) &mdash; future modules.</li>
+      <li><strong>Topographic factor K<sub>zt</sub></strong> from Figure 26.8-1 (currently entered directly by the user).</li>
+      <li>Automatic lookup of <strong>basic wind speed V</strong> from the ASCE Hazard Tool (currently entered manually, as with p<sub>g</sub> in the Snow module).</li>
+    </ul>
+
+    <p>Site and calculations by StructCalc (working title) &mdash; built for Serhii. This is a working engineering tool: always verify the building meets the Sec. 28.3.1 / 30.3.1 applicability conditions for the Envelope Procedure, confirm V and Risk Category from the ASCE Hazard Tool, and check K<sub>zt</sub> per Fig. 26.8-1 before use in design.</p>
+  </div>
+</footer>
+
+<div class="modal-overlay" id="infoModal">
+  <div class="modal-box">
+    <button type="button" class="modal-close" id="infoModalClose" aria-label="Close">&times;</button>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<script src="engine.js"></script>
+</body>
+</html>

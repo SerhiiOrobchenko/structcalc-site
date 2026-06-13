@@ -56,20 +56,9 @@ const MODULE_TYPES = [
     title: 'Wind Loads',
     variants: {
       'ASCE 7-22': {
-        status: 'planned',
+        status: 'ready',
         path: '../ASCE 7-22 Wind Load Calculator/index.html',
-        label: 'ASCE/SEI 7-22, Chapters 26-30',
-        roadmap: {
-          summary: 'Main Wind Force Resisting System (MWFRS) and Components & Cladding (C&C) pressures for low-rise buildings.',
-          points: [
-            'Basic wind speed V and Risk Category (Ch. 26) — reuses the Site Location lookup already built for the Seismic data.',
-            'Velocity pressure qz, qh via Kz (Table 26.10-1), Kzt (topographic, Sec. 26.8), Ke, Kd (Sec. 26.9 / 26.6).',
-            'Directionality factor Kd (Table 26.6-1) and Gust-Effect Factor G / Gf (Sec. 26.11).',
-            'MWFRS external pressure coefficients GCpf for low-rise buildings (Fig. 27.3-1, envelope procedure, Ch. 27 Part 2).',
-            'Components & Cladding pressure coefficients GCp (Fig. 30.3-1 / 30.4-1 etc., Ch. 30) for walls, roof zones and corner/edge strips.',
-            'Internal pressure coefficient GCpi by enclosure classification (Table 26.13-1).'
-          ]
-        }
+        label: 'ASCE/SEI 7-22, Chapters 26, 28 & 30 (Envelope Procedure)'
       },
       'NBCC 2015': {
         status: 'planned',
