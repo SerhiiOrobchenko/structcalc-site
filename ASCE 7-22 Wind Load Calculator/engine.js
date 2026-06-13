@@ -169,7 +169,14 @@ const state = {
   minDim: 60,        // least horizontal dimension of the building, ft
   theta: 10,         // roof angle, degrees
   areaWall: 20,      // C&C effective wind area, walls, ft^2
-  areaRoof: 50       // C&C effective wind area, roof, ft^2
+  areaRoof: 50,      // C&C effective wind area, roof, ft^2
+
+  // Report header fields (Phase 4) — informational only, do not affect calculations
+  projectName: '',
+  projectNumber: '',
+  engineer: '',
+  projectDate: '',   // ISO yyyy-mm-dd; defaulted to today on init if empty
+  riskCategory: 'II' // Table 1.5-1 — recorded for the report header only
 };
 
 /* =====================================================================
@@ -382,15 +389,17 @@ function pVal(psf) { return state.unitSystem === 'SI' ? psf / PSF_PER_KPA : psf;
 function renderSteps(steps) {
   const c = document.getElementById('stepsContainer');
   if (!c) return;
-  c.innerHTML = '';
+  // SkyCiv-style "References | Calculations | Results" columnar layout
+  let html = '<table class="steps-table"><thead><tr><th>Reference</th><th>Calculation</th><th>Result</th></tr></thead><tbody>';
   steps.forEach(st => {
-    const div = document.createElement('div');
-    div.className = 'step';
-    div.innerHTML = '<div class="step-label">' + st.label + ' <span class="src-tag">' + st.clause + '</span></div>' +
-      '<div class="formula">' + st.formula + '</div>' +
-      '<div class="result">' + st.result + '</div>';
-    c.appendChild(div);
+    html += '<tr>' +
+      '<td class="ref-col"><span class="src-tag">' + st.clause + '</span></td>' +
+      '<td class="calc-col"><span class="step-label">' + st.label + '</span><div class="formula">' + st.formula + '</div></td>' +
+      '<td class="result-col">' + st.result + '</td>' +
+      '</tr>';
   });
+  html += '</tbody></table>';
+  c.innerHTML = html;
 }
 
 function zoneTable(containerId, rows, dual) {
@@ -454,6 +463,21 @@ function renderResults() {
   zoneTable('ccRoofTable', r.ccRoof, true);
 
   renderDiagram(r);
+  renderPrintCover();
+}
+
+function renderPrintCover() {
+  const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setTxt('printProjectName', state.projectName || '—');
+  setTxt('printProjectNumber', state.projectNumber || '—');
+  setTxt('printEngineer', state.engineer || '—');
+  setTxt('printProjectDate', state.projectDate
+    ? new Date(state.projectDate + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+    : '—');
+  setTxt('printRiskCategory', state.riskCategory || '—');
+  setTxt('printMode', state.mode === 'mwfrs'
+    ? 'Main Wind Force Resisting System (MWFRS), Envelope Procedure (Ch. 28)'
+    : 'Components & Cladding (Ch. 30)');
 }
 
 /* =====================================================================
@@ -634,6 +658,28 @@ function bindInputs() {
       renderResults();
     });
   }
+
+  // Project Information (report header) — informational only
+  document.getElementById('projectName').addEventListener('input', e => {
+    state.projectName = e.target.value;
+    renderResults();
+  });
+  document.getElementById('projectNumber').addEventListener('input', e => {
+    state.projectNumber = e.target.value;
+    renderResults();
+  });
+  document.getElementById('engineer').addEventListener('input', e => {
+    state.engineer = e.target.value;
+    renderResults();
+  });
+  document.getElementById('projectDate').addEventListener('input', e => {
+    state.projectDate = e.target.value;
+    renderResults();
+  });
+  document.getElementById('riskCategory').addEventListener('change', e => {
+    state.riskCategory = e.target.value;
+    renderResults();
+  });
 }
 
 /* =====================================================================
@@ -733,6 +779,11 @@ const INFO_CONTENT = {
     </ul>
     <p>Both signs must be evaluated (<span class="src-tag">Table 26.13-1, Note 1</span>); this calculator pairs each (GC_pf)/(GC_p) value with whichever (GC_pi) sign produces the larger-magnitude net pressure.</p>`
   },
+  riskCategory: {
+    title: 'Risk Category',
+    html: `<p>Risk Category (I, II, III, or IV) is assigned per <span class="src-tag">Table 1.5-1</span> based on the building's occupancy/use. It is recorded here for the report header and does not feed into this module's calculations directly — its effect is already embedded in the basic wind speed V you enter.</p>
+    <p>Per <span class="src-tag">Sec. 26.5.1</span>, the wind speed maps of <span class="src-tag">Figures 26.5-1A–D</span> are keyed to Risk Category (each map corresponds to a target annual probability of exceedance / mean recurrence interval appropriate to that category). Use the <a href="https://ascehazardtool.org" target="_blank" rel="noopener">ASCE 7 Hazard Tool</a> with your project's Risk Category to obtain the correct V for the "Basic Wind Speed" field above.</p>`
+  },
   h: {
     title: 'Mean Roof Height, h',
     html: `<p>Mean roof height h is defined in <span class="src-tag">Sec. 26.2</span> as the average of the roof eave height and the roof ridge height, except that for roof angles &le; 10&deg; the eave height may be used as h.</p>
@@ -824,9 +875,9 @@ function bindInfoModal() {
    ===================================================================== */
 function bindPrintButton() {
   const btn = document.getElementById('printBtn');
-  const dateEl = document.getElementById('printDate');
-  if (dateEl) {
-    dateEl.textContent = 'Generated ' + new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) + ' — values reflect the inputs and computed results shown below at the time of printing.';
+  const genEl = document.getElementById('printGenerated');
+  if (genEl) {
+    genEl.textContent = 'Report generated ' + new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) + ' — values reflect the inputs and computed results shown below at the time of printing.';
   }
   if (btn) {
     btn.addEventListener('click', () => window.print());
@@ -862,6 +913,17 @@ function init() {
   document.getElementById('areaWall').value = state.areaWall;
   document.getElementById('areaRoof').value = state.areaRoof;
   document.getElementById('roofType').value = state.roofType;
+
+  // Project Information (report header)
+  if (!state.projectDate) {
+    const d = new Date();
+    state.projectDate = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  document.getElementById('projectName').value = state.projectName;
+  document.getElementById('projectNumber').value = state.projectNumber;
+  document.getElementById('engineer').value = state.engineer;
+  document.getElementById('projectDate').value = state.projectDate;
+  document.getElementById('riskCategory').value = state.riskCategory;
 
   updateUnitLabels();
   bindInputs();
@@ -907,6 +969,17 @@ document.addEventListener('DOMContentLoaded', init);
     document.getElementById('areaRoof').value = fmt(areaOut(state.areaRoof), 2);
     document.getElementById('roofType').value = state.roofType || (state.theta > 7 ? 'sloped' : 'flat');
     state.roofType = document.getElementById('roofType').value;
+
+    // Project Information (report header)
+    if (!state.projectDate) {
+      const d = new Date();
+      state.projectDate = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    document.getElementById('projectName').value = state.projectName || '';
+    document.getElementById('projectNumber').value = state.projectNumber || '';
+    document.getElementById('engineer').value = state.engineer || '';
+    document.getElementById('projectDate').value = state.projectDate;
+    document.getElementById('riskCategory').value = state.riskCategory || 'II';
 
     document.getElementById('unitSI').classList.toggle('active', state.unitSystem === 'SI');
     document.getElementById('unitUS').classList.toggle('active', state.unitSystem === 'US');

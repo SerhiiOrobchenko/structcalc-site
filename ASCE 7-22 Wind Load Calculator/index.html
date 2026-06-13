@@ -79,11 +79,21 @@
   table tr.na td{color:var(--muted); font-style:italic;}
 
   .steps{font-size:.88rem;}
-  .steps .step{border-left:3px solid var(--brand-light); padding:6px 10px 6px 12px; margin-bottom:8px;}
-  .steps .step .step-label{font-weight:700; color:var(--brand); font-size:.82rem; display:block; margin-bottom:2px;}
-  .steps .formula{font-family:var(--mono); background:#f6f8fb; border:1px solid var(--line); border-radius:4px; padding:6px 8px; margin:4px 0; font-size:.82rem; overflow-x:auto;}
-  .steps .result{font-weight:700;}
+  table.steps-table{font-size:.86rem;}
+  table.steps-table td, table.steps-table th{text-align:left; vertical-align:top;}
+  table.steps-table td.ref-col{width:14%; white-space:nowrap; color:var(--muted); font-size:.76rem;}
+  table.steps-table td.calc-col{width:56%;}
+  table.steps-table td.result-col{width:30%; font-weight:700;}
+  table.steps-table .step-label{font-weight:700; color:var(--brand); font-size:.85rem; display:block; margin-bottom:3px;}
+  table.steps-table .formula{font-family:var(--mono); background:#f6f8fb; border:1px solid var(--line); border-radius:4px; padding:5px 7px; margin-top:2px; font-size:.8rem; overflow-x:auto;}
   .note-inline{color:var(--muted); font-size:.78rem; margin-top:4px; font-weight:400;}
+
+  /* ---- Project info / report header -------------------------------------- */
+  .report-meta{display:grid; grid-template-columns:repeat(4,1fr); gap:10px;}
+  @media (max-width:760px){ .report-meta{grid-template-columns:repeat(2,1fr);} }
+  table.report-cover-table{width:100%; border-collapse:collapse; font-size:.86rem; margin:8px 0 4px;}
+  table.report-cover-table td{border:1px solid var(--line); padding:5px 8px;}
+  table.report-cover-table td:first-child{font-weight:600; color:var(--brand); width:32%; background:var(--brand-light);}
 
   .summary-cards{display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin:10px 0;}
   @media (max-width:760px){ .summary-cards{grid-template-columns:repeat(2,1fr);} }
@@ -150,6 +160,9 @@
     body{background:#fff;}
     main{max-width:100%;}
     #torsionDetails{display:block !important;}
+    /* SkyCiv-style report pagination: each major section starts on its own page */
+    #diagramPanel, .panel[data-mode], footer.sources{page-break-before:always;}
+    footer.sources{display:block !important; border-top:none; padding:20px 0 0;}
   }
 </style>
 </head>
@@ -174,9 +187,17 @@
 
 <main>
 
-  <div class="print-only" style="margin-bottom:12px;">
-    <h1 style="color:var(--brand); margin:0;">Wind Load Report &mdash; ASCE/SEI 7-22, Chapters 26&ndash;30</h1>
-    <p style="color:var(--muted); font-size:.85rem;" id="printDate"></p>
+  <div class="print-only" id="printCover" style="margin-bottom:12px;">
+    <h1 style="color:var(--brand); margin:0 0 8px;">Wind Load Report &mdash; ASCE/SEI 7-22, Chapters 26&ndash;30</h1>
+    <table class="report-cover-table">
+      <tr><td>Project name</td><td id="printProjectName">&ndash;</td></tr>
+      <tr><td>Project no. / location</td><td id="printProjectNumber">&ndash;</td></tr>
+      <tr><td>Engineer / designer</td><td id="printEngineer">&ndash;</td></tr>
+      <tr><td>Project date</td><td id="printProjectDate">&ndash;</td></tr>
+      <tr><td>Risk Category</td><td id="printRiskCategory">&ndash;</td></tr>
+      <tr><td>Calculation procedure</td><td id="printMode">&ndash;</td></tr>
+    </table>
+    <p style="color:var(--muted); font-size:.8rem;" id="printGenerated"></p>
   </div>
 
   <div class="intro">
@@ -187,6 +208,37 @@
     <p>The calculation chain is: velocity pressure exposure coefficient K<sub>h</sub> (Table 26.10-1) &rarr; ground elevation factor K<sub>e</sub> (Table 26.9-1) &rarr; velocity pressure q<sub>h</sub> (Eq. 26.10-1) &rarr; internal pressure coefficient (GC<sub>pi</sub>) (Table 26.13-1) &rarr; external pressure coefficients (GC<sub>pf</sub>) for MWFRS (Fig. 28.3-1/28.3-2) and (GC<sub>p</sub>) for C&amp;C (Fig. 30.3-1/30.3-2A) &rarr; design pressures p (Eq. 28.3-1 / 30.3-1). Every value is computed explicitly with its clause/equation/table/figure reference.</p>
     <p><strong>Basic wind speed, V:</strong> read from Figures 26.5-1A&ndash;D for the project location and Risk Category using the official <a href="https://ascehazardtool.org" target="_blank" rel="noopener">ASCE 7 Hazard Tool</a> (ascehazardtool.org), then enter it below.</p>
     <p>Items not yet covered by this module are listed in the Roadmap in the footer below.</p>
+  </div>
+
+  <div class="panel" id="projectInfoPanel">
+    <h2>Project Information <span class="ref">Report header</span></h2>
+    <div class="report-meta">
+      <div class="field">
+        <label for="projectName">Project name</label>
+        <input type="text" id="projectName" placeholder="e.g. 123 Main St — New Garage">
+      </div>
+      <div class="field">
+        <label for="projectNumber">Project no. / location</label>
+        <input type="text" id="projectNumber" placeholder="Project number or address">
+      </div>
+      <div class="field">
+        <label for="engineer">Engineer / designer</label>
+        <input type="text" id="engineer" placeholder="Name">
+      </div>
+      <div class="field">
+        <label for="projectDate">Date</label>
+        <input type="date" id="projectDate">
+      </div>
+    </div>
+    <div class="field" style="max-width:220px;">
+      <label for="riskCategory">Risk Category<button type="button" class="info-btn" data-info="riskCategory" aria-label="Learn more">i</button></label>
+      <select id="riskCategory">
+        <option value="I">I</option>
+        <option value="II">II</option>
+        <option value="III">III</option>
+        <option value="IV">IV</option>
+      </select>
+    </div>
   </div>
 
   <div class="panel" id="diagramPanel">
