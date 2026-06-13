@@ -26,6 +26,17 @@
       <button id="btnExportProject" class="btn" title="Download the active project as a .json file">Export .json</button>
       <button id="btnImportProject" class="btn" title="Load a project from a .json file">Import .json</button>
       <input type="file" id="importFile" accept="application/json" style="display:none">
+      <span class="sep"></span>
+      <label for="codeSelect" class="bar-label">Code</label>
+      <select id="codeSelect" title="Design code — switches the engine used by every calculation in this project">
+        <option value="ASCE 7-22">ASCE 7-22 (USA)</option>
+        <option value="NBCC 2015">NBCC 2015 (Canada)</option>
+      </select>
+      <label for="unitsSelect" class="bar-label">Units</label>
+      <select id="unitsSelect" title="Unit system for new/unsaved calculations">
+        <option value="US">US / Imperial</option>
+        <option value="SI">SI</option>
+      </select>
     </div>
   </header>
 
@@ -65,6 +76,23 @@
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-primary" id="npCreate">Create project</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add calculation dialog: pick a module type (Snow, Wind, Seismic, ...) to add
+       to the active project. The engine used depends on the Code selector above. -->
+  <div class="modal-overlay" id="addCalcModal">
+    <div class="modal-box modal-box-wide">
+      <button type="button" class="modal-close" id="addCalcClose" aria-label="Close">&times;</button>
+      <h3>Add calculation</h3>
+      <div class="calc-type-grid" id="calcTypeGrid"></div>
+      <div class="field">
+        <label for="acDescription">Description (optional)</label>
+        <input type="text" id="acDescription" placeholder="e.g. left canopy, grid A">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" id="acAdd" disabled>Add to project</button>
       </div>
     </div>
   </div>

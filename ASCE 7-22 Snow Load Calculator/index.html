@@ -43,13 +43,6 @@
   }
   .seg button.active{background:#fff; color:var(--brand); font-weight:600;}
 
-  nav.modulenav{
-    background:#16384f; color:#cfe2f3; padding:8px 20px; display:flex; gap:18px; flex-wrap:wrap; font-size:.88rem;
-  }
-  nav.modulenav a{color:#cfe2f3; text-decoration:none; padding:4px 2px; border-bottom:2px solid transparent;}
-  nav.modulenav a.active{color:#fff; border-color:var(--accent); font-weight:600;}
-  nav.modulenav a.disabled{color:#5f7f96; cursor:default;}
-
   main{max-width:1180px; margin:0 auto; padding:18px 16px 60px;}
 
   .intro{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px 20px; margin-bottom:18px;}
@@ -159,7 +152,7 @@
   /* ---- Print report ------------------------------------------------------- */
   .print-only{display:none;}
   @media print{
-    header.topbar, nav.modulenav, #map, #locateBtn, #fetchSeismicBtn,
+    header.topbar, #map, #locateBtn, #fetchSeismicBtn,
     .info-btn, footer.sources, .btn, #printBtn{display:none !important;}
     .grid{display:block;}
     .panel{break-inside:avoid; border:1px solid #ccc; box-shadow:none;}
@@ -187,14 +180,6 @@
     <button type="button" id="printBtn" class="btn" style="background:transparent; border:1px solid #9fc6ea;">Print / Export Report</button>
   </div>
 </header>
-
-<nav class="modulenav">
-  <a href="../NBCC 2015 Snow Drift Calculator/index.html">Canada: Snow Drift Load (NBCC 2015)</a>
-  <a href="#" class="active">USA: Roof Snow Loads (ASCE/SEI 7-22, Ch. 7)</a>
-  <a href="#" class="disabled">Wind Loads ASCE 7-22 Ch. 26-30 (soon)</a>
-  <a href="#" class="disabled">Seismic Loads ASCE 7-22 Ch. 11-12 (soon)</a>
-  <a href="#" class="disabled">Member Design (soon)</a>
-</nav>
 
 <main>
 
