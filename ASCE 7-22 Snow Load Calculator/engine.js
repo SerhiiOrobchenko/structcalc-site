@@ -686,7 +686,8 @@ const INFO_CONTENT = {
       <li><span class="src-tag">Leaflet.js + OpenStreetMap tiles</span> &mdash; renders the point on the map.</li>
       <li><span class="src-tag">USGS Design Maps web service (earthquake.usgs.gov/ws/designmaps/asce7-22.json)</span> &mdash; returns S<sub>S</sub>, S<sub>1</sub>, S<sub>MS</sub>, S<sub>M1</sub>, S<sub>DS</sub>, S<sub>D1</sub>, PGA<sub>M</sub>, T<sub>L</sub>, T<sub>S</sub>, T<sub>0</sub> and Seismic Design Category per <span class="src-tag">ASCE/SEI 7-22 Sec. 11.4</span> and <span class="src-tag">Tables 11.6-1/11.6-2</span>.</li>
     </ul>
-    <p><strong>This panel does NOT provide p<sub>g</sub> or wind speed V.</strong> Those require the official <a href="https://ascehazardtool.org" target="_blank" rel="noopener">ASCE 7 Hazard Tool</a> (registered account/API key) &mdash; enter p<sub>g</sub> manually in Section 1.</p>`
+    <p><strong>This panel does NOT provide p<sub>g</sub> or wind speed V.</strong> Those require the official <a href="https://ascehazardtool.org" target="_blank" rel="noopener">ASCE 7 Hazard Tool</a> (registered account/API key) &mdash; enter p<sub>g</sub> manually in Section 1.</p>
+    <p>The geocoder matches city/town names rather than exact street addresses &mdash; if you enter a full street address, the lookup falls back to the city/town part automatically. Check the pin and adjust latitude/longitude manually for the exact building location if needed. Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, rendered with <a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet.js</a>.</p>`
   },
   siteClass: {
     title: 'Site Class — ASCE/SEI 7-22 Ch. 20, Table 20.2-1',
@@ -790,6 +791,10 @@ const INFO_CONTENT = {
     html: `<p><span class="src-tag">Sec. 7.9</span> &mdash; the sliding snow load (0.4&middot;p<sub>f</sub>&middot;W from the upper roof) is distributed over <strong>15 ft (4.6 m)</strong> of the lower roof width, measured from the upper/lower roof intersection.</p>
     <p>If the lower roof is <strong>narrower than 15 ft (4.6 m)</strong>, the total sliding load is reduced proportionally to the available width before being applied as a uniform load over that width.</p>
     <p>Set this value to 15 ft / 4.6 m or more if the reduction does not apply.</p>`
+  },
+  stepsInfo: {
+    title: 'Step-by-Step Calculation',
+    html: `<p>Every value below is computed from the inputs on the left, with the clause, equation, table, or figure it comes from &mdash; see the "Where these formulas come from" section at the bottom of this page for the full citation list.</p>`
   }
 };
 

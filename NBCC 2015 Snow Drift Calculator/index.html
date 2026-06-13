@@ -168,15 +168,8 @@
 <body>
 
 <header class="topbar">
-  <div class="brand">StructCalc <span>&mdash; Engineering Calculations</span></div>
-  <div class="topbar-controls">
-    <label>Code:
-      <select id="codeSelect">
-        <option value="nbcc2015">Canada &mdash; NBCC 2015</option>
-        <option value="asce7" disabled>USA &mdash; ASCE/SEI 7 (coming soon)</option>
-      </select>
-    </label>
-    <div class="seg" role="group" aria-label="Unit system">
+  <div class="topbar-controls" style="justify-content:flex-end; width:100%;">
+    <div class="seg" role="group" aria-label="Unit system" style="display:none;">
       <button id="unitSI" data-units="SI">SI (kPa, m)</button>
       <button id="unitUS" data-units="US" class="active">US / Imperial (psf, ft)</button>
     </div>
@@ -208,12 +201,10 @@
           <div class="field">
             <label for="Ss">Ground snow load, S<sub>s</sub> <span id="unitPress1">(psf)</span><button type="button" class="info-btn" data-info="Ss" aria-label="Learn more">i</button></label>
             <input type="number" id="Ss" step="any">
-            <span class="hint">From NBCC 2015 Appendix C, Table C-2 for your location.</span>
           </div>
           <div class="field">
             <label for="Sr">Associated rain load, S<sub>r</sub> <span id="unitPress2">(psf)</span><button type="button" class="info-btn" data-info="Sr" aria-label="Learn more">i</button></label>
             <input type="number" id="Sr" step="any">
-            <span class="hint">From NBCC 2015 Appendix C, Table C-2.</span>
           </div>
         </div>
         <div class="row3">
@@ -228,23 +219,19 @@
               <option value="custom">Custom&hellip;</option>
             </select>
             <input type="number" id="IsCustom" step="any" style="display:none; margin-top:4px;" placeholder="Custom Is">
-            <span class="hint">NBCC 2015 Table 4.1.6.2.&ndash;A (Importance Categories per Table 4.1.2.1.). Verify against your copy.</span>
           </div>
           <div class="field">
             <label for="Cb">Basic roof snow load factor, C<sub>b</sub><button type="button" class="info-btn" data-info="Cb" aria-label="Learn more">i</button></label>
             <input type="number" id="Cb" step="any" value="0.8">
-            <span class="hint">0.8 for typical roofs (Cw=1). Larger roofs may need a higher value per NBC Cl. 4.1.6.2.(2) &ndash; not yet automated here.</span>
           </div>
           <div class="field">
             <label for="Cw">Wind exposure factor, C<sub>w</sub><button type="button" class="info-btn" data-info="Cw" aria-label="Learn more">i</button></label>
             <input type="number" id="Cw" step="any" value="1.0">
-            <span class="hint">Use 1.0 wherever drift accumulation is being checked (Commentary G, para. 11).</span>
           </div>
         </div>
         <div class="field">
           <label for="Cs">Roof slope factor, C<sub>s</sub> (lower roof)<button type="button" class="info-btn" data-info="Cs" aria-label="Learn more">i</button></label>
           <input type="number" id="Cs" step="any" value="1.0" style="max-width:180px;">
-          <span class="hint">1.0 for flat or low-slope roofs (NBC Sentence 4.1.6.2.(5)). Sloped-roof Cs is a separate module &ndash; see roadmap.</span>
         </div>
       </div>
 
@@ -253,7 +240,6 @@
         <div class="field">
           <label for="h">Height of roof step, h <span id="unitLen1">(ft)</span><button type="button" class="info-btn" data-info="h" aria-label="Learn more">i</button></label>
           <input type="number" id="h" step="any">
-          <span class="hint">Difference in elevation between the lower roof surface and the top of the upper roof / parapet (NBC Fig. 4.1.6.5.-A).</span>
         </div>
 
         <div class="alert info">
@@ -265,7 +251,6 @@
 
       <div class="panel">
         <h2>3. Lower-Roof Parapet Check <span class="ref">NBC Cl. 4.1.6.7.(1)(a)</span><button type="button" class="info-btn" data-info="parapetCheck" aria-label="Learn more">i</button></h2>
-        <p class="hint">If the lower roof itself has a parapet, this check determines whether the parapet&rsquo;s own drift (independent of the roof step) governs near that wall. Set h<sub>p,lower</sub> = 0 to skip.</p>
         <div class="row2">
           <div class="field">
             <label for="hpLower">Lower-roof parapet height, h<sub>p,lower</sub> <span id="unitLen2">(ft)</span><button type="button" class="info-btn" data-info="hpLower" aria-label="Learn more">i</button></label>
@@ -280,7 +265,6 @@
 
       <div class="panel">
         <h2>4. Snow Drift at Corners <span class="ref">NBC Art. 4.1.6.8</span><button type="button" class="info-btn" data-info="corners" aria-label="Learn more">i</button></h2>
-        <p class="hint">Where the roof step in Section 2 occurs at an outside or inside corner in plan, Sentences 4.1.6.8.(1)/(2) govern how the drift loads on the <strong>two faces</strong> of the corner are combined and applied &mdash; this Article defines no new C<sub>a0</sub>/x<sub>d</sub> formula. Each face below is evaluated with the same method as Section 2 (Sentence 4.1.6.5.(3), Eq.(2)&amp;(3)), using the roof-step height h entered above.</p>
         <label style="display:flex;align-items:center;gap:6px;font-size:.88rem;font-weight:600;">
           <input type="checkbox" id="cornerEnabled"> Include a corner condition
         </label>
@@ -332,8 +316,7 @@
       </div>
 
       <div class="panel">
-        <h2>Step-by-Step Calculation</h2>
-        <p class="hint">Every value below is computed from the inputs on the left, in SI units (kPa, m, kN/m&sup3;) as used by the Code, with the equivalent value shown in brackets when US units are selected.</p>
+        <h2>Step-by-Step Calculation<button type="button" class="info-btn" data-info="stepsInfo" aria-label="Learn more">i</button></h2>
         <div id="stepsContainer" class="steps"></div>
       </div>
     </div>

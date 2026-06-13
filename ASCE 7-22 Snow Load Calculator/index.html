@@ -165,15 +165,8 @@
 <body>
 
 <header class="topbar">
-  <div class="brand">StructCalc <span>&mdash; Engineering Calculations</span></div>
-  <div class="topbar-controls">
-    <label>Code:
-      <select id="codeSelect">
-        <option value="nbcc2015">Canada &mdash; NBCC 2015</option>
-        <option value="asce7" selected>USA &mdash; ASCE/SEI 7-22</option>
-      </select>
-    </label>
-    <div class="seg" role="group" aria-label="Unit system">
+  <div class="topbar-controls" style="justify-content:flex-end; width:100%;">
+    <div class="seg" role="group" aria-label="Unit system" style="display:none;">
       <button id="unitSI" data-units="SI">SI (kPa, m)</button>
       <button id="unitUS" data-units="US" class="active">US / Imperial (psf, ft)</button>
     </div>
@@ -198,7 +191,6 @@
 
   <div class="panel">
     <h2>Site Location <span class="ref">optional &mdash; map display &amp; automatic seismic data</span><button type="button" class="info-btn" data-info="siteLocation" aria-label="Learn more">i</button></h2>
-    <p class="hint">Enter a project address to show it on a map and automatically pull <strong>Seismic Design Parameters (ASCE/SEI 7-22 Chapter 11)</strong> &mdash; S<sub>S</sub>, S<sub>1</sub>, S<sub>MS</sub>, S<sub>M1</sub>, S<sub>DS</sub>, S<sub>D1</sub>, PGA<sub>M</sub>, and Seismic Design Category &mdash; from the USGS Design Maps service. <strong>This does not provide p<sub>g</sub> or wind speed V</strong>: the official ASCE 7 Hazard Tool API that supplies those requires a registered account/API key, so p<sub>g</sub> above must still be entered manually from <a href="https://ascehazardtool.org" target="_blank" rel="noopener">ascehazardtool.org</a> for these coordinates.</p>
 
     <div class="loc-row">
       <div class="field addr">
@@ -222,19 +214,16 @@
       </div>
     </div>
     <div id="map"></div>
-    <span class="hint">Geocoding: <a href="https://open-meteo.com/en/docs/geocoding-api" target="_blank" rel="noopener">Open-Meteo Geocoding API</a> (free, no key, CORS-enabled, OpenStreetMap-derived place data). It matches city/town names rather than exact street addresses &mdash; if you enter a full street address, the lookup falls back to the city/town part automatically. Check the pin and adjust latitude/longitude manually for the exact building location if needed. Map: &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, rendered with <a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet.js</a>.</span>
 
     <h3 style="margin-top:18px;">Seismic Design Parameters <span class="ref">ASCE/SEI 7-22 Ch. 11, Sec. 11.4 &amp; Ch. 20 &mdash; USGS Design Maps</span></h3>
     <div class="loc-row">
       <div class="field">
-        <label>Risk Category</label>
+        <label>Risk Category<button type="button" class="info-btn" data-info="riskCategory" aria-label="Learn more">i</button></label>
         <input type="text" id="seismicRiskCategoryDisplay" disabled>
-        <span class="hint">From Section 1 below (Sec. 1.5 / Table 1.5-1).</span>
       </div>
       <div class="field">
         <label for="siteClass">Site Class<button type="button" class="info-btn" data-info="siteClass" aria-label="Learn more">i</button></label>
         <select id="siteClass"></select>
-        <span class="hint">Ch. 20. "Default" applies Sec. 11.4.3 default site class. Site Class F requires a site-specific procedure (Sec. 11.4.8) and isn&rsquo;t covered by this service.</span>
       </div>
       <div class="field" style="flex:0 0 auto; min-width:auto;">
         <button type="button" id="fetchSeismicBtn" class="btn">Get seismic data (USGS)</button>
@@ -267,12 +256,10 @@
           <div class="field">
             <label for="riskCategory">Risk Category<button type="button" class="info-btn" data-info="riskCategory" aria-label="Learn more">i</button></label>
             <select id="riskCategory"></select>
-            <span class="hint">Determines p<sub>m,max</sub> from Table 7.3-4. See Sec. 1.5 / Table 1.5-1 for Risk Category assignment.</span>
           </div>
           <div class="field">
             <label for="pg">Ground snow load, p<sub>g</sub> <span class="unit-pressure">(psf)</span><button type="button" class="info-btn" data-info="pg" aria-label="Learn more">i</button></label>
             <input type="number" id="pg" step="any">
-            <span class="hint">From the <a href="https://ascehazardtool.org" target="_blank" rel="noopener">ASCE 7 Hazard Tool</a> (ascehazardtool.org) for your site &amp; Risk Category &mdash; Figures 7.2-1A&ndash;D (Table 7.2-1 for Alaska).</span>
           </div>
         </div>
         <div class="row2">
@@ -287,7 +274,6 @@
               <option value="partial">Partially Exposed</option>
               <option value="sheltered">Sheltered</option>
             </select>
-            <span class="hint">"Sheltered" is N/A for above-tree-line / Alaska rows of Table 7.3-1.</span>
           </div>
         </div>
       </div>
@@ -301,7 +287,6 @@
         <div class="field" id="rroofField">
           <label for="rroof">Roof thermal resistance, R<sub>roof</sub> (h&middot;ft&sup2;&middot;&deg;F/Btu)<button type="button" class="info-btn" data-info="rroof" aria-label="Learn more">i</button></label>
           <input type="number" id="rroof" step="any">
-          <span class="hint">Table 7.3-3 is tabulated in US units; enter R<sub>roof</sub> in h&middot;ft&sup2;&middot;&deg;F/Btu (1 h&middot;ft&sup2;&middot;&deg;F/Btu = 0.176 m&sup2;&middot;K/W). For R<sub>roof</sub> &gt; 50, C<sub>t</sub> = 1.2 (Footnote b).</span>
         </div>
         <div class="field" id="ctCustomField">
           <label for="ctCustom">Custom C<sub>t</sub><button type="button" class="info-btn" data-info="ctCustom" aria-label="Learn more">i</button></label>
@@ -315,7 +300,6 @@
           <div class="field">
             <label for="slopeDeg">Roof slope (degrees)<button type="button" class="info-btn" data-info="slopeDeg" aria-label="Learn more">i</button></label>
             <input type="number" id="slopeDeg" step="any" min="0" max="90">
-            <span class="hint">Convert rise:run to degrees: slope&deg; = atan(rise/run) &times; 180/&pi;.</span>
           </div>
           <div class="field">
             <label for="surfaceType">Roof surface<button type="button" class="info-btn" data-info="surfaceType" aria-label="Learn more">i</button></label>
@@ -336,7 +320,6 @@
             <option value="curved">Curved roof</option>
             <option value="other">Other (multiple folded plate, sawtooth, barrel vault, steep roof, etc.)</option>
           </select>
-          <span class="hint">p<sub>m</sub> applies only to monoslope/hip/gable roofs with slope &lt; 15&deg;, and to curved roofs with eave-to-crown vertical angle &lt; 10&deg; (Sec. 7.3.3).</span>
         </div>
         <div class="field" id="curvedAngleField">
           <label for="curvedAngle">Eave-to-crown vertical angle (degrees)<button type="button" class="info-btn" data-info="curvedAngle" aria-label="Learn more">i</button></label>
@@ -350,12 +333,10 @@
           <div class="field">
             <label for="W">Eave-to-ridge horizontal distance, W <span class="unit-length">(ft)</span><button type="button" class="info-btn" data-info="W" aria-label="Learn more">i</button></label>
             <input type="number" id="W" step="any">
-            <span class="hint">Used for the Sec. 7.10 rain-on-snow slope check (slope &lt; W/50, W in ft) and the Sec. 7.9 sliding load (0.4&middot;p<sub>f</sub>&middot;W).</span>
           </div>
           <div class="field">
             <label for="lowerRoofWidth">Lower roof width <span class="unit-length">(ft)</span><button type="button" class="info-btn" data-info="lowerRoofWidth" aria-label="Learn more">i</button></label>
             <input type="number" id="lowerRoofWidth" step="any">
-            <span class="hint">Width over which the sliding load is distributed (15 ft / 4.6 m maximum; reduced proportionally if the lower roof is narrower &ndash; Sec. 7.9). Set to 15 ft / 4.6 m or more if not applicable.</span>
           </div>
         </div>
       </div>
@@ -388,8 +369,7 @@
       </div>
 
       <div class="panel">
-        <h2>Step-by-Step Calculation</h2>
-        <p class="hint">Every value below is computed from the inputs on the left, with the clause, equation, table, or figure it comes from.</p>
+        <h2>Step-by-Step Calculation<button type="button" class="info-btn" data-info="stepsInfo" aria-label="Learn more">i</button></h2>
         <div id="stepsContainer" class="steps"></div>
       </div>
     </div>

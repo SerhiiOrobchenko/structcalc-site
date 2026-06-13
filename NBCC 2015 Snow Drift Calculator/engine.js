@@ -671,7 +671,7 @@ function infoBtnHtml(key) {
 const INFO_CONTENT = {
   Ss: {
     title: 'Ground snow load, S<sub>s</sub>',
-    html: `<p>Tabulated 1-in-50-year ground snow load by location, from <strong>NBCC 2015 Appendix C, Table C-2</strong> (referenced in the field hint). Enter the value (kPa) for your project's location.</p>
+    html: `<p>Tabulated 1-in-50-year ground snow load by location, from <strong>NBCC 2015 Appendix C, Table C-2</strong>. Enter the value (kPa) for your project's location.</p>
       <p>S<sub>s</sub> is the base input to the design snow load equation, <span class="src-tag">NBC Sentence 4.1.6.2.(1)</span>: S = I<sub>s</sub>[S<sub>s</sub>(C<sub>b</sub>C<sub>w</sub>C<sub>s</sub>C<sub>a</sub>) + S<sub>r</sub>], and to the specific weight of snow, <span class="src-tag">NBC Sentence 4.1.6.13.(1)</span>: &gamma; = min(0.43&middot;S<sub>s</sub> + 2.2, 4.0) kN/m&sup3;.</p>`
   },
   Sr: {
@@ -687,16 +687,19 @@ const INFO_CONTENT = {
   Cb: {
     title: 'Basic roof snow load factor, C<sub>b</sub>',
     html: `<p>C<sub>b</sub> is the basic roof snow load factor used in the design snow load equation, <span class="src-tag">NBC Sentence 4.1.6.2.(1)</span>: S = I<sub>s</sub>[S<sub>s</sub>(C<sub>b</sub>C<sub>w</sub>C<sub>s</sub>C<sub>a</sub>) + S<sub>r</sub>].</p>
-      <p>It also appears throughout the drift calculations: in <span class="src-tag">NBC Sentence 4.1.6.5.(3)</span> (h<sub>p</sub>' and F), <span class="src-tag">NBC Eq. (2) &amp; (3)</span> (C<sub>a0</sub> = min(&beta;&gamma;h/(C<sub>b</sub>S<sub>s</sub>), F/C<sub>b</sub>)), <span class="src-tag">NBC Sentence 4.1.6.5.(2)</span> (drift length x<sub>d</sub>), and the parapet check <span class="src-tag">NBC Cl. 4.1.6.7.(1)(a)</span>.</p>`
+      <p>It also appears throughout the drift calculations: in <span class="src-tag">NBC Sentence 4.1.6.5.(3)</span> (h<sub>p</sub>' and F), <span class="src-tag">NBC Eq. (2) &amp; (3)</span> (C<sub>a0</sub> = min(&beta;&gamma;h/(C<sub>b</sub>S<sub>s</sub>), F/C<sub>b</sub>)), <span class="src-tag">NBC Sentence 4.1.6.5.(2)</span> (drift length x<sub>d</sub>), and the parapet check <span class="src-tag">NBC Cl. 4.1.6.7.(1)(a)</span>.</p>
+      <p>0.8 is the typical value for roofs with C<sub>w</sub> = 1. Larger roofs may need a higher value per <span class="src-tag">NBC Cl. 4.1.6.2.(2)</span> &mdash; not yet automated here.</p>`
   },
   Cw: {
     title: 'Wind exposure factor, C<sub>w</sub>',
     html: `<p>C<sub>w</sub> is the wind exposure factor in the design snow load equation, <span class="src-tag">NBC Sentence 4.1.6.2.(1)</span>: S = I<sub>s</sub>[S<sub>s</sub>(C<sub>b</sub>C<sub>w</sub>C<sub>s</sub>C<sub>a</sub>) + S<sub>r</sub>].</p>
-      <p>It also defines the "sheltered zone" near a roof step in <span class="src-tag">NBC Fig. 4.1.6.5.-A</span>: h' = h &minus; C<sub>b</sub>C<sub>w</sub>S<sub>s</sub>/&gamma;, x = 10h' &mdash; the distance over which C<sub>w</sub> = 1.0 must be used for adjoining roof areas.</p>`
+      <p>It also defines the "sheltered zone" near a roof step in <span class="src-tag">NBC Fig. 4.1.6.5.-A</span>: h' = h &minus; C<sub>b</sub>C<sub>w</sub>S<sub>s</sub>/&gamma;, x = 10h' &mdash; the distance over which C<sub>w</sub> = 1.0 must be used for adjoining roof areas.</p>
+      <p>Use C<sub>w</sub> = 1.0 wherever drift accumulation is being checked (Commentary G, paragraph 11).</p>`
   },
   Cs: {
     title: 'Roof slope factor, C<sub>s</sub> (lower roof)',
-    html: `<p>C<sub>s</sub> is the roof slope factor for the lower roof, applied in the design snow load equation, <span class="src-tag">NBC Sentence 4.1.6.2.(1)</span>: S = I<sub>s</sub>[S<sub>s</sub>(C<sub>b</sub>C<sub>w</sub>C<sub>s</sub>C<sub>a</sub>) + S<sub>r</sub>]. C<sub>a</sub> is the drift accumulation factor computed in Section 2.</p>`
+    html: `<p>C<sub>s</sub> is the roof slope factor for the lower roof, applied in the design snow load equation, <span class="src-tag">NBC Sentence 4.1.6.2.(1)</span>: S = I<sub>s</sub>[S<sub>s</sub>(C<sub>b</sub>C<sub>w</sub>C<sub>s</sub>C<sub>a</sub>) + S<sub>r</sub>]. C<sub>a</sub> is the drift accumulation factor computed in Section 2.</p>
+      <p>Use C<sub>s</sub> = 1.0 for flat or low-slope roofs (<span class="src-tag">NBC Sentence 4.1.6.2.(5)</span>). A sloped-roof C<sub>s</sub> calculation is a separate module &mdash; see the roadmap at the bottom of this page.</p>`
   },
   h: {
     title: 'Height of roof step, h',
@@ -708,7 +711,8 @@ const INFO_CONTENT = {
     html: `<p>A separate check required by <span class="src-tag">NBC Cl. 4.1.6.7.(1)(a)</span>, which gives:</p>
       <p>C<sub>a0</sub> = min(0.67&gamma;h<sub>p,lower</sub>/(C<sub>b</sub>S<sub>s</sub>), 1 + &gamma;l<sub>0</sub>/(7.5C<sub>b</sub>S<sub>s</sub>))</p>
       <p>This is reproduced in <em>NBC 2015 Structural Commentaries</em>, Commentary G, Sample Calculation 1, Step 10, and confirmed directly against <em>NBCC 2015, Division B</em>, Sentence 4.1.6.7.(1) (p. 4-20).</p>
-      <p>If the resulting C<sub>a0</sub> &lt; 1, the parapet drift is not significant and may be ignored per the Commentary. If C<sub>a0</sub> &ge; 1, combine with the roof-step drift using engineering judgement.</p>`
+      <p>If the resulting C<sub>a0</sub> &lt; 1, the parapet drift is not significant and may be ignored per the Commentary. If C<sub>a0</sub> &ge; 1, combine with the roof-step drift using engineering judgement.</p>
+      <p>If the lower roof itself has a parapet, this check determines whether the parapet's own drift (independent of the roof step) governs near that wall. Set h<sub>p,lower</sub> = 0 to skip this check.</p>`
   },
   hpLower: {
     title: 'Lower-roof parapet height, h<sub>p,lower</sub>',
@@ -771,6 +775,10 @@ const INFO_CONTENT = {
   cornerBeta: {
     title: '&beta; — factor (corner face)',
     html: `<p>Same quantity as Section 2's &beta; (1.0 or 0.67, per <span class="src-tag">NBC Eq. (2) &amp; (3)</span>, Commentary G &para;37), evaluated for this corner face as part of the per-face C<sub>a0</sub>/x<sub>d</sub> calculation required by <span class="src-tag">NBC Sentence 4.1.6.8.(1)</span> / <span class="src-tag">NBC Sentence 4.1.6.8.(2)</span>.</p>`
+  },
+  stepsInfo: {
+    title: 'Step-by-Step Calculation',
+    html: `<p>Every value below is computed from the inputs on the left, in SI units (kPa, m, kN/m&sup3;) as used by the Code, with the equivalent value shown in brackets when US units are selected. Each step is labelled with the Code clause or Commentary G step it implements &mdash; see the "Where these formulas come from" section at the bottom of this page for the full citation list.</p>`
   }
 };
 

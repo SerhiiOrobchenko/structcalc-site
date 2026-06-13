@@ -115,7 +115,7 @@ body {
   overflow-y: auto;
   background: #fff;
   border-right: 1px solid var(--border);
-  padding: 10px 0;
+  padding: 18px 0 10px;
 }
 
 .tree-group {
