@@ -862,40 +862,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function applyState(msg) {
     if (!msg) return;
-    if (msg.state) Object.assign(state, msg.state);
-    if (msg.unitSystem) unitSystem = msg.unitSystem;
-
-    document.getElementById('unitSI').classList.toggle('active', unitSystem === 'SI');
-    document.getElementById('unitUS').classList.toggle('active', unitSystem === 'US');
-
-    renderMainInputs();
-    renderCases();
-
-    document.getElementById('cornerEnabled').checked = state.corner.enabled;
-    document.getElementById('cornerBlock').style.display = state.corner.enabled ? 'block' : 'none';
-    document.getElementById('cornerType').value = state.corner.type;
-    renderCorner();
-
-    update();
-  }
-
-  window.addEventListener('message', e => {
-    const msg = e.data;
-    if (!msg) return;
-    if (msg.type === 'loadState') {
-      try { applyState(msg); } catch (err) { console.error('StructCalc applyState error', err); }
-    } else if (msg.type === 'requestState') {
-      postState();
-    }
-  });
-
-  // Wrap update() so every recompute (incl. from user edits) reports the
-  // new state back to the shell.
-  const _update = update;
-  update = function () {
-    _update.apply(this, arguments);
-    postState();
-  };
-
-  window.addEventListener('DOMContentLoaded', () => setTimeout(postState, 0));
-})();
+    if (msg.state) Object.assign(state, msg
