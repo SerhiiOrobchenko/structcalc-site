@@ -178,18 +178,42 @@
   #reportContent .panel h3{color:var(--brand); font-size:.95rem; border-bottom:1px dashed var(--line); padding-bottom:4px;}
   #reportContent svg{max-width:100%; height:auto;}
 
+  /* ---- Print title block (repeating per-page header, Tekla Tedds / SkyCiv
+     style). Populated by buildTitleBlockHTML() in engine.js. Fields are
+     user-entered Project Information metadata; "Sheet no." is a static
+     per-section index, not a live page counter (see comment on
+     buildTitleBlockHTML). ----------------------------------------------- */
+  table.title-block{width:100%; border-collapse:collapse; font-size:.74rem; margin:0;}
+  table.title-block td{border:1px solid #999; padding:4px 6px; vertical-align:top;}
+  table.title-block .tb-company{width:30%; font-weight:700; font-size:.95rem; color:var(--brand); vertical-align:middle;}
+  table.title-block .tb-project, table.title-block .tb-ref{width:35%;}
+  table.title-block .tb-signoff{width:33.33%;}
+  table.title-block .tb-label{font-size:.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:.03em;}
+
   /* ---- Print report ------------------------------------------------------- */
   .print-only{display:none;}
+  /* Each printed "page" (cover or report section) is a table whose <thead>
+     holds the title block; thead{display:table-header-group} repeats that
+     header on every physical page the table's body spans. The 1px border on
+     table.report-page gives the page a thin outline; per CSS Fragmentation
+     this border is drawn once around the (possibly multi-page) table rather
+     than re-drawn on every physical page in all browsers/PDF engines —
+     verify the printed output if a border on every page is required. */
+  table.report-page{width:100%; border-collapse:collapse; border:1px solid #ccc;}
+  table.report-page thead{display:table-header-group;}
+  table.report-page > tbody > tr > td{padding:10px;}
+  table.report-page .panel{border:none; box-shadow:none; margin:0; padding:0;}
   @media print{
     header.topbar, .info-btn, .btn, footer.sources{display:none !important;}
     .intro, #projectInfoPanel, #diagramPanel, .grid{display:none !important;}
     .print-only{display:block;}
     body{background:#fff;}
     main{max-width:100%; padding:0;}
-    #reportContent .panel, #printCover{break-inside:avoid; border:1px solid #ccc; box-shadow:none;}
-    /* Each major report section starts on its own page */
-    #reportContent .report-section{page-break-before:always;}
-    #reportContent .report-section:first-child{page-break-before:avoid;}
+    /* Each report page (cover + each section) starts on its own printed
+       page; if a section's content is taller than one page it flows onto
+       additional pages, with the title block repeating at the top of each. */
+    table.report-page{page-break-before:always; break-before:page;}
+    table.report-page:first-of-type{page-break-before:avoid; break-before:avoid;}
   }
 </style>
 </head>
@@ -211,17 +235,22 @@
 
 <main>
 
-  <div class="print-only" id="printCover" style="margin-bottom:12px;">
-    <h1 style="color:var(--brand); margin:0 0 8px;">Wind Load Report &mdash; ASCE/SEI 7-22, Chapters 26&ndash;30</h1>
-    <table class="report-cover-table">
-      <tr><td>Project name</td><td id="printProjectName">&ndash;</td></tr>
-      <tr><td>Project no. / location</td><td id="printProjectNumber">&ndash;</td></tr>
-      <tr><td>Engineer / designer</td><td id="printEngineer">&ndash;</td></tr>
-      <tr><td>Project date</td><td id="printProjectDate">&ndash;</td></tr>
-      <tr><td>Risk Category</td><td id="printRiskCategory">&ndash;</td></tr>
-      <tr><td>Calculation procedure</td><td id="printMode">&ndash;</td></tr>
+  <div class="print-only" id="printCover">
+    <table class="report-page">
+      <thead><tr><th id="printTitleBlockHost"></th></tr></thead>
+      <tbody><tr><td>
+        <h1 style="color:var(--brand); margin:0 0 8px;">Wind Load Report &mdash; ASCE/SEI 7-22, Chapters 26&ndash;30</h1>
+        <table class="report-cover-table">
+          <tr><td>Project name</td><td id="printProjectName">&ndash;</td></tr>
+          <tr><td>Project no. / location</td><td id="printProjectNumber">&ndash;</td></tr>
+          <tr><td>Engineer / designer</td><td id="printEngineer">&ndash;</td></tr>
+          <tr><td>Project date</td><td id="printProjectDate">&ndash;</td></tr>
+          <tr><td>Risk Category</td><td id="printRiskCategory">&ndash;</td></tr>
+          <tr><td>Calculation procedure</td><td id="printMode">&ndash;</td></tr>
+        </table>
+        <p style="color:var(--muted); font-size:.8rem;" id="printGenerated"></p>
+      </td></tr></tbody>
     </table>
-    <p style="color:var(--muted); font-size:.8rem;" id="printGenerated"></p>
   </div>
 
   <div class="print-only" id="reportContent"></div>
@@ -271,6 +300,40 @@
         <option value="III">III</option>
         <option value="IV">IV</option>
       </select>
+    </div>
+
+    <h3 style="margin:16px 0 6px; color:var(--brand); font-size:.9rem; border-bottom:1px dashed var(--line); padding-bottom:4px;">Print Title Block <span class="ref">Repeats on every report page</span></h3>
+    <div class="report-meta">
+      <div class="field">
+        <label for="companyName">Company name</label>
+        <input type="text" id="companyName" placeholder="e.g. Acme Engineering, LLC">
+      </div>
+      <div class="field">
+        <label for="sectionName">Section</label>
+        <input type="text" id="sectionName" placeholder="e.g. Lateral Wind Loads">
+      </div>
+      <div class="field">
+        <label for="jobRef">Job Ref.</label>
+        <input type="text" id="jobRef" placeholder="Job / project reference no.">
+      </div>
+    </div>
+    <div class="report-meta">
+      <div class="field">
+        <label for="chkdBy">Chk'd by</label>
+        <input type="text" id="chkdBy" placeholder="Name">
+      </div>
+      <div class="field">
+        <label for="chkdDate">Chk'd date</label>
+        <input type="date" id="chkdDate">
+      </div>
+      <div class="field">
+        <label for="appdBy">App'd by</label>
+        <input type="text" id="appdBy" placeholder="Name">
+      </div>
+      <div class="field">
+        <label for="appdDate">App'd date</label>
+        <input type="date" id="appdDate">
+      </div>
     </div>
   </div>
 

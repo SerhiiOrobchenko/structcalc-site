@@ -14,6 +14,17 @@ function fmt(v, d = 2) {
   return Number(v).toFixed(d);
 }
 
+// Escape free-text user input before inserting it into an innerHTML string
+// (used by the print title block, which is built via string concatenation).
+function escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // Pressure: internal psf <-> displayed unit
 function pressureOut(psf) {
   return state.unitSystem === 'SI' ? psf / PSF_PER_KPA : psf;
@@ -69,9 +80,9 @@ const GCPI = {
   partiallyOpen: { pos: 0.18, neg: -0.18, label: 'Partially Open' },
   open: { pos: 0.0, neg: 0.0, label: 'Open' },
   // Open Building with monoslope/pitched/troughed free roof — Sec. 27.3.2,
-  // Eq. 27.3-2: p = q_h K_d G C_N. This procedure does not use (GC_pi) at
-  // all (C_N is already a net pressure coefficient), so `noGcpi` suppresses
-  // the (GC_pi) display/selection for this option (see init()).
+  // Eq. 27.3-2: p = q<sub>h</sub> K<sub>d</sub> G C<sub>N</sub>. This procedure does not use (GC<sub>pi</sub>) at
+  // all (C<sub>N</sub> is already a net pressure coefficient), so `noGcpi` suppresses
+  // the (GC<sub>pi</sub>) display/selection for this option (see init()).
   openFreeRoof: { pos: 0.0, neg: 0.0, label: 'Open Building — Free Roof (Sec. 27.3.2)', noGcpi: true }
 };
 
@@ -197,13 +208,13 @@ const GCP_ROOF_HIP = {
 
 /* =====================================================================
    OPEN BUILDINGS WITH FREE ROOFS — Sec. 27.3.2, Eq. 27.3-2
-   p = q_h K_d G C_N
+   p = q<sub>h</sub> K<sub>d</sub> G C<sub>N</sub>
    G  = Gust-Effect Factor, Sec. 26.11. This calculator uses G = 0.85 for
         rigid structures (Sec. 26.11.1). The flexible-structure G_f
         procedure (Sec. 26.11.3-26.11.5, requires fundamental natural
         frequency) is NOT implemented — verify directly if the structure's
         natural frequency is below 1 Hz.
-   C_N = Net pressure coefficient, Figs. 27.3-4 (monoslope), 27.3-5
+   C<sub>N</sub> = Net pressure coefficient, Figs. 27.3-4 (monoslope), 27.3-5
         (pitched), 27.3-6 (troughed), or 27.3-7 (gamma=90/270, all shapes).
    ===================================================================== */
 const G_RIGID = 0.85; // Sec. 26.11.1, rigid structures
@@ -284,8 +295,8 @@ const CN_TROUGHED = {
 // Figure 27.3-7 — Open buildings, all roof shapes (monoslope, pitched, or
 // troughed), theta <= 45 deg, gamma = 90/270 deg (wind parallel to
 // ridge/valley), applies for all h/L. Three zones by horizontal distance
-// from the windward edge: <= h, > h to <= 2h, > 2h. Single C_N per zone/load
-// case (no C_NW/C_NL split). Also governs Fig. 27.3-4 Note 4 (monoslope,
+// from the windward edge: <= h, > h to <= 2h, > 2h. Single C<sub>N</sub> per zone/load
+// case (no C<sub>NW</sub>/C<sub>NL</sub> split). Also governs Fig. 27.3-4 Note 4 (monoslope,
 // theta < 5 deg, 0.05 <= h/L < 0.25).
 // SOURCE: direct image read of fig277_table.png (verified this session).
 const CN_FIG277 = {
@@ -347,7 +358,7 @@ const state = {
   areaRoof: 50,      // C&C effective wind area, roof, ft^2
   hasOverhang: false, // Sec. 30.7 — building has roof overhangs requiring overhang C&C pressures
   hasParapet: false, // Sec. 27.3.4 (MWFRS) / Sec. 30.9 (C&C) — building has a parapet
-  parapetHeight: 3,  // height of parapet above the roof surface, ft (used to compute q_p at top of parapet)
+  parapetHeight: 3,  // height of parapet above the roof surface, ft (used to compute q<sub>p</sub> at top of parapet)
 
   // Open Building — Free Roof (Sec. 27.3.2), only used when enclosure === 'openFreeRoof'
   openRoofShape: 'monoslope', // 'monoslope' | 'pitched' | 'troughed' — Figs. 27.3-4/5/6
@@ -359,7 +370,16 @@ const state = {
   projectNumber: '',
   engineer: '',
   projectDate: '',   // ISO yyyy-mm-dd; defaulted to today on init if empty
-  riskCategory: 'II' // Table 1.5-1 — recorded for the report header only
+  riskCategory: 'II', // Table 1.5-1 — recorded for the report header only
+
+  // Print title block fields (Phase 3) — informational only, do not affect calculations
+  companyName: '',   // firm/company name shown in the title block
+  sectionName: '',   // calc section/discipline label (e.g. "Lateral Loads")
+  jobRef: '',        // job/project reference number for the title block
+  chkdBy: '',        // "Checked by" name
+  chkdDate: '',      // "Checked" date, ISO yyyy-mm-dd
+  appdBy: '',        // "Approved by" name
+  appdDate: ''       // "Approved" date, ISO yyyy-mm-dd
 };
 
 /* =====================================================================
@@ -542,7 +562,7 @@ function gcpOverhang(roofZone, A, theta, roofShape) {
 // parapet (these GCpn values already represent the combination of front- and back-face
 // pressure on the parapet, per the commentary). qp is the velocity pressure evaluated
 // at the top of the parapet (z = h + parapet height), using the same Kz formula
-// (Table 26.10-1) as q_h but at the higher elevation.
+// (Table 26.10-1) as q<sub>h</sub> but at the higher elevation.
 // Source for GCpn = +1.5 / -1.0: corroborated by RISA "Load Generation - Wind Loads"
 // help documentation and the ICC "Demystifying Loads for Building Officials" ASCE 7-22
 // guide, both citing Sec. 27.3.4.
@@ -617,7 +637,7 @@ function cnMonoslope(theta, gamma, loadCase, windFlow) {
 }
 
 // Open buildings — Figs. 27.3-5 (pitched) / 27.3-6 (troughed): single
-// C_NW/C_NL table for gamma = 0/180, rows tabulated at theta = 7.5-45 deg
+// C<sub>NW</sub>/C<sub>NL</sub> table for gamma = 0/180, rows tabulated at theta = 7.5-45 deg
 // (no theta < 7.5 deg row). theta < 7.5 deg is clamped to the 7.5 deg row
 // by lerpTheta; `belowRange` flags this for the UI.
 function cnPitchedTroughed(theta, loadCase, windFlow, shape) {
@@ -631,7 +651,7 @@ function cnPitchedTroughed(theta, loadCase, windFlow, shape) {
 }
 
 // Open buildings — Fig. 27.3-7 (gamma = 90/270, all roof shapes): returns
-// the 3-zone C_N array [<=h, >h..<=2h, >2h] for the given load case/wind flow.
+// the 3-zone C<sub>N</sub> array [<=h, >h..<=2h, >2h] for the given load case/wind flow.
 function cnFig277(loadCase, windFlow) {
   return CN_FIG277[loadCase][windFlow];
 }
@@ -642,57 +662,57 @@ function compute(s) {
   // --- Velocity pressure exposure coefficient, Kh ---
   const kh = computeKh(s.h, s.exposure);
   steps.push({
-    label: 'Velocity Pressure Exposure Coefficient, K_h',
+    label: 'Velocity Pressure Exposure Coefficient, K<sub>h</sub>',
     clause: 'Table 26.10-1 (Note 1 formula' + (s.exposure === 'B' && s.h < 30 ? ' and footnote *)' : ')'),
     formula: (s.exposure === 'B' && s.h < 30)
-      ? 'Exposure B, h < 30 ft → K_h = 0.70 (Table 26.10-1, footnote *)'
+      ? 'Exposure B, h < 30 ft → K<sub>h</sub> = 0.70 (Table 26.10-1, footnote *)'
       : (s.h < 15
-        ? 'K_h = 2.41(15/z_g)^(2/α) = 2.41(15/' + EXPOSURE[s.exposure].zg + ')^(2/' + EXPOSURE[s.exposure].alpha + ')'
-        : 'K_h = 2.41(h/z_g)^(2/α) = 2.41(' + fmt(s.h, 1) + '/' + EXPOSURE[s.exposure].zg + ')^(2/' + EXPOSURE[s.exposure].alpha + ')'),
-    result: 'K_h = ' + fmt(kh, 3)
+        ? 'K<sub>h</sub> = 2.41(15/z<sub>g</sub>)^(2/α) = 2.41(15/' + EXPOSURE[s.exposure].zg + ')^(2/' + EXPOSURE[s.exposure].alpha + ')'
+        : 'K<sub>h</sub> = 2.41(h/z<sub>g</sub>)^(2/α) = 2.41(' + fmt(s.h, 1) + '/' + EXPOSURE[s.exposure].zg + ')^(2/' + EXPOSURE[s.exposure].alpha + ')'),
+    result: 'K<sub>h</sub> = ' + fmt(kh, 3)
   });
 
   // --- Ground elevation factor, Ke ---
   const ke = computeKe(s.groundElev);
   steps.push({
-    label: 'Ground Elevation Factor, K_e',
+    label: 'Ground Elevation Factor, K<sub>e</sub>',
     clause: 'Table 26.9-1, Note 2',
-    formula: 'K_e = exp(-0.0000362 × z_e) = exp(-0.0000362 × ' + fmt(s.groundElev, 0) + ')',
-    result: 'K_e = ' + fmt(ke, 3) + '  (K_e = 1.00 is always permitted)'
+    formula: 'K<sub>e</sub> = exp(-0.0000362 × z<sub>e</sub>) = exp(-0.0000362 × ' + fmt(s.groundElev, 0) + ')',
+    result: 'K<sub>e</sub> = ' + fmt(ke, 3) + '  (K<sub>e</sub> = 1.00 is always permitted)'
   });
 
   // --- Wind directionality factor, Kd ---
   steps.push({
-    label: 'Wind Directionality Factor, K_d',
+    label: 'Wind Directionality Factor, K<sub>d</sub>',
     clause: 'Table 26.6-1',
     formula: 'Buildings — MWFRS and Components & Cladding',
-    result: 'K_d = ' + fmt(KD, 2)
+    result: 'K<sub>d</sub> = ' + fmt(KD, 2)
   });
 
   // --- Topographic factor, Kzt (user-supplied) ---
   steps.push({
-    label: 'Topographic Factor, K_zt',
+    label: 'Topographic Factor, K<sub>zt</sub>',
     clause: 'Sec. 26.8.2, Fig. 26.8-1',
-    formula: 'User input (K_zt = 1.0 if the site does not meet the Fig. 26.8-1 escarpment/ridge/hill criteria of Sec. 26.8.1)',
-    result: 'K_zt = ' + fmt(s.kzt, 2)
+    formula: 'User input (K<sub>zt</sub> = 1.0 if the site does not meet the Fig. 26.8-1 escarpment/ridge/hill criteria of Sec. 26.8.1)',
+    result: 'K<sub>zt</sub> = ' + fmt(s.kzt, 2)
   });
 
   // --- Velocity pressure qh ---
   const qh = 0.00256 * kh * s.kzt * ke * s.V * s.V;
   steps.push({
-    label: 'Velocity Pressure at Mean Roof Height, q_h',
+    label: 'Velocity Pressure at Mean Roof Height, q<sub>h</sub>',
     clause: 'Eq. 26.10-1',
-    formula: 'q_h = 0.00256 K_h K_zt K_e V² = 0.00256 × ' + fmt(kh, 3) + ' × ' + fmt(s.kzt, 2) + ' × ' + fmt(ke, 3) + ' × ' + fmt(s.V, 1) + '²',
-    result: 'q_h = ' + fmt(qh, 2) + ' psf'
+    formula: 'q<sub>h</sub> = 0.00256 K<sub>h</sub> K<sub>zt</sub> K<sub>e</sub> V² = 0.00256 × ' + fmt(kh, 3) + ' × ' + fmt(s.kzt, 2) + ' × ' + fmt(ke, 3) + ' × ' + fmt(s.V, 1) + '²',
+    result: 'q<sub>h</sub> = ' + fmt(qh, 2) + ' psf'
   });
 
   // --- Internal pressure coefficient, GCpi ---
   const gcpi = GCPI[s.enclosure];
   steps.push({
-    label: 'Internal Pressure Coefficient, (GC_pi)',
+    label: 'Internal Pressure Coefficient, (GC<sub>pi</sub>)',
     clause: 'Table 26.13-1',
     formula: GCPI[s.enclosure].label + ' building classification (Sec. 26.2 definitions)',
-    result: '(GC_pi) = +' + fmt(gcpi.pos, 2) + ' and ' + fmt(gcpi.neg, 2)
+    result: '(GC<sub>pi</sub>) = +' + fmt(gcpi.pos, 2) + ' and ' + fmt(gcpi.neg, 2)
   });
 
   // --- Zone dimension a ---
@@ -922,8 +942,8 @@ function zoneTableHTML(rows, dual, labels) {
   if (!rows.length) return '<p class="muted">Not applicable.</p>';
   const lbl = labels || ZONE_LABELS;
   let html = '<table><thead><tr><th>Zone</th>';
-  if (dual) html += '<th>(GC_p) range</th>'; else html += '<th>(GC_pf)</th>';
-  html += '<th>p_min (outward / suction), ' + pUnit() + '</th><th>p_max (inward / positive), ' + pUnit() + '</th></tr></thead><tbody>';
+  if (dual) html += '<th>(GC<sub>p</sub>) range</th>'; else html += '<th>(GC<sub>pf</sub>)</th>';
+  html += '<th>p<sub>min</sub> (outward / suction), ' + pUnit() + '</th><th>p<sub>max</sub> (inward / positive), ' + pUnit() + '</th></tr></thead><tbody>';
   rows.forEach(r => {
     const gcStr = dual
       ? fmt(r.gcp.neg, 2) + ' to ' + fmt(r.gcp.pos, 2)
@@ -962,8 +982,8 @@ function ccParapetTableHTML(rows, labels) {
   if (!rows.length) return '<p class="muted">Not applicable.</p>';
   const lbl = labels || ZONE_LABELS;
   let html = '<table><thead><tr><th>Zone</th>' +
-    '<th>(GC_p) Load A</th><th>p_A, ' + pUnit() + '</th>' +
-    '<th>(GC_p) Load B</th><th>p_B, ' + pUnit() + '</th></tr></thead><tbody>';
+    '<th>(GC<sub>p</sub>) Load A</th><th>p<sub>A</sub>, ' + pUnit() + '</th>' +
+    '<th>(GC<sub>p</sub>) Load B</th><th>p<sub>B</sub>, ' + pUnit() + '</th></tr></thead><tbody>';
   rows.forEach(r => {
     html += '<tr><td>' + (lbl[r.zone] || r.zone) + '</td>' +
       '<td>' + fmt(r.gcA, 2) + '</td><td>' + fmt(pVal(r.pA), 2) + '</td>' +
@@ -984,7 +1004,7 @@ function ccParapetTable(containerId, rows, labels) {
 function openRoofGammaTableHTML(gamma0180) {
   if (!gamma0180) return '<p class="muted">See note above.</p>';
   let html = '<table><thead><tr><th>Wind Direction</th><th>Load Case</th>' +
-    '<th>C_NW</th><th>C_NL</th><th>p_W, ' + pUnit() + '</th><th>p_L, ' + pUnit() + '</th></tr></thead><tbody>';
+    '<th>C<sub>NW</sub></th><th>C<sub>NL</sub></th><th>p<sub>W</sub>, ' + pUnit() + '</th><th>p<sub>L</sub>, ' + pUnit() + '</th></tr></thead><tbody>';
   const rows = [
     { lbl: 'γ = 0°', lc: 'A', d: gamma0180.gamma0.A },
     { lbl: 'γ = 0°', lc: 'B', d: gamma0180.gamma0.B },
@@ -1009,8 +1029,8 @@ function openRoofGammaTable(containerId, gamma0180) {
 // Open Buildings — gamma=90/270 deg results table (Fig. 27.3-7, 3 zones x Load Cases A/B)
 function openRoofZoneTableHTML(fig277) {
   let html = '<table><thead><tr><th>Zone (horiz. distance from windward edge)</th>' +
-    '<th>C_N, Load Case A</th><th>p_A, ' + pUnit() + '</th>' +
-    '<th>C_N, Load Case B</th><th>p_B, ' + pUnit() + '</th></tr></thead><tbody>';
+    '<th>C<sub>N</sub>, Load Case A</th><th>p<sub>A</sub>, ' + pUnit() + '</th>' +
+    '<th>C<sub>N</sub>, Load Case B</th><th>p<sub>B</sub>, ' + pUnit() + '</th></tr></thead><tbody>';
   fig277.zoneKeys.forEach((zk, i) => {
     html += '<tr><td>' + fig277.zoneLabels[zk] + '</td>' +
       '<td>' + fmt(fig277.A[i].CN, 2) + '</td><td>' + fmt(pVal(fig277.A[i].p), 2) + '</td>' +
@@ -1175,6 +1195,9 @@ function renderResults() {
    nothing here is computed.
    ===================================================================== */
 function renderPrintCover() {
+  const tbHost = document.getElementById('printTitleBlockHost');
+  if (tbHost) tbHost.innerHTML = buildTitleBlockHTML(1);
+
   const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   setTxt('printProjectName', state.projectName || '—');
   setTxt('printProjectNumber', state.projectNumber || '—');
@@ -1255,8 +1278,8 @@ function reportInputDataHTML(r) {
 }
 
 // Design Summary section — the same governing coefficients shown in the
-// on-screen "Results Summary" cards (q_h, K_h, K_e, (GC_pi), zone dim. a),
-// plus K_d and K_zt for completeness. Values come directly from r/state.
+// on-screen "Results Summary" cards (q<sub>h</sub>, K<sub>h</sub>, K<sub>e</sub>, (GC<sub>pi</sub>), zone dim. a),
+// plus K<sub>d</sub> and K<sub>zt</sub> for completeness. Values come directly from r/state.
 function reportDesignSummaryHTML(r) {
   const s = state;
   let rows = '';
@@ -1382,16 +1405,61 @@ function reportOpenRoofHTML(r) {
   return html;
 }
 
+// Repeating print title block (Tekla Tedds / SkyCiv style) — placed in the
+// <thead> of every "report-page" table so it repeats on every printed page
+// via CSS `thead{display:table-header-group}` (index.html @media print).
+// All fields are user-entered metadata (state.companyName, state.projectName,
+// state.jobRef, state.chkdBy/appdBy, etc., from the Project Information
+// panel); nothing here is computed.
+//
+// "Sheet no." is a STATIC per-section index (1 = cover page, 2..N+1 = the
+// report sections in the order buildReportHTML() emits them), NOT a live
+// "Sheet X of Y" page counter: CSS Paged Media page-based counters
+// (counter(page)/counter(pages)) are not implemented by Chrome for ordinary
+// DOM content (only inside @page margin boxes, which Chrome doesn't
+// support), so an honest running page count cannot be produced here. Users
+// should verify actual printed page numbers in the PDF/print preview.
+function buildTitleBlockHTML(sheetNo) {
+  const s = state;
+  const dateStr = (iso) => iso
+    ? new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+    : '&ndash;';
+  return '<table class="title-block"><tbody>' +
+    '<tr>' +
+      '<td class="tb-company">' + (s.companyName ? escHtml(s.companyName) : '&ndash;') + '</td>' +
+      '<td class="tb-project">' +
+        '<div class="tb-label">Project</div><div>' + (s.projectName ? escHtml(s.projectName) : '&ndash;') + '</div>' +
+        '<div class="tb-label">Section</div><div>' + (s.sectionName ? escHtml(s.sectionName) : '&ndash;') + '</div>' +
+      '</td>' +
+      '<td class="tb-ref">' +
+        '<div class="tb-label">Job Ref.</div><div>' + (s.jobRef ? escHtml(s.jobRef) : '&ndash;') + '</div>' +
+        '<div class="tb-label">Sheet no.</div><div>' + sheetNo + '</div>' +
+      '</td>' +
+    '</tr>' +
+    '<tr>' +
+      '<td class="tb-signoff"><div class="tb-label">Calc. by</div><div>' + (s.engineer ? escHtml(s.engineer) : '&ndash;') + '</div><div class="tb-label">Date</div><div>' + dateStr(s.projectDate) + '</div></td>' +
+      '<td class="tb-signoff"><div class="tb-label">Chk&rsquo;d by</div><div>' + (s.chkdBy ? escHtml(s.chkdBy) : '&ndash;') + '</div><div class="tb-label">Date</div><div>' + dateStr(s.chkdDate) + '</div></td>' +
+      '<td class="tb-signoff"><div class="tb-label">App&rsquo;d by</div><div>' + (s.appdBy ? escHtml(s.appdBy) : '&ndash;') + '</div><div class="tb-label">Date</div><div>' + dateStr(s.appdDate) + '</div></td>' +
+    '</tr>' +
+  '</tbody></table>';
+}
+
 // Assembles the full printable report from r/state. Sections are numbered
 // sequentially and conditional sections (Parapet, Open Roof) are appended
-// only when applicable — mirrors what is actually shown on screen.
+// only when applicable — mirrors what is actually shown on screen. Each
+// section is wrapped in a <table class="report-page"> whose <thead> holds
+// the repeating title block (sheet no. = section index + 1; sheet 1 is the
+// cover page built by renderPrintCover()).
 function buildReportHTML(r) {
   const s = state;
   let secNum = 0;
   const section = (title, ref, body) => {
     secNum++;
-    return '<div class="panel report-section"><h2>' + secNum + '. ' + title +
+    const inner = '<div class="panel report-section"><h2>' + secNum + '. ' + title +
       (ref ? ' <span class="ref">' + ref + '</span>' : '') + '</h2>' + body + '</div>';
+    // Sheet 1 = cover page (renderPrintCover); sections start at sheet 2.
+    return '<table class="report-page"><thead><tr><th>' + buildTitleBlockHTML(secNum + 1) +
+      '</th></tr></thead><tbody><tr><td>' + inner + '</td></tr></tbody></table>';
   };
 
   let html = '';
@@ -1430,13 +1498,12 @@ function buildReportHTML(r) {
     html += section('Open Building &mdash; Free Roof Pressures', 'Sec. 27.3.2, Eq. 27.3-2: p = q<sub>h</sub>K<sub>d</sub>GC<sub>N</sub>', reportOpenRoofHTML(r));
   }
 
-  // References — reuse the exact "Where these formulas come from" citation
-  // list from the footer (same content the on-screen module shows), so the
-  // report's reference list never drifts from the live citations.
-  const sourcesUl = document.querySelector('footer.sources .inner ul');
-  if (sourcesUl) {
-    html += section('References &mdash; Where These Formulas Come From', null, sourcesUl.outerHTML);
-  }
+  // No standalone "References" section: every section/row/step above already
+  // carries its own inline ASCE 7-22 clause/equation/figure/table citation
+  // (via the section-header <span class="ref">, the per-row "Reference"
+  // column in reportInputDataHTML, and the per-step "Reference" column in
+  // stepsTableHTML), so a separate end-of-report reference list would only
+  // duplicate citations the reader has already seen in context.
 
   return html;
 }
@@ -1572,7 +1639,7 @@ function renderDiagram(r) {
   if (note) {
     const g = GCPI[state.enclosure];
     note.textContent = 'Enclosure classification: ' + (g ? g.label : state.enclosure) +
-      ' — (GC_pi) = ±' + fmt(g ? g.pos : 0, 2) + ' (Table 26.13-1). Procedure shown: ' +
+      ' — (GC<sub>pi</sub>) = ±' + fmt(g ? g.pos : 0, 2) + ' (Table 26.13-1). Procedure shown: ' +
       (state.mode === 'mwfrs' ? 'MWFRS, Envelope Procedure (Ch. 28)' : 'Components & Cladding (Ch. 30)') + '.';
   }
 
@@ -1752,6 +1819,36 @@ function bindInputs() {
     state.riskCategory = e.target.value;
     renderResults();
   });
+
+  // Print title block fields (Phase 3 / report header) — informational only
+  document.getElementById('companyName').addEventListener('input', e => {
+    state.companyName = e.target.value;
+    renderResults();
+  });
+  document.getElementById('sectionName').addEventListener('input', e => {
+    state.sectionName = e.target.value;
+    renderResults();
+  });
+  document.getElementById('jobRef').addEventListener('input', e => {
+    state.jobRef = e.target.value;
+    renderResults();
+  });
+  document.getElementById('chkdBy').addEventListener('input', e => {
+    state.chkdBy = e.target.value;
+    renderResults();
+  });
+  document.getElementById('chkdDate').addEventListener('input', e => {
+    state.chkdDate = e.target.value;
+    renderResults();
+  });
+  document.getElementById('appdBy').addEventListener('input', e => {
+    state.appdBy = e.target.value;
+    renderResults();
+  });
+  document.getElementById('appdDate').addEventListener('input', e => {
+    state.appdDate = e.target.value;
+    renderResults();
+  });
 }
 
 /* =====================================================================
@@ -1839,79 +1936,79 @@ const INFO_CONTENT = {
   },
   exposure: {
     title: 'Exposure Category — Sec. 26.7',
-    html: `<p><span class="src-tag">ASCE/SEI 7-22, Sec. 26.7.2</span> defines the exposure categories used to determine K_z/K_h from Table 26.10-1:</p>
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, Sec. 26.7.2</span> defines the exposure categories used to determine K<sub>z</sub>/K<sub>h</sub> from Table 26.10-1:</p>
     <ul>
       <li><strong>B</strong> &mdash; Urban and suburban areas, wooded areas, or other terrain with numerous closely spaced obstructions having the size of single-family dwellings or larger.</li>
       <li><strong>C</strong> &mdash; Open terrain with scattered obstructions having heights generally less than 30 ft, including flat open country and grasslands.</li>
       <li><strong>D</strong> &mdash; Flat, unobstructed areas and water surfaces. Includes smooth mud flats, salt flats, and unbroken ice.</li>
     </ul>
     <p>The exposure category is determined for the direction(s) from which the wind blows, per <span class="src-tag">Sec. 26.7.3</span> (surface roughness in an upwind sector of 45&deg; and a distance of 1,500 ft or 10&times;h, whichever is greater).</p>
-    <p><strong>How the exposure category feeds K_h</strong> (<span class="src-tag">Table 26.10-1, Note 1</span>), using mean roof height h and the exposure-specific &alpha; and z_g below:</p>
+    <p><strong>How the exposure category feeds K<sub>h</sub></strong> (<span class="src-tag">Table 26.10-1, Note 1</span>), using mean roof height h and the exposure-specific &alpha; and z<sub>g</sub> below:</p>
     <table style="border-collapse:collapse; margin:6px 0;">
-      <tr><th style="text-align:left; padding-right:16px; border-bottom:1px solid #ccc;">Exposure</th><th style="text-align:left; padding-right:16px; border-bottom:1px solid #ccc;">&alpha;</th><th style="text-align:left; border-bottom:1px solid #ccc;">z_g (ft)</th></tr>
+      <tr><th style="text-align:left; padding-right:16px; border-bottom:1px solid #ccc;">Exposure</th><th style="text-align:left; padding-right:16px; border-bottom:1px solid #ccc;">&alpha;</th><th style="text-align:left; border-bottom:1px solid #ccc;">z<sub>g</sub> (ft)</th></tr>
       <tr><td style="padding-right:16px;">B</td><td style="padding-right:16px;">7.5</td><td>3,280</td></tr>
       <tr><td style="padding-right:16px;">C</td><td style="padding-right:16px;">9.8</td><td>2,460</td></tr>
       <tr><td style="padding-right:16px;">D</td><td style="padding-right:16px;">11.5</td><td>1,935</td></tr>
     </table>
     <ul>
-      <li>h &lt; 15 ft: <strong>K_h = 2.41 (15/z_g)<sup>2/&alpha;</sup></strong></li>
-      <li>15 ft &le; h &le; z_g: <strong>K_h = 2.41 (h/z_g)<sup>2/&alpha;</sup></strong></li>
-      <li>h &gt; z_g: <strong>K_h = 2.41</strong></li>
+      <li>h &lt; 15 ft: <strong>K<sub>h</sub> = 2.41 (15/z<sub>g</sub>)<sup>2/&alpha;</sup></strong></li>
+      <li>15 ft &le; h &le; z<sub>g</sub>: <strong>K<sub>h</sub> = 2.41 (h/z<sub>g</sub>)<sup>2/&alpha;</sup></strong></li>
+      <li>h &gt; z<sub>g</sub>: <strong>K<sub>h</sub> = 2.41</strong></li>
     </ul>
-    <p><span class="src-tag">Table 26.10-1, footnote *</span> &mdash; Exception: for Exposure B with h &lt; 30 ft, the formula above is overridden and <strong>K_h = 0.70</strong> is used directly (this is the value used in <span class="src-tag">Chapter 28</span>, the Envelope Procedure used by this calculator).</p>`
+    <p><span class="src-tag">Table 26.10-1, footnote *</span> &mdash; Exception: for Exposure B with h &lt; 30 ft, the formula above is overridden and <strong>K<sub>h</sub> = 0.70</strong> is used directly (this is the value used in <span class="src-tag">Chapter 28</span>, the Envelope Procedure used by this calculator).</p>`
   },
   kzt: {
-    title: 'Topographic Factor, K_zt — Sec. 26.8',
+    title: 'Topographic Factor, K<sub>zt</sub> — Sec. 26.8',
     html: `<p><span class="src-tag">Sec. 26.8.1</span> &mdash; wind speed-up over isolated hills, ridges, and escarpments shall be included in the design when the site conditions and structure location meet all of the conditions listed (e.g., the hill/ridge/escarpment is isolated, H/L<sub>h</sub> &ge; 0.2, and the structure is located within the distances specified in Fig. 26.8-1).</p>
-    <p>If those conditions are <strong>not</strong> met, <span class="src-tag">K_zt = 1.0</span>.</p>
-    <p>If they are met, <span class="src-tag">Eq. 26.8-1</span>: K_zt = (1 + K<sub>1</sub>K<sub>2</sub>K<sub>3</sub>)&sup2;, with K<sub>1</sub>, K<sub>2</sub>, K<sub>3</sub> read from <span class="src-tag">Fig. 26.8-1</span> based on hill shape, height H, horizontal distance from the crest x, and height above ground z. This calculator does not reproduce Fig. 26.8-1 &mdash; enter the resulting K_zt directly.</p>`
+    <p>If those conditions are <strong>not</strong> met, <span class="src-tag">K<sub>zt</sub> = 1.0</span>.</p>
+    <p>If they are met, <span class="src-tag">Eq. 26.8-1</span>: K<sub>zt</sub> = (1 + K<sub>1</sub>K<sub>2</sub>K<sub>3</sub>)&sup2;, with K<sub>1</sub>, K<sub>2</sub>, K<sub>3</sub> read from <span class="src-tag">Fig. 26.8-1</span> based on hill shape, height H, horizontal distance from the crest x, and height above ground z. This calculator does not reproduce Fig. 26.8-1 &mdash; enter the resulting K<sub>zt</sub> directly.</p>`
   },
   groundElev: {
-    title: 'Ground Elevation Factor, K_e — Sec. 26.9, Table 26.9-1',
-    html: `<p><span class="src-tag">Table 26.9-1, Note 2</span> &mdash; K_e = exp(-0.0000362 z_e), where z_e is the ground elevation above sea level at the building site, in feet.</p>
-    <p><span class="src-tag">Table 26.9-1, Note 1</span> permits K_e = 1.0 to be used for any elevation (conservative). Enter z_e = 0 to force K_e = 1.0.</p>`
+    title: 'Ground Elevation Factor, K<sub>e</sub> — Sec. 26.9, Table 26.9-1',
+    html: `<p><span class="src-tag">Table 26.9-1, Note 2</span> &mdash; K<sub>e</sub> = exp(-0.0000362 z<sub>e</sub>), where z<sub>e</sub> is the ground elevation above sea level at the building site, in feet.</p>
+    <p><span class="src-tag">Table 26.9-1, Note 1</span> permits K<sub>e</sub> = 1.0 to be used for any elevation (conservative). Enter z<sub>e</sub> = 0 to force K<sub>e</sub> = 1.0.</p>`
   },
   enclosure: {
-    title: 'Enclosure Classification & (GC_pi) — Sec. 26.2 & Table 26.13-1',
+    title: 'Enclosure Classification & (GC<sub>pi</sub>) — Sec. 26.2 & Table 26.13-1',
     html: `<p>Building enclosure classification is determined per the definitions of <span class="src-tag">Sec. 26.2</span> (Enclosed, Partially Enclosed, Partially Open, Open Buildings), based on the area of openings in the building envelope relative to wall/roof area.</p>
-    <p><span class="src-tag">Table 26.13-1</span> &mdash; Internal Pressure Coefficient, (GC_pi):</p>
+    <p><span class="src-tag">Table 26.13-1</span> &mdash; Internal Pressure Coefficient, (GC<sub>pi</sub>):</p>
     <ul>
-      <li>Open Buildings: (GC_pi) = 0.00</li>
-      <li>Partially Open Buildings: (GC_pi) = &plusmn;0.18</li>
-      <li>Enclosed Buildings: (GC_pi) = &plusmn;0.18</li>
-      <li>Partially Enclosed Buildings: (GC_pi) = &plusmn;0.55</li>
+      <li>Open Buildings: (GC<sub>pi</sub>) = 0.00</li>
+      <li>Partially Open Buildings: (GC<sub>pi</sub>) = &plusmn;0.18</li>
+      <li>Enclosed Buildings: (GC<sub>pi</sub>) = &plusmn;0.18</li>
+      <li>Partially Enclosed Buildings: (GC<sub>pi</sub>) = &plusmn;0.55</li>
     </ul>
-    <p>Both signs must be evaluated (<span class="src-tag">Table 26.13-1, Note 1</span>); this calculator pairs each (GC_pf)/(GC_p) value with whichever (GC_pi) sign produces the larger-magnitude net pressure.</p>
-    <p><strong>Open Building &mdash; Free Roof</strong> selects the <span class="src-tag">Sec. 27.3.2</span> procedure for open buildings with monoslope, pitched, or troughed free roofs (e.g., canopies, pavilions, open-sided sheds with no walls). This replaces the normal (GC_pf)/(GC_p)-(GC_pi) MWFRS/C&amp;C flow above with <span class="src-tag">Eq. 27.3-2</span>: p = q_h K_d G C_N, where C_N is read from <span class="src-tag">Figs. 27.3-4 through 27.3-7</span>. (GC_pi) is not applicable to this procedure (there is no enclosed internal volume).</p>`
+    <p>Both signs must be evaluated (<span class="src-tag">Table 26.13-1, Note 1</span>); this calculator pairs each (GC<sub>pf</sub>)/(GC<sub>p</sub>) value with whichever (GC<sub>pi</sub>) sign produces the larger-magnitude net pressure.</p>
+    <p><strong>Open Building &mdash; Free Roof</strong> selects the <span class="src-tag">Sec. 27.3.2</span> procedure for open buildings with monoslope, pitched, or troughed free roofs (e.g., canopies, pavilions, open-sided sheds with no walls). This replaces the normal (GC<sub>pf</sub>)/(GC<sub>p</sub>)-(GC<sub>pi</sub>) MWFRS/C&amp;C flow above with <span class="src-tag">Eq. 27.3-2</span>: p = q<sub>h</sub> K<sub>d</sub> G C<sub>N</sub>, where C<sub>N</sub> is read from <span class="src-tag">Figs. 27.3-4 through 27.3-7</span>. (GC<sub>pi</sub>) is not applicable to this procedure (there is no enclosed internal volume).</p>`
   },
   openRoof: {
     title: 'Open Buildings with Free Roofs — Sec. 27.3.2',
-    html: `<p><span class="src-tag">ASCE/SEI 7-22, Sec. 27.3.2</span> &mdash; "Open Buildings with Monoslope, Pitched, or Troughed Free Roofs." Net design wind pressure, <span class="src-tag">Eq. 27.3-2</span>: <strong>p = q_h K_d G C_N</strong>, applied normal to the roof surface (positive toward the roof bottom surface).</p>
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, Sec. 27.3.2</span> &mdash; "Open Buildings with Monoslope, Pitched, or Troughed Free Roofs." Net design wind pressure, <span class="src-tag">Eq. 27.3-2</span>: <strong>p = q<sub>h</sub> K<sub>d</sub> G C<sub>N</sub></strong>, applied normal to the roof surface (positive toward the roof bottom surface).</p>
     <p><strong>G</strong> &mdash; Gust-Effect Factor, <span class="src-tag">Sec. 26.11</span>. This calculator uses G = 0.85 for rigid structures (<span class="src-tag">Sec. 26.11.1</span>). The flexible-structure G_f procedure (<span class="src-tag">Secs. 26.11.3&ndash;26.11.5</span>, requires the fundamental natural frequency) is <strong>not implemented</strong> &mdash; verify separately if the structure's natural frequency is below 1 Hz.</p>
-    <p><strong>C_N</strong> &mdash; Net pressure coefficient for two orthogonal load cases (A and B), tabulated by roof angle &theta;, h/L ratio, wind flow (Clear/Obstructed under the roof), and wind direction &gamma; relative to the ridge/span:</p>
+    <p><strong>C<sub>N</sub></strong> &mdash; Net pressure coefficient for two orthogonal load cases (A and B), tabulated by roof angle &theta;, h/L ratio, wind flow (Clear/Obstructed under the roof), and wind direction &gamma; relative to the ridge/span:</p>
     <ul>
       <li><span class="src-tag">Fig. 27.3-4</span> &mdash; Monoslope, &gamma; = 0&deg;/180&deg;, 0.25 &le; h/L &le; 1.0, &theta; &le; 45&deg;.</li>
       <li><span class="src-tag">Fig. 27.3-5</span> &mdash; Pitched, &gamma; = 0&deg;/180&deg; (one table applies to both, by roof symmetry).</li>
       <li><span class="src-tag">Fig. 27.3-6</span> &mdash; Troughed, &gamma; = 0&deg;/180&deg; (one table applies to both, by roof symmetry).</li>
-      <li><span class="src-tag">Fig. 27.3-7</span> &mdash; &gamma; = 90&deg;/270&deg; (wind parallel to ridge/span), applies to all three roof shapes, all h/L, &theta; &le; 45&deg;, in 3 zones based on horizontal distance from the windward edge.</li>
+      <li><span class="src-tag">Fig. 27.3-7</span> &mdash; &gamma; = 90&deg;/270&deg; (wind parallel to ridge/valley), applies to all three roof shapes, all h/L, &theta; &le; 45&deg;, in 3 zones based on horizontal distance from the windward edge.</li>
     </ul>
     <p>Linear interpolation for intermediate &theta; between tabulated rows (7.5&deg;&ndash;45&deg;) is permitted by <span class="src-tag">Fig. 27.3-4, Note 3</span> and applied here for all four figures.</p>
     <p>Both Load Cases A and B, and both wind directions (&gamma; = 0&deg;/180&deg; and 90&deg;/270&deg;), must be evaluated to determine the controlling design pressures &mdash; per the figure notes, the case producing the largest absolute pressure for each region of the roof governs.</p>`
   },
   openRoofShape: {
     title: 'Free Roof Shape — Figs. 27.3-4/5/6',
-    html: `<p>Selects which C_N table governs the &gamma; = 0&deg;/180&deg; loading (<span class="src-tag">Sec. 27.3.2</span>):</p>
+    html: `<p>Selects which C<sub>N</sub> table governs the &gamma; = 0&deg;/180&deg; loading (<span class="src-tag">Sec. 27.3.2</span>):</p>
     <ul>
-      <li><strong>Monoslope</strong> &mdash; single sloped plane, <span class="src-tag">Fig. 27.3-4</span>. For &theta; &lt; 7.5&deg;, a flat-roof row applies (identical C_N for &gamma; = 0&deg; and 180&deg;, by symmetry).</li>
+      <li><strong>Monoslope</strong> &mdash; single sloped plane, <span class="src-tag">Fig. 27.3-4</span>. For &theta; &lt; 7.5&deg;, a flat-roof row applies (identical C<sub>N</sub> for &gamma; = 0&deg; and 180&deg;, by symmetry).</li>
       <li><strong>Pitched (gable-shaped, ridge at center)</strong> &mdash; <span class="src-tag">Fig. 27.3-5</span>.</li>
-      <li><strong>Troughed (valley at center)</strong> &mdash; <span class="src-tag">Fig. 27.3-6</span>, whose C_N values are the sign-flip of Fig. 27.3-5 (physically consistent: a troughed roof is an inverted pitched roof).</li>
+      <li><strong>Troughed (valley at center)</strong> &mdash; <span class="src-tag">Fig. 27.3-6</span>, whose C<sub>N</sub> values are the sign-flip of Fig. 27.3-5 (physically consistent: a troughed roof is an inverted pitched roof).</li>
     </ul>
     <p>For all three shapes, <span class="src-tag">Fig. 27.3-7</span> (&gamma; = 90&deg;/270&deg;) is always shown as well, since wind parallel to the ridge/valley must also be checked.</p>
     <p><span class="src-tag">Fig. 27.3-4, Note 4</span>: for monoslope roofs with 0.05 &le; h/L &lt; 0.25 and &theta; &lt; 5&deg;, Fig. 27.3-7 is used in place of Fig. 27.3-4 for the &gamma; = 0&deg;/180&deg; case as well &mdash; this calculator applies that substitution and flags it. Whether the same substitution applies to pitched/troughed roofs (Figs. 27.3-5/27.3-6) was not confirmed in the source review and is flagged as engineering judgment if encountered.</p>`
   },
   openWindFlow: {
     title: 'Wind Flow (Clear / Obstructed) — Figs. 27.3-4/5/6/7, Note 2',
-    html: `<p>Per the notes to <span class="src-tag">Figs. 27.3-4 through 27.3-7</span>, C_N values are tabulated separately for two conditions of airflow beneath the free roof:</p>
+    html: `<p>Per the notes to <span class="src-tag">Figs. 27.3-4 through 27.3-7</span>, C<sub>N</sub> values are tabulated separately for two conditions of airflow beneath the free roof:</p>
     <ul>
       <li><strong>Clear wind flow</strong> &mdash; wind able to flow with minimal obstruction beneath the roof.</li>
       <li><strong>Obstructed wind flow</strong> &mdash; wind flow blocked by objects beneath the roof equal to more than 50% of the open area under the roof.</li>
@@ -1921,7 +2018,7 @@ const INFO_CONTENT = {
   openL: {
     title: 'Roof Plan Dimension, L — Fig. 27.3-4 Notation',
     html: `<p>L is the horizontal dimension of the roof measured in the along-wind direction (i.e., the span over which the monoslope/pitched/troughed roof extends), per the Notation diagram of <span class="src-tag">Fig. 27.3-4</span>.</p>
-    <p>Together with the mean roof height h (entered above, under "Building Geometry"), this gives the ratio <strong>h/L</strong>, which the C_N tables of Figs. 27.3-4/5/6 are tabulated for over the range 0.25 &le; h/L &le; 1.0. h/L outside this range, or &theta; &gt; 45&deg;, is flagged in the results as outside the figures' stated applicability &mdash; verify against the Standard.</p>`
+    <p>Together with the mean roof height h (entered above, under "Building Geometry"), this gives the ratio <strong>h/L</strong>, which the C<sub>N</sub> tables of Figs. 27.3-4/5/6 are tabulated for over the range 0.25 &le; h/L &le; 1.0. h/L outside this range, or &theta; &gt; 45&deg;, is flagged in the results as outside the figures' stated applicability &mdash; verify against the Standard.</p>`
   },
   riskCategory: {
     title: 'Risk Category',
@@ -1931,7 +2028,7 @@ const INFO_CONTENT = {
   h: {
     title: 'Mean Roof Height, h',
     html: `<p>Mean roof height h is defined in <span class="src-tag">Sec. 26.2</span> as the average of the roof eave height and the roof ridge height, except that for roof angles &le; 10&deg; the eave height may be used as h.</p>
-    <p>h is used to: determine K_h (<span class="src-tag">Table 26.10-1</span> &mdash; see the "i" button on Exposure Category for the K_h formula and &alpha;/z_g table); determine applicability of the Envelope Procedure, h &le; 60 ft (<span class="src-tag">Sec. 28.3.1</span>); compute the zone dimension a (<span class="src-tag">Fig. 28.3-1</span> Notation &mdash; see the "i" button on Least Horizontal Dimension for the a formula); and determine whether torsional Load Cases 3/4 are required, h &gt; 30 ft (<span class="src-tag">Sec. 28.3.2</span>).</p>`
+    <p>h is used to: determine K<sub>h</sub> (<span class="src-tag">Table 26.10-1</span> &mdash; see the "i" button on Exposure Category for the K<sub>h</sub> formula and &alpha;/z<sub>g</sub> table); determine applicability of the Envelope Procedure, h &le; 60 ft (<span class="src-tag">Sec. 28.3.1</span>); compute the zone dimension a (<span class="src-tag">Fig. 28.3-1</span> Notation &mdash; see the "i" button on Least Horizontal Dimension for the a formula); and determine whether torsional Load Cases 3/4 are required, h &gt; 30 ft (<span class="src-tag">Sec. 28.3.2</span>).</p>`
   },
   minDim: {
     title: 'Least Horizontal Dimension',
@@ -1946,10 +2043,10 @@ const INFO_CONTENT = {
   },
   theta: {
     title: 'Roof Angle, θ',
-    html: `<p>Angle of the plane of the roof from horizontal, in degrees. Used to interpolate (GC_pf) from <span class="src-tag">Figure 28.3-1</span> (Load Cases 1 &amp; 3, rows tabulated at &theta; = 0&ndash;5&deg;, 20&deg;, 30&ndash;45&deg;, 90&deg;, with linear interpolation permitted for intermediate angles) and to select the roof C&amp;C figure: <span class="src-tag">Figure 30.3-2A</span> for &theta; &le; 7&deg;, or <span class="src-tag">Figures 30.3-2B/2C</span> (gable) / <span class="src-tag">30.3-2D&ndash;G</span> (hip) for 7&deg; &lt; &theta; &le; 45&deg; depending on the Roof Shape selector.</p>
+    html: `<p>Angle of the plane of the roof from horizontal, in degrees. Used to interpolate (GC<sub>pf</sub>) from <span class="src-tag">Figure 28.3-1</span> (Load Cases 1 &amp; 3, rows tabulated at &theta; = 0&ndash;5&deg;, 20&deg;, 30&ndash;45&deg;, 90&deg;, with linear interpolation permitted for intermediate angles) and to select the roof C&amp;C figure: <span class="src-tag">Figure 30.3-2A</span> for &theta; &le; 7&deg;, or <span class="src-tag">Figures 30.3-2B/2C</span> (gable) / <span class="src-tag">30.3-2D&ndash;G</span> (hip) for 7&deg; &lt; &theta; &le; 45&deg; depending on the Roof Shape selector.</p>
     <p>For &theta; &le; 10&deg;, h may be taken as the eave height (<span class="src-tag">Sec. 26.2</span> definition of mean roof height).</p>
     <p><strong>Interpolation formula</strong> &mdash; for &theta; between two tabulated rows &theta;<sub>1</sub> &lt; &theta; &lt; &theta;<sub>2</sub>:</p>
-    <p>(GC_pf)(&theta;) = (GC_pf)(&theta;<sub>1</sub>) + [(&theta; &minus; &theta;<sub>1</sub>) / (&theta;<sub>2</sub> &minus; &theta;<sub>1</sub>)] &times; [(GC_pf)(&theta;<sub>2</sub>) &minus; (GC_pf)(&theta;<sub>1</sub>)]</p>
+    <p>(GC<sub>pf</sub>)(&theta;) = (GC<sub>pf</sub>)(&theta;<sub>1</sub>) + [(&theta; &minus; &theta;<sub>1</sub>) / (&theta;<sub>2</sub> &minus; &theta;<sub>1</sub>)] &times; [(GC<sub>pf</sub>)(&theta;<sub>2</sub>) &minus; (GC<sub>pf</sub>)(&theta;<sub>1</sub>)]</p>
     <p>&theta; below the lowest tabulated row or above the highest is clamped to that row's value (no extrapolation).</p>
     <p>&theta; &gt; 27&deg; (gable) or &gt; 45&deg; (hip) is beyond the range of the digitized figures; the calculator caps the roof C&amp;C coefficients at the highest tabulated &theta; band and flags this in a note above the roof C&amp;C table. MWFRS results remain valid for all &theta; up to 90&deg;.</p>`
   },
@@ -1958,31 +2055,31 @@ const INFO_CONTENT = {
     html: `<p>Selects which roof C&amp;C figure set applies for &theta; &gt; 7&deg;:</p>
     <p><strong>Gable</strong> &mdash; <span class="src-tag">Figure 30.3-2B</span> (7&deg; &lt; &theta; &le; 20&deg;) or <span class="src-tag">Figure 30.3-2C</span> (20&deg; &lt; &theta; &le; 27&deg;), Zones 1, 2, 3.</p>
     <p><strong>Hip</strong> &mdash; <span class="src-tag">Figures 30.3-2D&ndash;G</span> equivalent (7&deg; &lt; &theta; &le; 45&deg;, in three sub-bands), Zones 1, 2, 3.</p>
-    <p>Both sets of (GC_p) values were digitized from the user's Calcs.com (ClearCalcs) ASCE 7-22 Wind Loads C&amp;C calculator formula listing and cross-validated 6/6 against explicit printed value labels on the Fig. 30.3-2B figure image &mdash; see "Where these formulas come from" in the Sources footer for details.</p>`
+    <p>Both sets of (GC<sub>p</sub>) values were digitized from the user's Calcs.com (ClearCalcs) ASCE 7-22 Wind Loads C&amp;C calculator formula listing and cross-validated 6/6 against explicit printed value labels on the Fig. 30.3-2B figure image &mdash; see "Where these formulas come from" in the Sources footer for details.</p>`
   },
   areaWall: {
     title: 'Effective Wind Area — Walls (C&C), Figure 30.3-1',
-    html: `<p><span class="src-tag">Sec. 26.2 definition of "Effective Wind Area"</span> &mdash; the span length of the component multiplied by an effective width that need not be less than one-third the span length (this maximizes A and minimizes the magnitude of (GC_p)).</p>
-    <p><span class="src-tag">Figure 30.3-1</span> tabulates (GC_p) for wall Zones 4 and 5 at A &le; 10 ft&sup2; and A &ge; 500 ft&sup2;, with log-linear interpolation between. This calculator applies that interpolation directly.</p>
+    html: `<p><span class="src-tag">Sec. 26.2 definition of "Effective Wind Area"</span> &mdash; the span length of the component multiplied by an effective width that need not be less than one-third the span length (this maximizes A and minimizes the magnitude of (GC<sub>p</sub>)).</p>
+    <p><span class="src-tag">Figure 30.3-1</span> tabulates (GC<sub>p</sub>) for wall Zones 4 and 5 at A &le; 10 ft&sup2; and A &ge; 500 ft&sup2;, with log-linear interpolation between. This calculator applies that interpolation directly.</p>
     <p><strong>Interpolation formula</strong> (for A<sub>lo</sub> &le; A &le; A<sub>hi</sub>, here A<sub>lo</sub>=10 ft&sup2;, A<sub>hi</sub>=500 ft&sup2;):</p>
-    <p>(GC_p)(A) = (GC_p)(A<sub>lo</sub>) + [log&#8321;&#8320;(A/A<sub>lo</sub>) / log&#8321;&#8320;(A<sub>hi</sub>/A<sub>lo</sub>)] &times; [(GC_p)(A<sub>hi</sub>) &minus; (GC_p)(A<sub>lo</sub>)]</p>
+    <p>(GC<sub>p</sub>)(A) = (GC<sub>p</sub>)(A<sub>lo</sub>) + [log&#8321;&#8320;(A/A<sub>lo</sub>) / log&#8321;&#8320;(A<sub>hi</sub>/A<sub>lo</sub>)] &times; [(GC<sub>p</sub>)(A<sub>hi</sub>) &minus; (GC<sub>p</sub>)(A<sub>lo</sub>)]</p>
     <p>For A &lt; 10 ft&sup2; or A &gt; 500 ft&sup2;, A is clamped to 10 or 500 ft&sup2; before interpolating (i.e., the tabulated end values are used directly).</p>`
   },
   areaRoof: {
     title: 'Effective Wind Area — Roof (C&C), Figures 30.3-2A/2B-2G',
     html: `<p>Same definition as the wall effective wind area (<span class="src-tag">Sec. 26.2</span>), applied to the roof component/cladding under consideration.</p>
-    <p><span class="src-tag">Figure 30.3-2A</span> (&theta; &le; 7&deg;) tabulates (GC_p) for roof Zones 1&prime;, 1, 2, and 3 at A &le; 10 ft&sup2; and A &ge; 500 ft&sup2;, with log-linear interpolation between.</p>
-    <p><span class="src-tag">Figures 30.3-2B/2C</span> (gable, 7&deg; &lt; &theta; &le; 27&deg;) and <span class="src-tag">30.3-2D&ndash;G</span> (hip, 7&deg; &lt; &theta; &le; 45&deg;) tabulate (GC_p) for roof Zones 1, 2, 3 at A &le; 10 ft&sup2; and a zone/sign-specific upper area (100&ndash;300 ft&sup2;), with log-linear interpolation between.</p>
+    <p><span class="src-tag">Figure 30.3-2A</span> (&theta; &le; 7&deg;) tabulates (GC<sub>p</sub>) for roof Zones 1&prime;, 1, 2, and 3 at A &le; 10 ft&sup2; and A &ge; 500 ft&sup2;, with log-linear interpolation between.</p>
+    <p><span class="src-tag">Figures 30.3-2B/2C</span> (gable, 7&deg; &lt; &theta; &le; 27&deg;) and <span class="src-tag">30.3-2D&ndash;G</span> (hip, 7&deg; &lt; &theta; &le; 45&deg;) tabulate (GC<sub>p</sub>) for roof Zones 1, 2, 3 at A &le; 10 ft&sup2; and a zone/sign-specific upper area (100&ndash;300 ft&sup2;), with log-linear interpolation between.</p>
     <p><strong>Interpolation formula</strong> (same form as the wall C&amp;C interpolation, for A<sub>lo</sub> &le; A &le; A<sub>hi</sub>):</p>
-    <p>(GC_p)(A) = (GC_p)(A<sub>lo</sub>) + [log&#8321;&#8320;(A/A<sub>lo</sub>) / log&#8321;&#8320;(A<sub>hi</sub>/A<sub>lo</sub>)] &times; [(GC_p)(A<sub>hi</sub>) &minus; (GC_p)(A<sub>lo</sub>)]</p>
+    <p>(GC<sub>p</sub>)(A) = (GC<sub>p</sub>)(A<sub>lo</sub>) + [log&#8321;&#8320;(A/A<sub>lo</sub>) / log&#8321;&#8320;(A<sub>hi</sub>/A<sub>lo</sub>)] &times; [(GC<sub>p</sub>)(A<sub>hi</sub>) &minus; (GC<sub>p</sub>)(A<sub>lo</sub>)]</p>
     <p>A outside [A<sub>lo</sub>, A<sub>hi</sub>] is clamped to the nearer bound (the tabulated end value is used directly). A<sub>lo</sub> = 10 ft&sup2; in all cases; A<sub>hi</sub> = 500 ft&sup2; for &theta; &le; 7&deg; (Fig. 30.3-2A) or the zone/sign-specific value (100&ndash;300 ft&sup2;) for sloped roofs (Figs. 30.3-2B&ndash;G).</p>`
   },
   overhang: {
     title: 'Roof Overhangs — Sec. 30.7',
-    html: `<p><span class="src-tag">ASCE/SEI 7-22, Sec. 30.7</span> &mdash; for buildings with roof overhangs, the net pressure coefficient on the overhang is obtained by combining the (GC_p) for the applicable roof surface (top of overhang) with the (GC_p) for the adjacent wall zone (bottom/soffit of overhang), both evaluated at the overhang's effective wind area. This replaces the separate overhang (GC_p) graphs used in prior editions of ASCE 7.</p>
-    <p>This calculator combines: <strong>net (GC_p) = roof (GC_p) &minus; wall (GC_p)</strong>, using the roof C&amp;C zone 2 (eave) with wall zone 4, and roof zone 3 (corner) with wall zone 5 &mdash; both pairings span the same "a"-dimension perimeter strip per the Notation under Figs. 30.3-1/30.3-2. Interior Zone 1 is excluded (overhangs occur only at the perimeter).</p>
-    <p>The sign convention and the zone-pairing/combination approach are based on the worked example and discussion in <em>"ASCE 7-22 Changes to Component and Cladding Wind Provisions"</em> (StructureMag, 2022) and the Eng-Tips thread <em>"ASCE 7-22 Roof overhang pressure"</em> (Nov 2025): roof zone 2, &theta;=20&deg;-27&deg; hip, A&le;10 ft&sup2; gives roof (GC_p)=&minus;2.0 and wall (GC_p)=+1.0, combining to a net coefficient of &minus;3.0, exactly matching this calculator's tables.</p>
-    <p><span class="src-tag">No (GC_pi) term</span> &mdash; both faces of an overhang are exterior surfaces, so Eq. 30.3-1's internal-pressure adjustment does not apply; the combined coefficient above is already a net (through-thickness) value.</p>
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, Sec. 30.7</span> &mdash; for buildings with roof overhangs, the net pressure coefficient on the overhang is obtained by combining the (GC<sub>p</sub>) for the applicable roof surface (top of overhang) with the (GC<sub>p</sub>) for the adjacent wall zone (bottom/soffit of overhang), both evaluated at the overhang's effective wind area. This replaces the separate overhang (GC<sub>p</sub>) graphs used in prior editions of ASCE 7.</p>
+    <p>This calculator combines: <strong>net (GC<sub>p</sub>) = roof (GC<sub>p</sub>) &minus; wall (GC<sub>p</sub>)</strong>, using the roof C&amp;C zone 2 (eave) with wall zone 4, and roof zone 3 (corner) with wall zone 5 &mdash; both pairings span the same "a"-dimension perimeter strip per the Notation under Figs. 30.3-1/30.3-2. Interior Zone 1 is excluded (overhangs occur only at the perimeter).</p>
+    <p>The sign convention and the zone-pairing/combination approach are based on the worked example and discussion in <em>"ASCE 7-22 Changes to Component and Cladding Wind Provisions"</em> (StructureMag, 2022) and the Eng-Tips thread <em>"ASCE 7-22 Roof overhang pressure"</em> (Nov 2025): roof zone 2, &theta;=20&deg;-27&deg; hip, A&le;10 ft&sup2; gives roof (GC<sub>p</sub>)=&minus;2.0 and wall (GC<sub>p</sub>)=+1.0, combining to a net coefficient of &minus;3.0, exactly matching this calculator's tables.</p>
+    <p><span class="src-tag">No (GC<sub>pi</sub>) term</span> &mdash; both faces of an overhang are exterior surfaces, so Eq. 30.3-1's internal-pressure adjustment does not apply; the combined coefficient above is already a net (through-thickness) value.</p>
     <p>The exact roof-zone&harr;wall-zone pairing is not explicitly tabulated in the secondary sources reviewed for this calculator; the pairing used here is this calculator's engineering judgment based on the geometric correspondence of the "a"-dimension zones. Verify against ASCE/SEI 7-22 Sec. 30.7 and Fig. 30.7-1 directly for critical designs.</p>`
   },
   parapet: {
@@ -2000,28 +2097,28 @@ const INFO_CONTENT = {
     title: 'Velocity Pressure — Step by Step',
     html: `<p>Every value below is computed from the inputs on the left, with the clause or equation it comes from &mdash; see "Where these formulas come from" at the bottom of this page for the full citation list. The formulas actually evaluated, in order, are:</p>
     <ol>
-      <li><strong>K_h</strong> (<span class="src-tag">Table 26.10-1, Note 1</span>) &mdash; K_h = 2.41(h/z_g)<sup>2/&alpha;</sup> (or the h&lt;15 ft / h&gt;z_g branches), with &alpha; and z_g from the selected Exposure Category; overridden to K_h = 0.70 for Exposure B with h &lt; 30 ft (<span class="src-tag">footnote *</span>). See the "i" button on Exposure Category for the full table.</li>
-      <li><strong>K_e</strong> (<span class="src-tag">Table 26.9-1, Note 2</span>) &mdash; K_e = exp(&minus;0.0000362 &times; z_e), where z_e is the ground elevation entered above (z_e = 0 gives K_e = 1.00).</li>
-      <li><strong>K_d</strong> (<span class="src-tag">Table 26.6-1</span>) &mdash; K_d = 0.85 for buildings, MWFRS and C&amp;C (fixed value, not user-adjustable).</li>
-      <li><strong>K_zt</strong> (<span class="src-tag">Sec. 26.8, Eq. 26.8-1</span>) &mdash; user input; K_zt = 1.0 unless the site meets the Fig. 26.8-1 escarpment/ridge/hill criteria.</li>
-      <li><strong>q_h</strong> (<span class="src-tag">Eq. 26.10-1</span>) &mdash; q_h = 0.00256 &times; K_h &times; K_zt &times; K_e &times; V&sup2; (V in mph, q_h in psf).</li>
-      <li><strong>(GC_pi)</strong> (<span class="src-tag">Table 26.13-1</span>) &mdash; &plusmn;0.18 (Enclosed or Partially Open) or &plusmn;0.55 (Partially Enclosed), per the Enclosure Classification selected above; both signs are evaluated and the worse one is reported for each zone (<span class="src-tag">Note 1</span>).</li>
+      <li><strong>K<sub>h</sub></strong> (<span class="src-tag">Table 26.10-1, Note 1</span>) &mdash; K<sub>h</sub> = 2.41(h/z<sub>g</sub>)<sup>2/&alpha;</sup> (or the h&lt;15 ft / h&gt;z<sub>g</sub> branches), with &alpha; and z<sub>g</sub> from the selected Exposure Category; overridden to K<sub>h</sub> = 0.70 for Exposure B with h &lt; 30 ft (<span class="src-tag">footnote *</span>). See the "i" button on Exposure Category for the full table.</li>
+      <li><strong>K<sub>e</sub></strong> (<span class="src-tag">Table 26.9-1, Note 2</span>) &mdash; K<sub>e</sub> = exp(&minus;0.0000362 &times; z<sub>e</sub>), where z<sub>e</sub> is the ground elevation entered above (z<sub>e</sub> = 0 gives K<sub>e</sub> = 1.00).</li>
+      <li><strong>K<sub>d</sub></strong> (<span class="src-tag">Table 26.6-1</span>) &mdash; K<sub>d</sub> = 0.85 for buildings, MWFRS and C&amp;C (fixed value, not user-adjustable).</li>
+      <li><strong>K<sub>zt</sub></strong> (<span class="src-tag">Sec. 26.8, Eq. 26.8-1</span>) &mdash; user input; K<sub>zt</sub> = 1.0 unless the site meets the Fig. 26.8-1 escarpment/ridge/hill criteria.</li>
+      <li><strong>q<sub>h</sub></strong> (<span class="src-tag">Eq. 26.10-1</span>) &mdash; q<sub>h</sub> = 0.00256 &times; K<sub>h</sub> &times; K<sub>zt</sub> &times; K<sub>e</sub> &times; V&sup2; (V in mph, q<sub>h</sub> in psf).</li>
+      <li><strong>(GC<sub>pi</sub>)</strong> (<span class="src-tag">Table 26.13-1</span>) &mdash; &plusmn;0.18 (Enclosed or Partially Open) or &plusmn;0.55 (Partially Enclosed), per the Enclosure Classification selected above; both signs are evaluated and the worse one is reported for each zone (<span class="src-tag">Note 1</span>).</li>
       <li><strong>Zone dimension a</strong> (<span class="src-tag">Notation, Figs. 28.3-1 / 30.3-1</span>) &mdash; a = min[0.1 &times; B<sub>min</sub>, 0.4h], not less than max[0.04 &times; B<sub>min</sub>, 3 ft], where B<sub>min</sub> is the least horizontal dimension entered above; capped at 0.8h if &theta; &le; 7&deg; and B<sub>min</sub> &gt; 300 ft.</li>
     </ol>
-    <p>These six values (K_h, K_e, K_d, K_zt, q_h, (GC_pi)) and a feed every MWFRS and C&amp;C pressure below via <span class="src-tag">Eq. 28.3-1</span>: p = q_h K_d [(GC_pf) &minus; (GC_pi)] and <span class="src-tag">Eq. 30.3-1</span>: p = q_h K_d [(GC_p) &minus; (GC_pi)] &mdash; see the "i" buttons on the MWFRS and C&amp;C section headers for those equations and how (GC_pf)/(GC_p) are obtained.</p>`
+    <p>These six values (K<sub>h</sub>, K<sub>e</sub>, K<sub>d</sub>, K<sub>zt</sub>, q<sub>h</sub>, (GC<sub>pi</sub>)) and a feed every MWFRS and C&amp;C pressure below via <span class="src-tag">Eq. 28.3-1</span>: p = q<sub>h</sub> K<sub>d</sub> [(GC<sub>pf</sub>) &minus; (GC<sub>pi</sub>)] and <span class="src-tag">Eq. 30.3-1</span>: p = q<sub>h</sub> K<sub>d</sub> [(GC<sub>p</sub>) &minus; (GC<sub>pi</sub>)] &mdash; see the "i" buttons on the MWFRS and C&amp;C section headers for those equations and how (GC<sub>pf</sub>)/(GC<sub>p</sub>) are obtained.</p>`
   },
   mwfrs: {
     title: 'MWFRS — Envelope Procedure, Figure 28.3-1 / 28.3-2',
-    html: `<p><span class="src-tag">Sec. 28.3, Eq. 28.3-1</span>: p = q_h K_d [(GC_pf) &minus; (GC_pi)]. Applicable to enclosed and partially enclosed buildings with h &le; 60 ft, flat/gable/hip roofs, per the conditions of <span class="src-tag">Sec. 28.3.1</span>.</p>
+    html: `<p><span class="src-tag">Sec. 28.3, Eq. 28.3-1</span>: p = q<sub>h</sub> K<sub>d</sub> [(GC<sub>pf</sub>) &minus; (GC<sub>pi</sub>)]. Applicable to enclosed and partially enclosed buildings with h &le; 60 ft, flat/gable/hip roofs, per the conditions of <span class="src-tag">Sec. 28.3.1</span>.</p>
     <p><strong>Load Case 1</strong> (Zones 1&ndash;4, 1E&ndash;4E) is &theta;-dependent. <strong>Load Case 2</strong> (Zones 1&ndash;6, 1E&ndash;6E) is the same for all &theta;. Each load case is evaluated for all four building corners taken as the windward corner (<span class="src-tag">Sec. 28.3.2.1</span>); Zones with the "E" suffix are end-zone (edge strip) values within distance a of the corner.</p>
     <p><strong>Load Cases 3 &amp; 4</strong> (<span class="src-tag">Fig. 28.3-2</span>) add torsional "T" zones to Load Cases 1 and 2, respectively, and are required when h &gt; 30 ft unless an exception of <span class="src-tag">Sec. 28.3.2</span> applies.</p>
-    <p>p_min and p_max below pair each (GC_pf) with whichever sign of (GC_pi) (Table 26.13-1) produces the larger-magnitude net pressure &mdash; both must be checked per <span class="src-tag">Table 26.13-1, Note 1</span>.</p>`
+    <p>p<sub>min</sub> and p<sub>max</sub> below pair each (GC<sub>pf</sub>) with whichever sign of (GC<sub>pi</sub>) (Table 26.13-1) produces the larger-magnitude net pressure &mdash; both must be checked per <span class="src-tag">Table 26.13-1, Note 1</span>.</p>`
   },
   cc: {
     title: 'Components &amp; Cladding — Figures 30.3-1 / 30.3-2A-2G',
-    html: `<p><span class="src-tag">Sec. 30.3, Eq. 30.3-1</span>: p = q_h K_d [(GC_p) &minus; (GC_pi)]. Applicable to C&amp;C of enclosed and partially enclosed low-rise buildings (h &le; 60 ft) with flat, gable, hip, monoslope, or similar roofs, per <span class="src-tag">Sec. 30.3.1</span> and the conditions on Figures 30.3-1/30.3-2.</p>
-    <p>(GC_p) is read from <span class="src-tag">Figure 30.3-1</span> (walls, Zones 4 &amp; 5, all &theta;), <span class="src-tag">Figure 30.3-2A</span> (roof, Zones 1&prime;, 1, 2, 3, for &theta; &le; 7&deg;), and <span class="src-tag">Figures 30.3-2B/2C</span> (gable) or <span class="src-tag">30.3-2D&ndash;G</span> (hip) (roof, Zones 1, 2, 3, for 7&deg; &lt; &theta; &le; 45&deg;), as a function of the effective wind area, with log-linear interpolation between the tabulated breakpoints.</p>
-    <p>p_min and p_max pair the negative/positive (GC_p) with whichever sign of (GC_pi) produces the larger-magnitude net pressure.</p>`
+    html: `<p><span class="src-tag">Sec. 30.3, Eq. 30.3-1</span>: p = q<sub>h</sub> K<sub>d</sub> [(GC<sub>p</sub>) &minus; (GC<sub>pi</sub>)]. Applicable to C&amp;C of enclosed and partially enclosed low-rise buildings (h &le; 60 ft) with flat, gable, hip, monoslope, or similar roofs, per <span class="src-tag">Sec. 30.3.1</span> and the conditions on Figures 30.3-1/30.3-2.</p>
+    <p>(GC<sub>p</sub>) is read from <span class="src-tag">Figure 30.3-1</span> (walls, Zones 4 &amp; 5, all &theta;), <span class="src-tag">Figure 30.3-2A</span> (roof, Zones 1&prime;, 1, 2, 3, for &theta; &le; 7&deg;), and <span class="src-tag">Figures 30.3-2B/2C</span> (gable) or <span class="src-tag">30.3-2D&ndash;G</span> (hip) (roof, Zones 1, 2, 3, for 7&deg; &lt; &theta; &le; 45&deg;), as a function of the effective wind area, with log-linear interpolation between the tabulated breakpoints.</p>
+    <p>p<sub>min</sub> and p<sub>max</sub> pair the negative/positive (GC<sub>p</sub>) with whichever sign of (GC<sub>pi</sub>) produces the larger-magnitude net pressure.</p>`
   }
 };
 
@@ -2098,8 +2195,8 @@ function stripHtml(html) {
 function zoneTableAOA(rows, dual, labels) {
   const lbl = labels || ZONE_LABELS;
   const header = dual
-    ? ['Zone', '(GCp) range', 'p_min (outward / suction), ' + pUnit(), 'p_max (inward / positive), ' + pUnit()]
-    : ['Zone', '(GCpf)', 'p_min (outward / suction), ' + pUnit(), 'p_max (inward / positive), ' + pUnit()];
+    ? ['Zone', '(GCp) range', 'pmin (outward / suction), ' + pUnit(), 'pmax (inward / positive), ' + pUnit()]
+    : ['Zone', '(GCpf)', 'pmin (outward / suction), ' + pUnit(), 'pmax (inward / positive), ' + pUnit()];
   const aoa = [header];
   rows.forEach(r => {
     const gcStr = dual
@@ -2113,7 +2210,7 @@ function zoneTableAOA(rows, dual, labels) {
 // AOA mirror of ccParapetTableHTML(rows, labels).
 function ccParapetAOA(rows, labels) {
   const lbl = labels || ZONE_LABELS;
-  const aoa = [['Zone', '(GCp) Load A', 'p_A, ' + pUnit(), '(GCp) Load B', 'p_B, ' + pUnit()]];
+  const aoa = [['Zone', '(GCp) Load A', 'pA, ' + pUnit(), '(GCp) Load B', 'pB, ' + pUnit()]];
   rows.forEach(r => {
     aoa.push([lbl[r.zone] || r.zone, fmt(r.gcA, 2), fmt(pVal(r.pA), 2), fmt(r.gcB, 2), fmt(pVal(r.pB), 2)]);
   });
@@ -2122,7 +2219,7 @@ function ccParapetAOA(rows, labels) {
 
 // AOA mirror of openRoofGammaTableHTML(gamma0180).
 function openRoofGammaAOA(gamma0180) {
-  const aoa = [['Wind Direction', 'Load Case', 'C_NW', 'C_NL', 'p_W, ' + pUnit(), 'p_L, ' + pUnit()]];
+  const aoa = [['Wind Direction', 'Load Case', 'CNW', 'CNL', 'pW, ' + pUnit(), 'pL, ' + pUnit()]];
   if (!gamma0180) return aoa;
   const rows = [
     { lbl: 'γ = 0°', lc: 'A', d: gamma0180.gamma0.A },
@@ -2138,7 +2235,7 @@ function openRoofGammaAOA(gamma0180) {
 
 // AOA mirror of openRoofZoneTableHTML(fig277).
 function openRoofZoneAOA(fig277) {
-  const aoa = [['Zone (horiz. distance from windward edge)', 'C_N, Load Case A', 'p_A, ' + pUnit(), 'C_N, Load Case B', 'p_B, ' + pUnit()]];
+  const aoa = [['Zone (horiz. distance from windward edge)', 'CN, Load Case A', 'pA, ' + pUnit(), 'CN, Load Case B', 'pB, ' + pUnit()]];
   fig277.zoneKeys.forEach((zk, i) => {
     aoa.push([fig277.zoneLabels[zk], fmt(fig277.A[i].CN, 2), fmt(pVal(fig277.A[i].p), 2), fmt(fig277.B[i].CN, 2), fmt(pVal(fig277.B[i].p), 2)]);
   });
@@ -2239,8 +2336,8 @@ function exportReportXLSX(r) {
     const parapetSummary = [
       ['Quantity', 'Value'],
       ['z (top of parapet), ' + lenUnit, fmt(lengthOut(p.zParapet), 1)],
-      ['K_h at parapet', fmt(p.khp, 3)],
-      ['q_p, ' + pUnit(), fmt(pVal(p.qp), 2)],
+      ['Kh at parapet', fmt(p.khp, 3)],
+      ['qp, ' + pUnit(), fmt(pVal(p.qp), 2)],
       ['p_p, windward (GCpn=+1.5), ' + pUnit(), fmt(pVal(p.ppWindward), 2)],
       ['p_p, leeward (GCpn=-1.0), ' + pUnit(), fmt(pVal(p.ppLeeward), 2)],
       ['Total combined p_p, ' + pUnit(), fmt(pVal(p.ppTotal), 2)],
@@ -2286,8 +2383,8 @@ function init() {
   const encSel = document.getElementById('enclosure');
   Object.keys(GCPI).forEach(k => {
     const o = document.createElement('option');
-    // Open Building — Free Roof (Sec. 27.3.2) has no (GC_pi) — omit the suffix for it.
-    o.value = k; o.textContent = GCPI[k].noGcpi ? GCPI[k].label : GCPI[k].label + ' (GC_pi = ±' + fmt(GCPI[k].pos, 2) + ')';
+    // Open Building — Free Roof (Sec. 27.3.2) has no (GC<sub>pi</sub>) — omit the suffix for it.
+    o.value = k; o.textContent = GCPI[k].noGcpi ? GCPI[k].label : GCPI[k].label + ' (GCpi = ±' + fmt(GCPI[k].pos, 2) + ')';
     if (k === state.enclosure) o.selected = true;
     encSel.appendChild(o);
   });
@@ -2328,6 +2425,15 @@ function init() {
   document.getElementById('engineer').value = state.engineer;
   document.getElementById('projectDate').value = state.projectDate;
   document.getElementById('riskCategory').value = state.riskCategory;
+
+  // Print title block fields (Phase 3 / report header)
+  document.getElementById('companyName').value = state.companyName || '';
+  document.getElementById('sectionName').value = state.sectionName || '';
+  document.getElementById('jobRef').value = state.jobRef || '';
+  document.getElementById('chkdBy').value = state.chkdBy || '';
+  document.getElementById('chkdDate').value = state.chkdDate || '';
+  document.getElementById('appdBy').value = state.appdBy || '';
+  document.getElementById('appdDate').value = state.appdDate || '';
 
   updateUnitLabels();
   bindInputs();
@@ -2410,6 +2516,15 @@ document.addEventListener('DOMContentLoaded', init);
     document.getElementById('engineer').value = state.engineer || '';
     document.getElementById('projectDate').value = state.projectDate;
     document.getElementById('riskCategory').value = state.riskCategory || 'II';
+
+    // Print title block fields (Phase 3 / report header)
+    document.getElementById('companyName').value = state.companyName || '';
+    document.getElementById('sectionName').value = state.sectionName || '';
+    document.getElementById('jobRef').value = state.jobRef || '';
+    document.getElementById('chkdBy').value = state.chkdBy || '';
+    document.getElementById('chkdDate').value = state.chkdDate || '';
+    document.getElementById('appdBy').value = state.appdBy || '';
+    document.getElementById('appdDate').value = state.appdDate || '';
 
     document.getElementById('unitSI').classList.toggle('active', state.unitSystem === 'SI');
     document.getElementById('unitUS').classList.toggle('active', state.unitSystem === 'US');
