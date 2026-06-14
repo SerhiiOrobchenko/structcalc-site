@@ -964,4 +964,29 @@ document.addEventListener('DOMContentLoaded', init);
     syncCtVisibility();
     syncRoofTypeVisibility();
     updateUnitLabels();
-    if (state.lat != null && st
+    if (state.lat != null && state.lon != null && typeof showOnMap === 'function') {
+      try { showOnMap(state.lat, state.lon); } catch (e) { /* map not ready */ }
+    }
+    renderResults();
+  }
+
+  window.addEventListener('message', e => {
+    const msg = e.data;
+    if (!msg) return;
+    if (msg.type === 'loadState') {
+      try { applyState(msg.state); } catch (err) { console.error('StructCalc applyState error', err); }
+    } else if (msg.type === 'requestState') {
+      postState();
+    }
+  });
+
+  // Wrap renderResults so every recompute (incl. from user edits) reports
+  // the new state back to the shell.
+  const _renderResults = renderResults;
+  renderResults = function () {
+    _renderResults.apply(this, arguments);
+    postState();
+  };
+
+  window.addEventListener('DOMContentLoaded', () => setTimeout(postState, 0));
+})();
