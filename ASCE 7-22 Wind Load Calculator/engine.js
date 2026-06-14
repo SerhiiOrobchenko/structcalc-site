@@ -1181,6 +1181,11 @@ function renderDiagram(r) {
 
   const hFt = Math.max(state.h, 0);
   const theta = Math.max(state.theta, 0);
+  // Zone dimension "a" (Notation, Figs. 28.3-1/30.3-1/30.3-2), as a fraction of the least
+  // horizontal dimension, used to size the C&C corner/edge zone overlays below.
+  const minDimFt = Math.max(state.minDim, 0.001);
+  const aFt = r.a || 0;
+  const aRatio = aFt / minDimFt;
 
   // ---- Elevation -------------------------------------------------------
   const groundY = 170;
@@ -1223,16 +1228,49 @@ function renderDiagram(r) {
   elevSvg += `<defs><marker id="arrowElev" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="var(--accent)"/></marker></defs>`;
   // roof type label
   elevSvg += `<text x="${midX}" y="14" font-size="9" fill="var(--muted)" text-anchor="middle">${state.roofType === 'flat' ? 'Flat / low-slope roof (&theta; &le; 7&deg;)' : 'Sloped roof'}</text>`;
+
+  // C&C wall zones (Figure 30.3-1): Zone 5 = corner strips of width "a" at each end of the
+  // wall, Zone 4 = the field/interior of the wall between them.
+  if (state.mode === 'cc') {
+    const wallW = wallR - wallL;
+    const aElevPx = Math.min(40, Math.max(4, aRatio * wallW));
+    if (2 * aElevPx < wallW) {
+      elevSvg += `<rect x="${wallL}" y="${eaveY}" width="${aElevPx}" height="${groundY - eaveY}" fill="var(--accent)" fill-opacity="0.28"/>`;
+      elevSvg += `<rect x="${wallR - aElevPx}" y="${eaveY}" width="${aElevPx}" height="${groundY - eaveY}" fill="var(--accent)" fill-opacity="0.28"/>`;
+      elevSvg += `<text x="${wallL + aElevPx / 2}" y="${(eaveY + groundY) / 2}" font-size="9" fill="var(--ink)" text-anchor="middle" dominant-baseline="middle">5</text>`;
+      elevSvg += `<text x="${wallR - aElevPx / 2}" y="${(eaveY + groundY) / 2}" font-size="9" fill="var(--ink)" text-anchor="middle" dominant-baseline="middle">5</text>`;
+      elevSvg += `<text x="${midX}" y="${(eaveY + groundY) / 2}" font-size="9" fill="var(--ink)" text-anchor="middle" dominant-baseline="middle">4</text>`;
+    }
+  }
+
   elev.innerHTML = elevSvg;
 
   // ---- Plan -------------------------------------------------------------
   const px0 = 40, py0 = 40, pw = 200, ph = 120;
-  const minDimFt = Math.max(state.minDim, 0.001);
-  const aFt = r.a || 0;
-  const aPx = Math.min(60, Math.max(6, (aFt / minDimFt) * pw));
+  const aPx = Math.min(60, Math.max(6, aRatio * pw));
 
   let planSvg = '';
   planSvg += `<rect x="${px0}" y="${py0}" width="${pw}" height="${ph}" fill="var(--brand-light)" stroke="var(--brand)" stroke-width="1.5"/>`;
+
+  // C&C roof zones (Figs. 30.3-1/30.3-2A-G "picture frame" pattern): Zone 3 = corner
+  // squares (a x a), Zone 2 = edge strips (width a, excluding corners), Zone 1 = interior.
+  if (state.mode === 'cc' && pw - 2 * aPx > 0 && ph - 2 * aPx > 0) {
+    const corners = [
+      [px0, py0], [px0 + pw - aPx, py0], [px0, py0 + ph - aPx], [px0 + pw - aPx, py0 + ph - aPx]
+    ];
+    corners.forEach(([cx, cy]) => {
+      planSvg += `<rect x="${cx}" y="${cy}" width="${aPx}" height="${aPx}" fill="var(--accent)" fill-opacity="0.32"/>`;
+    });
+    planSvg += `<rect x="${px0 + aPx}" y="${py0}" width="${pw - 2 * aPx}" height="${aPx}" fill="var(--accent)" fill-opacity="0.16"/>`;
+    planSvg += `<rect x="${px0 + aPx}" y="${py0 + ph - aPx}" width="${pw - 2 * aPx}" height="${aPx}" fill="var(--accent)" fill-opacity="0.16"/>`;
+    planSvg += `<rect x="${px0}" y="${py0 + aPx}" width="${aPx}" height="${ph - 2 * aPx}" fill="var(--accent)" fill-opacity="0.16"/>`;
+    planSvg += `<rect x="${px0 + pw - aPx}" y="${py0 + aPx}" width="${aPx}" height="${ph - 2 * aPx}" fill="var(--accent)" fill-opacity="0.16"/>`;
+    planSvg += `<rect x="${px0 + aPx}" y="${py0 + aPx}" width="${pw - 2 * aPx}" height="${ph - 2 * aPx}" fill="var(--brand)" fill-opacity="0.06"/>`;
+    planSvg += `<text x="${px0 + aPx / 2}" y="${py0 + aPx / 2}" font-size="9" fill="var(--ink)" text-anchor="middle" dominant-baseline="middle">3</text>`;
+    planSvg += `<text x="${px0 + pw / 2}" y="${py0 + aPx / 2}" font-size="9" fill="var(--ink)" text-anchor="middle" dominant-baseline="middle">2</text>`;
+    planSvg += `<text x="${px0 + pw / 2}" y="${py0 + ph / 2}" font-size="11" fill="var(--ink)" text-anchor="middle" dominant-baseline="middle">1</text>`;
+  }
+
   // ridge line for sloped roofs
   if (risePx > 0.5) {
     planSvg += `<line x1="${px0}" y1="${py0 + ph / 2}" x2="${px0 + pw}" y2="${py0 + ph / 2}" stroke="var(--brand)" stroke-width="1" stroke-dasharray="4,3"/>`;
@@ -1258,6 +1296,18 @@ function renderDiagram(r) {
     note.textContent = 'Enclosure classification: ' + (g ? g.label : state.enclosure) +
       ' — (GC_pi) = ±' + fmt(g ? g.pos : 0, 2) + ' (Table 26.13-1). Procedure shown: ' +
       (state.mode === 'mwfrs' ? 'MWFRS, Envelope Procedure (Ch. 28)' : 'Components & Cladding (Ch. 30)') + '.';
+  }
+
+  // ---- C&C zone key (shown only in C&C mode) -----------------------------
+  const zoneKey = document.getElementById('ccZoneKey');
+  if (zoneKey) {
+    zoneKey.innerHTML = state.mode === 'cc'
+      ? 'Shaded zones above follow the corner/edge/interior pattern of <span class="src-tag">Figs. 30.3-1 (walls) and 30.3-2A-G (roof)</span>: ' +
+        '<strong>Zone 1</strong> = roof interior (field), <strong>Zone 2</strong> = roof edge strip (width a), <strong>Zone 3</strong> = roof corner (a&times;a), ' +
+        '<strong>Zone 4</strong> = wall field, <strong>Zone 5</strong> = wall corner strip (width a). Pressures for each zone are in the C&amp;C table below. ' +
+        'Zone 1&prime; (an additional interior subzone for flat roofs, &theta; &le; 7&deg;, per Fig. 30.3-2A) is not separately delineated here &mdash; ' +
+        'see the C&amp;C table for its value and Fig. 30.3-2A for its extent.'
+      : '';
   }
 }
 
@@ -1517,7 +1567,20 @@ const INFO_CONTENT = {
       <li><strong>C</strong> &mdash; Open terrain with scattered obstructions having heights generally less than 30 ft, including flat open country and grasslands.</li>
       <li><strong>D</strong> &mdash; Flat, unobstructed areas and water surfaces. Includes smooth mud flats, salt flats, and unbroken ice.</li>
     </ul>
-    <p>The exposure category is determined for the direction(s) from which the wind blows, per <span class="src-tag">Sec. 26.7.3</span> (surface roughness in an upwind sector of 45&deg; and a distance of 1,500 ft or 10&times;h, whichever is greater).</p>`
+    <p>The exposure category is determined for the direction(s) from which the wind blows, per <span class="src-tag">Sec. 26.7.3</span> (surface roughness in an upwind sector of 45&deg; and a distance of 1,500 ft or 10&times;h, whichever is greater).</p>
+    <p><strong>How the exposure category feeds K_h</strong> (<span class="src-tag">Table 26.10-1, Note 1</span>), using mean roof height h and the exposure-specific &alpha; and z_g below:</p>
+    <table style="border-collapse:collapse; margin:6px 0;">
+      <tr><th style="text-align:left; padding-right:16px; border-bottom:1px solid #ccc;">Exposure</th><th style="text-align:left; padding-right:16px; border-bottom:1px solid #ccc;">&alpha;</th><th style="text-align:left; border-bottom:1px solid #ccc;">z_g (ft)</th></tr>
+      <tr><td style="padding-right:16px;">B</td><td style="padding-right:16px;">7.5</td><td>3,280</td></tr>
+      <tr><td style="padding-right:16px;">C</td><td style="padding-right:16px;">9.8</td><td>2,460</td></tr>
+      <tr><td style="padding-right:16px;">D</td><td style="padding-right:16px;">11.5</td><td>1,935</td></tr>
+    </table>
+    <ul>
+      <li>h &lt; 15 ft: <strong>K_h = 2.41 (15/z_g)<sup>2/&alpha;</sup></strong></li>
+      <li>15 ft &le; h &le; z_g: <strong>K_h = 2.41 (h/z_g)<sup>2/&alpha;</sup></strong></li>
+      <li>h &gt; z_g: <strong>K_h = 2.41</strong></li>
+    </ul>
+    <p><span class="src-tag">Table 26.10-1, footnote *</span> &mdash; Exception: for Exposure B with h &lt; 30 ft, the formula above is overridden and <strong>K_h = 0.70</strong> is used directly (this is the value used in <span class="src-tag">Chapter 28</span>, the Envelope Procedure used by this calculator).</p>`
   },
   kzt: {
     title: 'Topographic Factor, K_zt — Sec. 26.8',
@@ -1590,7 +1653,7 @@ const INFO_CONTENT = {
   h: {
     title: 'Mean Roof Height, h',
     html: `<p>Mean roof height h is defined in <span class="src-tag">Sec. 26.2</span> as the average of the roof eave height and the roof ridge height, except that for roof angles &le; 10&deg; the eave height may be used as h.</p>
-    <p>h is used to: determine K_h (<span class="src-tag">Table 26.10-1</span>); determine applicability of the Envelope Procedure, h &le; 60 ft (<span class="src-tag">Sec. 28.3.1</span>); compute the zone dimension a (<span class="src-tag">Fig. 28.3-1</span> Notation); and determine whether torsional Load Cases 3/4 are required, h &gt; 30 ft (<span class="src-tag">Sec. 28.3.2</span>).</p>`
+    <p>h is used to: determine K_h (<span class="src-tag">Table 26.10-1</span> &mdash; see the "i" button on Exposure Category for the K_h formula and &alpha;/z_g table); determine applicability of the Envelope Procedure, h &le; 60 ft (<span class="src-tag">Sec. 28.3.1</span>); compute the zone dimension a (<span class="src-tag">Fig. 28.3-1</span> Notation &mdash; see the "i" button on Least Horizontal Dimension for the a formula); and determine whether torsional Load Cases 3/4 are required, h &gt; 30 ft (<span class="src-tag">Sec. 28.3.2</span>).</p>`
   },
   minDim: {
     title: 'Least Horizontal Dimension',
@@ -1607,6 +1670,9 @@ const INFO_CONTENT = {
     title: 'Roof Angle, θ',
     html: `<p>Angle of the plane of the roof from horizontal, in degrees. Used to interpolate (GC_pf) from <span class="src-tag">Figure 28.3-1</span> (Load Cases 1 &amp; 3, rows tabulated at &theta; = 0&ndash;5&deg;, 20&deg;, 30&ndash;45&deg;, 90&deg;, with linear interpolation permitted for intermediate angles) and to select the roof C&amp;C figure: <span class="src-tag">Figure 30.3-2A</span> for &theta; &le; 7&deg;, or <span class="src-tag">Figures 30.3-2B/2C</span> (gable) / <span class="src-tag">30.3-2D&ndash;G</span> (hip) for 7&deg; &lt; &theta; &le; 45&deg; depending on the Roof Shape selector.</p>
     <p>For &theta; &le; 10&deg;, h may be taken as the eave height (<span class="src-tag">Sec. 26.2</span> definition of mean roof height).</p>
+    <p><strong>Interpolation formula</strong> &mdash; for &theta; between two tabulated rows &theta;<sub>1</sub> &lt; &theta; &lt; &theta;<sub>2</sub>:</p>
+    <p>(GC_pf)(&theta;) = (GC_pf)(&theta;<sub>1</sub>) + [(&theta; &minus; &theta;<sub>1</sub>) / (&theta;<sub>2</sub> &minus; &theta;<sub>1</sub>)] &times; [(GC_pf)(&theta;<sub>2</sub>) &minus; (GC_pf)(&theta;<sub>1</sub>)]</p>
+    <p>&theta; below the lowest tabulated row or above the highest is clamped to that row's value (no extrapolation).</p>
     <p>&theta; &gt; 27&deg; (gable) or &gt; 45&deg; (hip) is beyond the range of the digitized figures; the calculator caps the roof C&amp;C coefficients at the highest tabulated &theta; band and flags this in a note above the roof C&amp;C table. MWFRS results remain valid for all &theta; up to 90&deg;.</p>`
   },
   roofShape: {
@@ -1619,13 +1685,19 @@ const INFO_CONTENT = {
   areaWall: {
     title: 'Effective Wind Area — Walls (C&C), Figure 30.3-1',
     html: `<p><span class="src-tag">Sec. 26.2 definition of "Effective Wind Area"</span> &mdash; the span length of the component multiplied by an effective width that need not be less than one-third the span length (this maximizes A and minimizes the magnitude of (GC_p)).</p>
-    <p><span class="src-tag">Figure 30.3-1</span> tabulates (GC_p) for wall Zones 4 and 5 at A &le; 10 ft&sup2; and A &ge; 500 ft&sup2;, with log-linear interpolation between. This calculator applies that interpolation directly.</p>`
+    <p><span class="src-tag">Figure 30.3-1</span> tabulates (GC_p) for wall Zones 4 and 5 at A &le; 10 ft&sup2; and A &ge; 500 ft&sup2;, with log-linear interpolation between. This calculator applies that interpolation directly.</p>
+    <p><strong>Interpolation formula</strong> (for A<sub>lo</sub> &le; A &le; A<sub>hi</sub>, here A<sub>lo</sub>=10 ft&sup2;, A<sub>hi</sub>=500 ft&sup2;):</p>
+    <p>(GC_p)(A) = (GC_p)(A<sub>lo</sub>) + [log&#8321;&#8320;(A/A<sub>lo</sub>) / log&#8321;&#8320;(A<sub>hi</sub>/A<sub>lo</sub>)] &times; [(GC_p)(A<sub>hi</sub>) &minus; (GC_p)(A<sub>lo</sub>)]</p>
+    <p>For A &lt; 10 ft&sup2; or A &gt; 500 ft&sup2;, A is clamped to 10 or 500 ft&sup2; before interpolating (i.e., the tabulated end values are used directly).</p>`
   },
   areaRoof: {
     title: 'Effective Wind Area — Roof (C&C), Figures 30.3-2A/2B-2G',
     html: `<p>Same definition as the wall effective wind area (<span class="src-tag">Sec. 26.2</span>), applied to the roof component/cladding under consideration.</p>
     <p><span class="src-tag">Figure 30.3-2A</span> (&theta; &le; 7&deg;) tabulates (GC_p) for roof Zones 1&prime;, 1, 2, and 3 at A &le; 10 ft&sup2; and A &ge; 500 ft&sup2;, with log-linear interpolation between.</p>
-    <p><span class="src-tag">Figures 30.3-2B/2C</span> (gable, 7&deg; &lt; &theta; &le; 27&deg;) and <span class="src-tag">30.3-2D&ndash;G</span> (hip, 7&deg; &lt; &theta; &le; 45&deg;) tabulate (GC_p) for roof Zones 1, 2, 3 at A &le; 10 ft&sup2; and a zone/sign-specific upper area (100&ndash;300 ft&sup2;), with log-linear interpolation between.</p>`
+    <p><span class="src-tag">Figures 30.3-2B/2C</span> (gable, 7&deg; &lt; &theta; &le; 27&deg;) and <span class="src-tag">30.3-2D&ndash;G</span> (hip, 7&deg; &lt; &theta; &le; 45&deg;) tabulate (GC_p) for roof Zones 1, 2, 3 at A &le; 10 ft&sup2; and a zone/sign-specific upper area (100&ndash;300 ft&sup2;), with log-linear interpolation between.</p>
+    <p><strong>Interpolation formula</strong> (same form as the wall C&amp;C interpolation, for A<sub>lo</sub> &le; A &le; A<sub>hi</sub>):</p>
+    <p>(GC_p)(A) = (GC_p)(A<sub>lo</sub>) + [log&#8321;&#8320;(A/A<sub>lo</sub>) / log&#8321;&#8320;(A<sub>hi</sub>/A<sub>lo</sub>)] &times; [(GC_p)(A<sub>hi</sub>) &minus; (GC_p)(A<sub>lo</sub>)]</p>
+    <p>A outside [A<sub>lo</sub>, A<sub>hi</sub>] is clamped to the nearer bound (the tabulated end value is used directly). A<sub>lo</sub> = 10 ft&sup2; in all cases; A<sub>hi</sub> = 500 ft&sup2; for &theta; &le; 7&deg; (Fig. 30.3-2A) or the zone/sign-specific value (100&ndash;300 ft&sup2;) for sloped roofs (Figs. 30.3-2B&ndash;G).</p>`
   },
   overhang: {
     title: 'Roof Overhangs — Sec. 30.7',
@@ -1648,7 +1720,17 @@ const INFO_CONTENT = {
   },
   stepsInfo: {
     title: 'Velocity Pressure — Step by Step',
-    html: `<p>Every value below is computed from the inputs on the left, with the clause or equation it comes from &mdash; see "Where these formulas come from" at the bottom of this page for the full citation list.</p>`
+    html: `<p>Every value below is computed from the inputs on the left, with the clause or equation it comes from &mdash; see "Where these formulas come from" at the bottom of this page for the full citation list. The formulas actually evaluated, in order, are:</p>
+    <ol>
+      <li><strong>K_h</strong> (<span class="src-tag">Table 26.10-1, Note 1</span>) &mdash; K_h = 2.41(h/z_g)<sup>2/&alpha;</sup> (or the h&lt;15 ft / h&gt;z_g branches), with &alpha; and z_g from the selected Exposure Category; overridden to K_h = 0.70 for Exposure B with h &lt; 30 ft (<span class="src-tag">footnote *</span>). See the "i" button on Exposure Category for the full table.</li>
+      <li><strong>K_e</strong> (<span class="src-tag">Table 26.9-1, Note 2</span>) &mdash; K_e = exp(&minus;0.0000362 &times; z_e), where z_e is the ground elevation entered above (z_e = 0 gives K_e = 1.00).</li>
+      <li><strong>K_d</strong> (<span class="src-tag">Table 26.6-1</span>) &mdash; K_d = 0.85 for buildings, MWFRS and C&amp;C (fixed value, not user-adjustable).</li>
+      <li><strong>K_zt</strong> (<span class="src-tag">Sec. 26.8, Eq. 26.8-1</span>) &mdash; user input; K_zt = 1.0 unless the site meets the Fig. 26.8-1 escarpment/ridge/hill criteria.</li>
+      <li><strong>q_h</strong> (<span class="src-tag">Eq. 26.10-1</span>) &mdash; q_h = 0.00256 &times; K_h &times; K_zt &times; K_e &times; V&sup2; (V in mph, q_h in psf).</li>
+      <li><strong>(GC_pi)</strong> (<span class="src-tag">Table 26.13-1</span>) &mdash; &plusmn;0.18 (Enclosed or Partially Open) or &plusmn;0.55 (Partially Enclosed), per the Enclosure Classification selected above; both signs are evaluated and the worse one is reported for each zone (<span class="src-tag">Note 1</span>).</li>
+      <li><strong>Zone dimension a</strong> (<span class="src-tag">Notation, Figs. 28.3-1 / 30.3-1</span>) &mdash; a = min[0.1 &times; B<sub>min</sub>, 0.4h], not less than max[0.04 &times; B<sub>min</sub>, 3 ft], where B<sub>min</sub> is the least horizontal dimension entered above; capped at 0.8h if &theta; &le; 7&deg; and B<sub>min</sub> &gt; 300 ft.</li>
+    </ol>
+    <p>These six values (K_h, K_e, K_d, K_zt, q_h, (GC_pi)) and a feed every MWFRS and C&amp;C pressure below via <span class="src-tag">Eq. 28.3-1</span>: p = q_h K_d [(GC_pf) &minus; (GC_pi)] and <span class="src-tag">Eq. 30.3-1</span>: p = q_h K_d [(GC_p) &minus; (GC_pi)] &mdash; see the "i" buttons on the MWFRS and C&amp;C section headers for those equations and how (GC_pf)/(GC_p) are obtained.</p>`
   },
   mwfrs: {
     title: 'MWFRS — Envelope Procedure, Figure 28.3-1 / 28.3-2',
