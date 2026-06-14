@@ -34,6 +34,11 @@
   }
   .seg button.active{background:#fff; color:var(--brand); font-weight:600;}
 
+  /* ---- Light variant of .seg, for use on white panel backgrounds ---------- */
+  .seg-light{border-color:var(--brand);}
+  .seg-light button{color:var(--brand);}
+  .seg-light button.active{background:var(--brand); color:#fff;}
+
   main{max-width:100%; margin:0; padding:18px 24px 60px;}
 
   .intro{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px 20px; margin-bottom:18px;}
@@ -164,38 +169,43 @@
   }
   .modal-close:hover{color:var(--ink); background:var(--brand-light);}
 
+  /* ---- Report tables (Input Data / Design Summary, used in #reportContent) - */
+  table.report-input-table td:first-child, table.report-input-table th:first-child{width:34%;}
+  table.report-input-table td:nth-child(2), table.report-input-table th:nth-child(2){text-align:left; width:32%;}
+  table.report-input-table td:nth-child(3), table.report-input-table th:nth-child(3){
+    text-align:left; font-size:.76rem; color:var(--muted); white-space:nowrap;
+  }
+  #reportContent .panel h3{color:var(--brand); font-size:.95rem; border-bottom:1px dashed var(--line); padding-bottom:4px;}
+  #reportContent svg{max-width:100%; height:auto;}
+
   /* ---- Print report ------------------------------------------------------- */
   .print-only{display:none;}
   @media print{
-    header.topbar, .info-btn, footer.sources, .btn, #printBtn{display:none !important;}
-    .grid{display:block;}
-    .panel{break-inside:avoid; border:1px solid #ccc; box-shadow:none;}
+    header.topbar, .info-btn, .btn, footer.sources{display:none !important;}
+    .intro, #projectInfoPanel, #diagramPanel, .grid{display:none !important;}
     .print-only{display:block;}
     body{background:#fff;}
-    main{max-width:100%;}
-    #torsionDetails{display:block !important;}
-    /* SkyCiv-style report pagination: each major section starts on its own page */
-    #diagramPanel, .panel[data-mode], footer.sources{page-break-before:always;}
-    footer.sources{display:block !important; border-top:none; padding:20px 0 0;}
+    main{max-width:100%; padding:0;}
+    #reportContent .panel, #printCover{break-inside:avoid; border:1px solid #ccc; box-shadow:none;}
+    /* Each major report section starts on its own page */
+    #reportContent .report-section{page-break-before:always;}
+    #reportContent .report-section:first-child{page-break-before:avoid;}
   }
 </style>
 </head>
 <body>
 
 <header class="topbar">
-  <div class="topbar-controls" id="calcProcControls">
-    <strong style="font-size:.9rem;">Calculation procedure:</strong>
-    <div class="seg" role="group" aria-label="Calculation procedure">
-      <button type="button" id="modeMWFRS" data-mode-btn="mwfrs" class="active">MWFRS</button>
-      <button type="button" id="modeCC" data-mode-btn="cc">Components &amp; Cladding</button>
-    </div>
+  <div class="topbar-controls">
+    <strong style="font-size:1.05rem;">StructCalc &mdash; Wind Loads (ASCE/SEI 7-22)</strong>
   </div>
   <div class="topbar-controls">
     <div class="seg" role="group" aria-label="Unit system" style="display:none;">
       <button id="unitSI" data-units="SI">SI (kPa, m)</button>
       <button id="unitUS" data-units="US" class="active">US / Imperial (psf, ft)</button>
     </div>
-    <button type="button" id="printBtn" class="btn" style="background:transparent; border:1px solid #9fc6ea;">Print / Export Report</button>
+    <button type="button" id="printBtn" class="btn" style="background:transparent; border:1px solid #9fc6ea;">Export PDF</button>
+    <button type="button" id="exportXlsxBtn" class="btn" style="background:transparent; border:1px solid #9fc6ea;">Export Excel</button>
   </div>
 </header>
 
@@ -214,6 +224,8 @@
     <p style="color:var(--muted); font-size:.8rem;" id="printGenerated"></p>
   </div>
 
+  <div class="print-only" id="reportContent"></div>
+
   <div class="intro">
     <h1>Wind Loads on Low-Rise Buildings &mdash; ASCE/SEI 7-22, Chapters 26&ndash;30</h1>
     <p><span class="badge">Ch. 26 &mdash; Basic Parameters</span><span class="badge">Ch. 28 Envelope Procedure &mdash; MWFRS</span><span class="badge">Ch. 30 &mdash; Components &amp; Cladding</span></p>
@@ -226,6 +238,13 @@
 
   <div class="panel" id="projectInfoPanel">
     <h2>Project Information <span class="ref">Report header</span></h2>
+    <div class="topbar-controls" id="calcProcControls" style="margin-bottom:14px;">
+      <strong style="font-size:.9rem; color:var(--brand);">Calculation procedure:</strong>
+      <div class="seg seg-light" role="group" aria-label="Calculation procedure">
+        <button type="button" id="modeMWFRS" data-mode-btn="mwfrs" class="active">MWFRS</button>
+        <button type="button" id="modeCC" data-mode-btn="cc">Components &amp; Cladding</button>
+      </div>
+    </div>
     <div class="report-meta">
       <div class="field">
         <label for="projectName">Project name</label>
@@ -529,6 +548,7 @@
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="engine.js"></script>
 </body>
 </html>

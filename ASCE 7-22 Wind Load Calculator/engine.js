@@ -325,6 +325,7 @@ function logLerpA(A, Alo, Ahi, lo, hi) {
    UI-ONLY STATE (not persisted via shell bridge)
    ===================================================================== */
 let torsionExpanded = false; // user toggle for "show T-zone pressures for reference" when h <= 30 ft
+let lastResult = null; // most recent compute() output, cached for the PDF/Excel report exporters
 
 /* =====================================================================
    STATE
@@ -897,9 +898,7 @@ const ZONE_LABELS = {
 function pUnit() { return state.unitSystem === 'SI' ? 'kPa' : 'psf'; }
 function pVal(psf) { return state.unitSystem === 'SI' ? psf / PSF_PER_KPA : psf; }
 
-function renderSteps(steps) {
-  const c = document.getElementById('stepsContainer');
-  if (!c) return;
+function stepsTableHTML(steps) {
   // SkyCiv-style "References | Calculations | Results" columnar layout
   let html = '<table class="steps-table"><thead><tr><th>Reference</th><th>Calculation</th><th>Result</th></tr></thead><tbody>';
   steps.forEach(st => {
@@ -910,13 +909,17 @@ function renderSteps(steps) {
       '</tr>';
   });
   html += '</tbody></table>';
-  c.innerHTML = html;
+  return html;
 }
 
-function zoneTable(containerId, rows, dual, labels) {
-  const c = document.getElementById(containerId);
+function renderSteps(steps) {
+  const c = document.getElementById('stepsContainer');
   if (!c) return;
-  if (!rows.length) { c.innerHTML = '<p class="muted">Not applicable.</p>'; return; }
+  c.innerHTML = stepsTableHTML(steps);
+}
+
+function zoneTableHTML(rows, dual, labels) {
+  if (!rows.length) return '<p class="muted">Not applicable.</p>';
   const lbl = labels || ZONE_LABELS;
   let html = '<table><thead><tr><th>Zone</th>';
   if (dual) html += '<th>(GC_p) range</th>'; else html += '<th>(GC_pf)</th>';
@@ -929,7 +932,13 @@ function zoneTable(containerId, rows, dual, labels) {
       '<td>' + fmt(pVal(r.p.min), 2) + '</td><td>' + fmt(pVal(r.p.max), 2) + '</td></tr>';
   });
   html += '</tbody></table>';
-  c.innerHTML = html;
+  return html;
+}
+
+function zoneTable(containerId, rows, dual, labels) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  c.innerHTML = zoneTableHTML(rows, dual, labels);
 }
 
 // Distinct zone labels for the roof overhang table (Sec. 30.7) — '2'/'3' here refer
@@ -949,10 +958,8 @@ const PARAPET_ZONE_LABELS = {
 // C&C parapet table (Sec. 30.9, Load A / Load B) — distinct from zoneTable() because
 // each zone carries two independent (GCp)/pressure pairs (Load A and Load B) rather
 // than a single neg/pos range.
-function ccParapetTable(containerId, rows, labels) {
-  const c = document.getElementById(containerId);
-  if (!c) return;
-  if (!rows.length) { c.innerHTML = '<p class="muted">Not applicable.</p>'; return; }
+function ccParapetTableHTML(rows, labels) {
+  if (!rows.length) return '<p class="muted">Not applicable.</p>';
   const lbl = labels || ZONE_LABELS;
   let html = '<table><thead><tr><th>Zone</th>' +
     '<th>(GC_p) Load A</th><th>p_A, ' + pUnit() + '</th>' +
@@ -963,15 +970,19 @@ function ccParapetTable(containerId, rows, labels) {
       '<td>' + fmt(r.gcB, 2) + '</td><td>' + fmt(pVal(r.pB), 2) + '</td></tr>';
   });
   html += '</tbody></table>';
-  c.innerHTML = html;
+  return html;
+}
+
+function ccParapetTable(containerId, rows, labels) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  c.innerHTML = ccParapetTableHTML(rows, labels);
 }
 
 // Open Buildings — gamma=0/180 deg results table (Figs. 27.3-4/5/6, or Fig. 27.3-7
 // when Fig. 27.3-4 Note 4 applies). Four rows: gamma=0/180 deg x Load Cases A/B.
-function openRoofGammaTable(containerId, gamma0180) {
-  const c = document.getElementById(containerId);
-  if (!c) return;
-  if (!gamma0180) { c.innerHTML = '<p class="muted">See note above.</p>'; return; }
+function openRoofGammaTableHTML(gamma0180) {
+  if (!gamma0180) return '<p class="muted">See note above.</p>';
   let html = '<table><thead><tr><th>Wind Direction</th><th>Load Case</th>' +
     '<th>C_NW</th><th>C_NL</th><th>p_W, ' + pUnit() + '</th><th>p_L, ' + pUnit() + '</th></tr></thead><tbody>';
   const rows = [
@@ -986,13 +997,17 @@ function openRoofGammaTable(containerId, gamma0180) {
       '<td>' + fmt(pVal(row.d.pW), 2) + '</td><td>' + fmt(pVal(row.d.pL), 2) + '</td></tr>';
   });
   html += '</tbody></table>';
-  c.innerHTML = html;
+  return html;
+}
+
+function openRoofGammaTable(containerId, gamma0180) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  c.innerHTML = openRoofGammaTableHTML(gamma0180);
 }
 
 // Open Buildings — gamma=90/270 deg results table (Fig. 27.3-7, 3 zones x Load Cases A/B)
-function openRoofZoneTable(containerId, fig277) {
-  const c = document.getElementById(containerId);
-  if (!c) return;
+function openRoofZoneTableHTML(fig277) {
   let html = '<table><thead><tr><th>Zone (horiz. distance from windward edge)</th>' +
     '<th>C_N, Load Case A</th><th>p_A, ' + pUnit() + '</th>' +
     '<th>C_N, Load Case B</th><th>p_B, ' + pUnit() + '</th></tr></thead><tbody>';
@@ -1002,7 +1017,13 @@ function openRoofZoneTable(containerId, fig277) {
       '<td>' + fmt(fig277.B[i].CN, 2) + '</td><td>' + fmt(pVal(fig277.B[i].p), 2) + '</td></tr>';
   });
   html += '</tbody></table>';
-  c.innerHTML = html;
+  return html;
+}
+
+function openRoofZoneTable(containerId, fig277) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  c.innerHTML = openRoofZoneTableHTML(fig277);
 }
 
 // Open Buildings with Free Roofs (Sec. 27.3.2) — results panel. Shown only when
@@ -1141,6 +1162,10 @@ function renderResults() {
 
   renderDiagram(r);
   renderPrintCover();
+
+  lastResult = r;
+  const reportEl = document.getElementById('reportContent');
+  if (reportEl) reportEl.innerHTML = buildReportHTML(r);
 }
 
 /* =====================================================================
@@ -1161,6 +1186,259 @@ function renderPrintCover() {
   setTxt('printMode', state.mode === 'mwfrs'
     ? 'Main Wind Force Resisting System (MWFRS), Envelope Procedure (Ch. 28)'
     : 'Components & Cladding (Ch. 30)');
+}
+
+/* =====================================================================
+   STEP-BY-STEP ENGINEERING REPORT (PDF / print)
+   Builds a self-contained "calculation package" — Input Data, Design
+   Summary, Step-by-Step Analysis, Diagrams, and Pressure Tables — from
+   the SAME compute()/state data used by the on-screen results. Nothing
+   here is a new calculation; it only re-presents r/state in a SkyCiv /
+   hand-calc style layout (modeled on the "Low-rise Building" sheet of
+   the user-supplied reference workbook, 726933068-Wind-ASCE7-22.xlsx).
+   ===================================================================== */
+
+// Small helper: one row of a 3-column "Parameter | Value | Reference" table.
+function reportRow(label, value, ref) {
+  return '<tr><td>' + label + '</td><td>' + value + '</td><td class="ref-col"><span class="src-tag">' + ref + '</span></td></tr>';
+}
+
+// Input Data section — every row mirrors a labeled input field already on
+// screen (Project Information / Basic Wind Parameters / Building Geometry /
+// C&C Effective Wind Areas / Open Roof inputs), with the same ASCE/SEI 7-22
+// clause references shown next to those fields or in INFO_CONTENT.
+function reportInputDataHTML(r) {
+  const s = state;
+  const lenUnit = s.unitSystem === 'SI' ? 'm' : 'ft';
+  const areaUnit = s.unitSystem === 'SI' ? 'm²' : 'ft²';
+  const spdUnit = s.unitSystem === 'SI' ? 'm/s' : 'mph';
+
+  let rows = '';
+  rows += reportRow('Calculation procedure', s.mode === 'mwfrs'
+    ? 'Main Wind Force Resisting System (MWFRS) &mdash; Envelope Procedure'
+    : 'Components &amp; Cladding (C&amp;C)', 'Ch. 28 / Ch. 30');
+  rows += reportRow('Risk Category', s.riskCategory, 'Table 1.5-1');
+  rows += reportRow('Basic wind speed, V', fmt(speedOut(s.V), 1) + ' ' + spdUnit, 'Sec. 26.5.1, Figs. 26.5-1A&ndash;D');
+  rows += reportRow('Exposure category', EXPOSURE[s.exposure].label, 'Sec. 26.7.3');
+  rows += reportRow('Topographic factor, K<sub>zt</sub>', fmt(s.kzt, 2), 'Sec. 26.8.2, Fig. 26.8-1');
+  rows += reportRow('Ground elevation, z<sub>e</sub>', fmt(lengthOut(s.groundElev), 1) + ' ' + lenUnit, 'Table 26.9-1, Note 2');
+  rows += reportRow('Enclosure classification',
+    GCPI[s.enclosure].label + (GCPI[s.enclosure].noGcpi ? '' : ' &mdash; (GC<sub>pi</sub>) = &plusmn;' + fmt(GCPI[s.enclosure].pos, 2)),
+    'Table 26.13-1');
+  rows += reportRow('Mean roof height, h', fmt(lengthOut(s.h), 2) + ' ' + lenUnit, 'Sec. 26.2');
+  rows += reportRow('Least horizontal dimension', fmt(lengthOut(s.minDim), 2) + ' ' + lenUnit, 'Fig. 28.3-1/30.3-1, Notation');
+  rows += reportRow('Roof type', s.roofType === 'flat' ? 'Flat / low-slope (&theta; &le; 7&deg;)' : 'Gable, hip, or other sloped (&theta; &gt; 7&deg;)', 'Sec. 26.2');
+  if (s.roofType !== 'flat' || s.enclosure === 'openFreeRoof') {
+    rows += reportRow('Roof angle, &theta;', fmt(s.theta, 1) + '&deg;', 'Notation, Fig. 28.3-1/30.3-1');
+  }
+  if (s.roofType !== 'flat' && s.mode === 'cc') {
+    rows += reportRow('Roof shape', s.roofShape === 'hip' ? 'Hip roof' : 'Gable roof',
+      s.roofShape === 'hip' ? 'Figs. 30.3-2D&ndash;G equiv.' : 'Figs. 30.3-2B/2C');
+  }
+  rows += reportRow('Parapet', s.hasParapet
+    ? ('Yes &mdash; height = ' + fmt(lengthOut(s.parapetHeight), 2) + ' ' + lenUnit)
+    : 'No', 'Sec. 27.3.4 / 28.3.4 (MWFRS); Sec. 30.9 (C&amp;C)');
+  if (s.mode === 'cc') {
+    rows += reportRow('Wall C&amp;C effective wind area', fmt(areaOut(s.areaWall), 1) + ' ' + areaUnit, 'Fig. 30.3-1');
+    rows += reportRow('Roof C&amp;C effective wind area', fmt(areaOut(s.areaRoof), 1) + ' ' + areaUnit, 'Figs. 30.3-2A&ndash;2G');
+    rows += reportRow('Roof overhangs', s.hasOverhang ? 'Yes' : 'No', 'Sec. 30.7');
+  }
+  if (s.enclosure === 'openFreeRoof') {
+    rows += reportRow('Free roof shape',
+      s.openRoofShape === 'monoslope' ? 'Monoslope' : (s.openRoofShape === 'pitched' ? 'Pitched' : 'Troughed'),
+      'Figs. 27.3-4/5/6');
+    rows += reportRow('Wind flow condition', s.openWindFlow === 'obstructed' ? 'Obstructed' : 'Clear', 'Figs. 27.3-4/5/6, Note 2');
+    rows += reportRow('Roof plan dimension, L', fmt(lengthOut(s.openL), 2) + ' ' + lenUnit, 'Fig. 27.3-4, Notation');
+  }
+
+  return '<table class="report-input-table"><thead><tr><th>Parameter</th><th>Value</th><th>Reference</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+// Design Summary section — the same governing coefficients shown in the
+// on-screen "Results Summary" cards (q_h, K_h, K_e, (GC_pi), zone dim. a),
+// plus K_d and K_zt for completeness. Values come directly from r/state.
+function reportDesignSummaryHTML(r) {
+  const s = state;
+  let rows = '';
+  rows += '<tr><td>Velocity pressure at mean roof height, q<sub>h</sub></td><td>' + fmt(pVal(r.qh), 2) + ' ' + pUnit() + '</td></tr>';
+  rows += '<tr><td>Velocity pressure exposure coefficient, K<sub>h</sub></td><td>' + fmt(r.kh, 3) + '</td></tr>';
+  rows += '<tr><td>Ground elevation factor, K<sub>e</sub></td><td>' + fmt(r.ke, 3) + '</td></tr>';
+  rows += '<tr><td>Wind directionality factor, K<sub>d</sub></td><td>' + fmt(r.kd, 2) + '</td></tr>';
+  rows += '<tr><td>Topographic factor, K<sub>zt</sub></td><td>' + fmt(s.kzt, 2) + '</td></tr>';
+  if (!GCPI[s.enclosure].noGcpi) {
+    rows += '<tr><td>Internal pressure coefficient, (GC<sub>pi</sub>)</td><td>&plusmn;' + fmt(r.gcpi.pos, 2) + '</td></tr>';
+  }
+  rows += '<tr><td>Zone dimension, a</td><td>' + fmt(lengthOut(r.a), 2) + ' ' + (s.unitSystem === 'SI' ? 'm' : 'ft') + '</td></tr>';
+  return '<table class="report-input-table"><thead><tr><th>Quantity</th><th>Value</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+// MWFRS Design Pressures section (Ch. 28 Envelope Procedure) — identical
+// tables/headings/citations to the on-screen data-mode="mwfrs" panel.
+function reportMWFRSHTML(r) {
+  const s = state;
+  let html = '<h3>Load Case 1 (Zones 1&ndash;4, 1E&ndash;4E) &mdash; &theta;-dependent <span class="ref">Fig. 28.3-1</span></h3>' +
+    zoneTableHTML(r.mwfrsLC1, false) +
+    '<h3>Load Case 2 (Zones 1&ndash;6, 1E&ndash;6E) &mdash; all &theta; <span class="ref">Fig. 28.3-1</span></h3>' +
+    zoneTableHTML(r.mwfrsLC2, false);
+
+  const torsionNote = r.torsionApplies
+    ? 'Mean roof height h = ' + fmt(lengthOut(s.h), 1) + ' ' + (s.unitSystem === 'SI' ? 'm' : 'ft') + ' &gt; 30 ft &rarr; Load Cases 3 and 4 (Fig. 28.3-2) are required unless one of the exceptions in Sec. 28.3.2 applies (e.g., torsional sensitivity not significant per ASCE 7 Ch. 26 criteria).'
+    : 'Mean roof height h &le; 30 ft &mdash; torsional Load Cases 3 and 4 (Fig. 28.3-2) are not required for this building per Sec. 28.3.2 (shown below for reference).';
+
+  html += '<h3>Torsional Load Cases 3 &amp; 4 (T-zones) <span class="ref">Fig. 28.3-2</span></h3>' +
+    '<div class="alert info">' + torsionNote + '</div>' +
+    '<p class="muted" style="margin-top:6px;">Load Case 3 = Load Case 1 zone pressures above, plus the following T-zones:</p>' + zoneTableHTML(r.mwfrsLC3, false) +
+    '<p class="muted" style="margin-top:6px;">Load Case 4 = Load Case 2 zone pressures above, plus the following T-zones:</p>' + zoneTableHTML(r.mwfrsLC4, false);
+  return html;
+}
+
+// C&C Design Pressures section (Ch. 30) — identical tables/headings/
+// citations to the on-screen data-mode="cc" + overhang panels.
+function reportCCHTML(r) {
+  const s = state;
+  let html = '<h3>Walls &mdash; Zones 4 &amp; 5 <span class="ref">Fig. 30.3-1</span></h3>' + zoneTableHTML(r.ccWall, true);
+
+  const roofHeading = (s.theta <= 7)
+    ? 'Roof &mdash; Zones 1&prime;, 1, 2, 3 <span class="ref">Fig. 30.3-2A, &theta; &le; 7&deg;</span>'
+    : 'Roof &mdash; Zones 1, 2, 3 <span class="ref">' +
+      (s.roofShape === 'hip' ? 'Figs. 30.3-2D&ndash;G equiv.' : 'Figs. 30.3-2B/2C') +
+      ', &theta; &gt; 7&deg;</span>';
+  html += '<h3>' + roofHeading + '</h3>';
+  if (s.theta > 7 && r.roofCapped) {
+    html += '<div class="alert warn">' + (s.roofShape === 'hip'
+      ? 'Roof angle &theta; &gt; 45&deg;: Figures 30.3-2D&ndash;G (hip) do not extend past &theta; = 45&deg;. The &theta; = 45&deg; coefficients are used as a capped approximation &mdash; verify against the Standard for roofs steeper than 45&deg;.'
+      : 'Roof angle &theta; &gt; 27&deg;: Figures 30.3-2B/2C (gable) do not extend past &theta; = 27&deg;. The &theta; = 20&deg;&ndash;27&deg; (Fig. 30.3-2C) coefficients are used as a capped approximation &mdash; verify against the Standard for roofs steeper than 27&deg;.') + '</div>';
+  }
+  html += zoneTableHTML(r.ccRoof, true);
+
+  if (s.hasOverhang) {
+    html += '<h3>Roof Overhangs &mdash; Net (Top + Bottom) <span class="ref">Sec. 30.7</span></h3>' +
+      '<p class="muted" style="margin:0 0 10px;">Net (GC<sub>p</sub>) = roof-surface (GC<sub>p</sub>) (top of overhang) &minus; wall-zone (GC<sub>p</sub>) (bottom/soffit), evaluated at the Roof C&amp;C effective wind area above. No (GC<sub>pi</sub>) term applies.</p>' +
+      zoneTableHTML(r.ccOverhang, true, OVERHANG_ZONE_LABELS);
+  }
+  return html;
+}
+
+// Parapet Wind Pressures section (Sec. 27.3.4/28.3.4 MWFRS + Sec. 30.9 C&C) —
+// identical cards/tables/citations to the on-screen #parapetSection.
+function reportParapetHTML(r) {
+  const s = state;
+  const p = r.parapet;
+  const lenUnit = s.unitSystem === 'SI' ? 'm' : 'ft';
+  let html = '<h3>MWFRS &mdash; Solid Parapet <span class="ref">Eq. 27.3-3, (GC<sub>pn</sub>) = +1.5 / &minus;1.0</span></h3>';
+  html += '<table class="report-input-table"><tbody>' +
+    '<tr><td>z (top of parapet)</td><td>' + fmt(lengthOut(p.zParapet), 1) + ' ' + lenUnit + '</td></tr>' +
+    '<tr><td>K<sub>h</sub> at parapet</td><td>' + fmt(p.khp, 3) + '</td></tr>' +
+    '<tr><td>q<sub>p</sub></td><td>' + fmt(pVal(p.qp), 2) + ' ' + pUnit() + '</td></tr>' +
+    '<tr><td>p<sub>p</sub>, windward (GC<sub>pn</sub>=+1.5)</td><td>' + fmt(pVal(p.ppWindward), 2) + ' ' + pUnit() + '</td></tr>' +
+    '<tr><td>p<sub>p</sub>, leeward (GC<sub>pn</sub>=&minus;1.0)</td><td>' + fmt(pVal(p.ppLeeward), 2) + ' ' + pUnit() + '</td></tr>' +
+    '<tr><td>Total combined p<sub>p</sub></td><td>' + fmt(pVal(p.ppTotal), 2) + ' ' + pUnit() + '</td></tr>' +
+    '</tbody></table>';
+  html += '<p class="muted" style="margin:10px 0;">The Envelope Procedure (Ch. 28) parapet provision is applied here using the same (GC<sub>pn</sub>) values as Sec. 27.3.4, cited provisionally as Sec. 28.3.4 &mdash; this Ch.27&rarr;Ch.28 cross-reference is engineering judgment, unverified; see the on-screen "i" button for details.</p>';
+  html += '<h3>C&amp;C &mdash; Walls Zones 4 &amp; 5, Load A / Load B <span class="ref">Eq. 30.9-1</span></h3>' +
+    '<p class="muted" style="margin:0 0 10px;">Load A = front-face wall (GC<sub>p</sub>)<sub>pos</sub> + back-face roof (GC<sub>p</sub>)<sub>neg</sub> (paired zone). Load B = back-face wall (GC<sub>p</sub>)<sub>pos</sub> + front-face wall (GC<sub>p</sub>)<sub>neg</sub> (same zone). q<sub>p</sub> above is used for both.</p>' +
+    ccParapetTableHTML(p.ccParapet, PARAPET_ZONE_LABELS);
+  return html;
+}
+
+// Open Building — Free Roof Pressures section (Sec. 27.3.2, Eq. 27.3-2) —
+// identical cards/notes/tables/citations to the on-screen #openRoofSection.
+function reportOpenRoofHTML(r) {
+  const o = r.openRoof;
+  let html = '<table class="report-input-table"><tbody>' +
+    '<tr><td>Gust factor, G</td><td>' + fmt(o.G, 2) + '</td></tr>' +
+    '<tr><td>h / L</td><td>' + fmt(o.hL, 3) + '</td></tr>' +
+    '</tbody></table>';
+
+  const msgs = [];
+  if (o.thetaOutOfRange) {
+    msgs.push('Roof angle &theta; = ' + fmt(o.theta, 1) + '&deg; exceeds the &theta; &le; 45&deg; applicability limit of Figs. 27.3-4/5/6/7 &mdash; results are not valid; verify against the Standard.');
+  }
+  if (o.note4Applies) {
+    msgs.push('h/L = ' + fmt(o.hL, 3) + ' and &theta; = ' + fmt(o.theta, 1) + '&deg; &lt; 5&deg; &rarr; per Fig. 27.3-4, Note 4, the &gamma; = 0&deg;/180&deg; loading uses the Fig. 27.3-7 coefficients (table below) instead of Fig. 27.3-4.' +
+      (o.shape !== 'monoslope' ? ' This Note 4 substitution is stated for monoslope roofs (Fig. 27.3-4); its applicability to ' + o.shape + ' roofs (Figs. 27.3-5/27.3-6) was not confirmed in the source review &mdash; engineering judgment, verify against the Standard.' : ''));
+  } else if (o.hlOutOfRange) {
+    msgs.push('h/L = ' + fmt(o.hL, 3) + ' is outside the 0.25 &le; h/L &le; 1.0 range given in the Fig. 27.3-4 Notation.' +
+      (o.shape !== 'monoslope' ? ' This range is assumed to also apply to Fig. 27.3-' + (o.shape === 'pitched' ? '5' : '6') + ' (not independently confirmed in the source review) &mdash; ' : ' ') +
+      ' The coefficients shown use the nearest tabulated &theta; row (clamped) and should be verified against the Standard for this h/L.');
+  }
+  if (o.pitchedTroughedBelowRange) {
+    msgs.push('&theta; = ' + fmt(o.theta, 1) + '&deg; is below the tabulated range of Fig. 27.3-' + (o.shape === 'troughed' ? '6' : '5') + ' (rows start at &theta; = 7.5&deg;). The &theta; = 7.5&deg; row is used as a clamped approximation &mdash; engineering judgment, verify against the Standard.');
+  }
+  if (msgs.length) {
+    html += '<div class="alert warn">' + msgs.map(m => '<p style="margin:2px 0;">' + m + '</p>').join('') + '</div>';
+  }
+
+  const figNum = o.shape === 'monoslope' ? '27.3-4' : (o.shape === 'pitched' ? '27.3-5' : '27.3-6');
+  html += '<h3>Wind Normal to Ridge/Span &mdash; &gamma; = 0&deg;/180&deg; <span class="ref">' +
+    (o.note4Applies ? 'Fig. 27.3-7 (per Fig. 27.3-4 Note 4)' : 'Fig. ' + figNum) + '</span></h3>';
+  html += o.note4Applies
+    ? '<p class="muted">Per Note 4, use the &gamma; = 90&deg;/270&deg; (Fig. 27.3-7) table below for this loading direction.</p>'
+    : openRoofGammaTableHTML(o.gamma0180);
+
+  html += '<h3>Wind Parallel to Ridge/Span &mdash; &gamma; = 90&deg;/270&deg; <span class="ref">Fig. 27.3-7</span></h3>' +
+    '<p class="muted" style="margin:0 0 10px;">Applies to monoslope, pitched, and troughed free roofs for all h/L, &theta; &le; 45&deg;. Zones are measured horizontally from the windward roof edge. Load Cases A and B per Fig. 27.3-7.</p>' +
+    openRoofZoneTableHTML(o.fig277);
+  return html;
+}
+
+// Assembles the full printable report from r/state. Sections are numbered
+// sequentially and conditional sections (Parapet, Open Roof) are appended
+// only when applicable — mirrors what is actually shown on screen.
+function buildReportHTML(r) {
+  const s = state;
+  let secNum = 0;
+  const section = (title, ref, body) => {
+    secNum++;
+    return '<div class="panel report-section"><h2>' + secNum + '. ' + title +
+      (ref ? ' <span class="ref">' + ref + '</span>' : '') + '</h2>' + body + '</div>';
+  };
+
+  let html = '';
+
+  html += section('Project &amp; Input Data', 'ASCE/SEI 7-22, Chapters 26&ndash;30', reportInputDataHTML(r));
+  html += section('Design Summary', null, reportDesignSummaryHTML(r));
+  html += section('Step-by-Step Calculation', 'ASCE/SEI 7-22 Ch. 26', stepsTableHTML(r.steps));
+
+  // Diagrams — clone the live elevation/plan SVGs (already rendered with the
+  // current inputs/zone overlay) under new ids so the live #elevSvg/#planSvg
+  // bindings in renderDiagram() are unaffected.
+  const elevEl = document.getElementById('elevSvg');
+  const planEl = document.getElementById('planSvg');
+  const noteEl = document.getElementById('enclosureNote');
+  const zoneKeyEl = document.getElementById('ccZoneKey');
+  const elevHTML = elevEl ? elevEl.outerHTML.replace('id="elevSvg"', 'id="reportElevSvg"') : '';
+  const planHTML = planEl ? planEl.outerHTML.replace('id="planSvg"', 'id="reportPlanSvg"') : '';
+  let diagBody = '<div style="display:flex; gap:16px; flex-wrap:wrap;">' +
+    '<div style="flex:1; min-width:240px;"><div class="muted" style="font-size:.8rem; font-weight:600; margin-bottom:4px;">Elevation</div>' + elevHTML + '</div>' +
+    '<div style="flex:1; min-width:240px;"><div class="muted" style="font-size:.8rem; font-weight:600; margin-bottom:4px;">Plan (roof / footprint)</div>' + planHTML + '</div></div>';
+  if (noteEl && noteEl.innerHTML) diagBody += '<p class="muted" style="margin-top:10px;">' + noteEl.innerHTML + '</p>';
+  if (zoneKeyEl && zoneKeyEl.innerHTML) diagBody += '<p class="muted" style="font-size:.8rem;">' + zoneKeyEl.innerHTML + '</p>';
+  html += section('Building Geometry &amp; Pressure Zones', 'Figs. 28.3-1/30.3-1/30.3-2A&ndash;G, Notation', diagBody);
+
+  if (s.mode === 'mwfrs') {
+    html += section('MWFRS Design Pressures &mdash; Envelope Procedure', 'Eq. 28.3-1, Figs. 28.3-1/28.3-2', reportMWFRSHTML(r));
+  } else {
+    html += section('Components &amp; Cladding Design Pressures', 'Eq. 30.3-1, Figs. 30.3-1/30.3-2A&ndash;2G', reportCCHTML(r));
+  }
+
+  if (s.hasParapet && r.parapet) {
+    html += section('Parapet Wind Pressures', 'Sec. 27.3.4/28.3.4 (MWFRS); Sec. 30.9 (C&amp;C)', reportParapetHTML(r));
+  }
+
+  if (r.openRoof) {
+    html += section('Open Building &mdash; Free Roof Pressures', 'Sec. 27.3.2, Eq. 27.3-2: p = q<sub>h</sub>K<sub>d</sub>GC<sub>N</sub>', reportOpenRoofHTML(r));
+  }
+
+  // References — reuse the exact "Where these formulas come from" citation
+  // list from the footer (same content the on-screen module shows), so the
+  // report's reference list never drifts from the live citations.
+  const sourcesUl = document.querySelector('footer.sources .inner ul');
+  if (sourcesUl) {
+    html += section('References &mdash; Where These Formulas Come From', null, sourcesUl.outerHTML);
+  }
+
+  return html;
 }
 
 /* =====================================================================
@@ -1615,7 +1893,7 @@ const INFO_CONTENT = {
       <li><span class="src-tag">Fig. 27.3-4</span> &mdash; Monoslope, &gamma; = 0&deg;/180&deg;, 0.25 &le; h/L &le; 1.0, &theta; &le; 45&deg;.</li>
       <li><span class="src-tag">Fig. 27.3-5</span> &mdash; Pitched, &gamma; = 0&deg;/180&deg; (one table applies to both, by roof symmetry).</li>
       <li><span class="src-tag">Fig. 27.3-6</span> &mdash; Troughed, &gamma; = 0&deg;/180&deg; (one table applies to both, by roof symmetry).</li>
-      <li><span class="src-tag">Fig. 27.3-7</span> &mdash; &gamma; = 90&deg;/270&deg; (wind parallel to ridge/valley), applies to all three roof shapes, all h/L, &theta; &le; 45&deg;, in 3 zones based on horizontal distance from the windward edge.</li>
+      <li><span class="src-tag">Fig. 27.3-7</span> &mdash; &gamma; = 90&deg;/270&deg; (wind parallel to ridge/span), applies to all three roof shapes, all h/L, &theta; &le; 45&deg;, in 3 zones based on horizontal distance from the windward edge.</li>
     </ul>
     <p>Linear interpolation for intermediate &theta; between tabulated rows (7.5&deg;&ndash;45&deg;) is permitted by <span class="src-tag">Fig. 27.3-4, Note 3</span> and applied here for all four figures.</p>
     <p>Both Load Cases A and B, and both wind directions (&gamma; = 0&deg;/180&deg; and 90&deg;/270&deg;), must be evaluated to determine the controlling design pressures &mdash; per the figure notes, the case producing the largest absolute pressure for each region of the roof governs.</p>`
@@ -1794,6 +2072,203 @@ function bindPrintButton() {
   if (btn) {
     btn.addEventListener('click', () => window.print());
   }
+
+  const xlsxBtn = document.getElementById('exportXlsxBtn');
+  if (xlsxBtn) {
+    xlsxBtn.addEventListener('click', () => exportReportXLSX(lastResult));
+  }
+}
+
+/* =====================================================================
+   EXCEL EXPORT (SheetJS)
+   Mirrors the printable report (buildReportHTML) section-for-section,
+   as plain arrays-of-arrays (AOA) — same r/state data, same labels and
+   ASCE/SEI 7-22 clause references, no new calculations or citations.
+   ===================================================================== */
+
+// Strips HTML tags/entities down to plain text (for Excel cell values).
+// Uses a detached <div> so &mdash;/&deg;/<sub> etc. decode correctly.
+function stripHtml(html) {
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  return (div.textContent || div.innerText || '').replace(/\s+/g, ' ').trim();
+}
+
+// AOA mirror of zoneTableHTML(rows, dual, labels) — same columns/labels.
+function zoneTableAOA(rows, dual, labels) {
+  const lbl = labels || ZONE_LABELS;
+  const header = dual
+    ? ['Zone', '(GCp) range', 'p_min (outward / suction), ' + pUnit(), 'p_max (inward / positive), ' + pUnit()]
+    : ['Zone', '(GCpf)', 'p_min (outward / suction), ' + pUnit(), 'p_max (inward / positive), ' + pUnit()];
+  const aoa = [header];
+  rows.forEach(r => {
+    const gcStr = dual
+      ? fmt(r.gcp.neg, 2) + ' to ' + fmt(r.gcp.pos, 2)
+      : fmt(r.gcpf, 2);
+    aoa.push([lbl[r.zone] || r.zone, gcStr, fmt(pVal(r.p.min), 2), fmt(pVal(r.p.max), 2)]);
+  });
+  return aoa;
+}
+
+// AOA mirror of ccParapetTableHTML(rows, labels).
+function ccParapetAOA(rows, labels) {
+  const lbl = labels || ZONE_LABELS;
+  const aoa = [['Zone', '(GCp) Load A', 'p_A, ' + pUnit(), '(GCp) Load B', 'p_B, ' + pUnit()]];
+  rows.forEach(r => {
+    aoa.push([lbl[r.zone] || r.zone, fmt(r.gcA, 2), fmt(pVal(r.pA), 2), fmt(r.gcB, 2), fmt(pVal(r.pB), 2)]);
+  });
+  return aoa;
+}
+
+// AOA mirror of openRoofGammaTableHTML(gamma0180).
+function openRoofGammaAOA(gamma0180) {
+  const aoa = [['Wind Direction', 'Load Case', 'C_NW', 'C_NL', 'p_W, ' + pUnit(), 'p_L, ' + pUnit()]];
+  if (!gamma0180) return aoa;
+  const rows = [
+    { lbl: 'γ = 0°', lc: 'A', d: gamma0180.gamma0.A },
+    { lbl: 'γ = 0°', lc: 'B', d: gamma0180.gamma0.B },
+    { lbl: 'γ = 180°', lc: 'A', d: gamma0180.gamma180.A },
+    { lbl: 'γ = 180°', lc: 'B', d: gamma0180.gamma180.B }
+  ];
+  rows.forEach(row => {
+    aoa.push([row.lbl, row.lc, fmt(row.d.CNW, 2), fmt(row.d.CNL, 2), fmt(pVal(row.d.pW), 2), fmt(pVal(row.d.pL), 2)]);
+  });
+  return aoa;
+}
+
+// AOA mirror of openRoofZoneTableHTML(fig277).
+function openRoofZoneAOA(fig277) {
+  const aoa = [['Zone (horiz. distance from windward edge)', 'C_N, Load Case A', 'p_A, ' + pUnit(), 'C_N, Load Case B', 'p_B, ' + pUnit()]];
+  fig277.zoneKeys.forEach((zk, i) => {
+    aoa.push([fig277.zoneLabels[zk], fmt(fig277.A[i].CN, 2), fmt(pVal(fig277.A[i].p), 2), fmt(fig277.B[i].CN, 2), fmt(pVal(fig277.B[i].p), 2)]);
+  });
+  return aoa;
+}
+
+// AOA for the "Input Data" sheet — strips HTML from the same row content
+// produced by reportInputDataHTML(), so values/labels/refs stay in sync.
+function inputDataAOA(r) {
+  const html = reportInputDataHTML(r);
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  const aoa = [['Parameter', 'Value', 'Reference']];
+  div.querySelectorAll('tbody tr').forEach(tr => {
+    const cells = tr.querySelectorAll('td');
+    aoa.push([stripHtml(cells[0].innerHTML), stripHtml(cells[1].innerHTML), stripHtml(cells[2].innerHTML)]);
+  });
+  return aoa;
+}
+
+// AOA for the "Design Summary" sheet — strips HTML from reportDesignSummaryHTML().
+function designSummaryAOA(r) {
+  const html = reportDesignSummaryHTML(r);
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  const aoa = [['Quantity', 'Value']];
+  div.querySelectorAll('tbody tr').forEach(tr => {
+    const cells = tr.querySelectorAll('td');
+    aoa.push([stripHtml(cells[0].innerHTML), stripHtml(cells[1].innerHTML)]);
+  });
+  return aoa;
+}
+
+// AOA for the "Calc Steps" sheet — mirrors stepsTableHTML(r.steps).
+function stepsAOA(steps) {
+  const aoa = [['Reference', 'Calculation', 'Formula / Substitution', 'Result']];
+  steps.forEach(st => {
+    aoa.push([stripHtml(st.clause), stripHtml(st.label), stripHtml(st.formula), stripHtml(st.result)]);
+  });
+  return aoa;
+}
+
+// AOA for the "References" sheet — extracted from the live footer citation
+// list (same source used by buildReportHTML's References section), one row
+// per <li>. No new citation text is generated here.
+function referencesAOA() {
+  const aoa = [['Where these formulas come from']];
+  const ul = document.querySelector('footer.sources .inner ul');
+  if (ul) {
+    ul.querySelectorAll('li').forEach(li => aoa.push([stripHtml(li.innerHTML)]));
+  }
+  return aoa;
+}
+
+// Appends an AOA as a new sheet, with a leading title row and a blank
+// separator row before the header row (for readability in Excel).
+function appendAoaSheet(wb, sheetName, title, aoa) {
+  const full = [[title], [], ...aoa];
+  const ws = XLSX.utils.aoa_to_sheet(full);
+  ws['!cols'] = [{ wch: 42 }, { wch: 28 }, { wch: 40 }, { wch: 40 }, { wch: 14 }];
+  XLSX.utils.book_append_sheet(wb, ws, sheetName.substring(0, 31));
+}
+
+// Builds and downloads the full workbook mirroring buildReportHTML(r).
+// r should be lastResult (the most recent compute() output).
+function exportReportXLSX(r) {
+  if (typeof XLSX === 'undefined') {
+    alert('Excel export library failed to load (requires internet access to cdnjs.cloudflare.com). Please check your connection and try again.');
+    return;
+  }
+  if (!r) {
+    alert('No results to export yet — please check the inputs above.');
+    return;
+  }
+  const s = state;
+  const wb = XLSX.utils.book_new();
+
+  appendAoaSheet(wb, 'Input Data', 'ASCE/SEI 7-22 Wind Load Calculation — Input Data', inputDataAOA(r));
+  appendAoaSheet(wb, 'Design Summary', 'Design Summary', designSummaryAOA(r));
+  appendAoaSheet(wb, 'Calc Steps', 'Step-by-Step Calculation (ASCE/SEI 7-22 Ch. 26)', stepsAOA(r.steps));
+
+  if (s.mode === 'mwfrs') {
+    appendAoaSheet(wb, 'MWFRS LC1', 'MWFRS Load Case 1 (Zones 1-4, 1E-4E) — Fig. 28.3-1', zoneTableAOA(r.mwfrsLC1, false));
+    appendAoaSheet(wb, 'MWFRS LC2', 'MWFRS Load Case 2 (Zones 1-6, 1E-6E) — Fig. 28.3-1', zoneTableAOA(r.mwfrsLC2, false));
+    appendAoaSheet(wb, 'MWFRS LC3 (T-zones)', 'MWFRS Load Case 3 T-zones — Fig. 28.3-2' + (r.torsionApplies ? '' : ' (h <= 30 ft: not required, shown for reference)'), zoneTableAOA(r.mwfrsLC3, false));
+    appendAoaSheet(wb, 'MWFRS LC4 (T-zones)', 'MWFRS Load Case 4 T-zones — Fig. 28.3-2' + (r.torsionApplies ? '' : ' (h <= 30 ft: not required, shown for reference)'), zoneTableAOA(r.mwfrsLC4, false));
+  } else {
+    appendAoaSheet(wb, 'C&C Walls', 'C&C Walls — Zones 4 & 5 — Fig. 30.3-1', zoneTableAOA(r.ccWall, true));
+    appendAoaSheet(wb, 'C&C Roof', 'C&C Roof — Fig. 30.3-2' + (s.theta <= 7 ? 'A (theta <= 7 deg)' : (s.roofShape === 'hip' ? 'D-G equiv. (hip)' : 'B/C (gable), theta > 7 deg')), zoneTableAOA(r.ccRoof, true));
+    if (s.hasOverhang) {
+      appendAoaSheet(wb, 'C&C Overhangs', 'Roof Overhangs — Net (Top + Bottom) — Sec. 30.7', zoneTableAOA(r.ccOverhang, true, OVERHANG_ZONE_LABELS));
+    }
+  }
+
+  if (s.hasParapet && r.parapet) {
+    const p = r.parapet;
+    const lenUnit = s.unitSystem === 'SI' ? 'm' : 'ft';
+    const parapetSummary = [
+      ['Quantity', 'Value'],
+      ['z (top of parapet), ' + lenUnit, fmt(lengthOut(p.zParapet), 1)],
+      ['K_h at parapet', fmt(p.khp, 3)],
+      ['q_p, ' + pUnit(), fmt(pVal(p.qp), 2)],
+      ['p_p, windward (GCpn=+1.5), ' + pUnit(), fmt(pVal(p.ppWindward), 2)],
+      ['p_p, leeward (GCpn=-1.0), ' + pUnit(), fmt(pVal(p.ppLeeward), 2)],
+      ['Total combined p_p, ' + pUnit(), fmt(pVal(p.ppTotal), 2)],
+      [],
+      ['C&C Walls — Zones 4 & 5, Load A / Load B — Eq. 30.9-1']
+    ];
+    appendAoaSheet(wb, 'Parapet', 'Parapet Wind Pressures — Sec. 27.3.4/28.3.4 (MWFRS), Sec. 30.9 (C&C)',
+      parapetSummary.concat(ccParapetAOA(p.ccParapet, PARAPET_ZONE_LABELS)));
+  }
+
+  if (r.openRoof) {
+    const o = r.openRoof;
+    const summary = [
+      ['Quantity', 'Value'],
+      ['Gust factor, G', fmt(o.G, 2)],
+      ['h / L', fmt(o.hL, 3)],
+      [],
+      ['Wind Normal to Ridge/Span — gamma = 0/180 deg' + (o.note4Applies ? ' (per Fig. 27.3-4 Note 4, uses Fig. 27.3-7 table)' : ' — Fig. ' + (o.shape === 'monoslope' ? '27.3-4' : (o.shape === 'pitched' ? '27.3-5' : '27.3-6')))]
+    ];
+    let aoa = summary.concat(o.note4Applies ? [] : openRoofGammaAOA(o.gamma0180));
+    aoa = aoa.concat([[], ['Wind Parallel to Ridge/Span — gamma = 90/270 deg — Fig. 27.3-7']]).concat(openRoofZoneAOA(o.fig277));
+    appendAoaSheet(wb, 'Open Roof', 'Open Building — Free Roof Pressures — Sec. 27.3.2, Eq. 27.3-2', aoa);
+  }
+
+  appendAoaSheet(wb, 'References', 'Where These Formulas Come From', referencesAOA());
+
+  const nameBase = (s.projectName || 'Wind_Load_Report').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'Wind_Load_Report';
+  XLSX.writeFile(wb, nameBase + '_ASCE7-22_Wind.xlsx');
 }
 
 /* =====================================================================
