@@ -327,7 +327,7 @@
 
   <div class="intro">
     <h1>Wind Loads on Low-Rise Buildings &mdash; ASCE/SEI 7-22, Chapters 26&ndash;30</h1>
-    <p><span class="badge">Ch. 26 &mdash; Basic Parameters</span><span class="badge">Ch. 28 Envelope Procedure &mdash; MWFRS</span><span class="badge">Ch. 30 &mdash; Components &amp; Cladding</span></p>
+    <p><span class="badge">Ch. 26 &mdash; Basic Parameters</span><span class="badge">Ch. 27 Directional Procedure &mdash; MWFRS</span><span class="badge">Ch. 28 Envelope Procedure &mdash; MWFRS</span><span class="badge">Ch. 30 &mdash; Components &amp; Cladding</span></p>
     <p>This module calculates main wind force resisting system (MWFRS) and components &amp; cladding (C&amp;C) design wind pressures for <strong>enclosed or partially enclosed, low-rise rectangular buildings</strong> (mean roof height h &le; 60 ft, with h not exceeding the least horizontal dimension) using the <strong>Envelope Procedure</strong> of ASCE/SEI 7-22 Chapter 28 (MWFRS) and Chapter 30 (C&amp;C), per the applicability conditions of Sec. 28.3.1 / 30.3.1.</p>
     <p>Use the <strong>MWFRS / Components &amp; Cladding</strong> switch at the top of the page to choose which procedure to run &mdash; only the inputs and results relevant to that procedure are shown.</p>
     <p>The calculation chain is: velocity pressure exposure coefficient K<sub>h</sub> (Table 26.10-1) &rarr; ground elevation factor K<sub>e</sub> (Table 26.9-1) &rarr; velocity pressure q<sub>h</sub> (Eq. 26.10-1) &rarr; internal pressure coefficient (GC<sub>pi</sub>) (Table 26.13-1) &rarr; external pressure coefficients (GC<sub>pf</sub>) for MWFRS (Fig. 28.3-1/28.3-2) and (GC<sub>p</sub>) for C&amp;C (Fig. 30.3-1/30.3-2A) &rarr; design pressures p (Eq. 28.3-1 / 30.3-1). Every value is computed explicitly with its clause/equation/table/figure reference.</p>
@@ -417,8 +417,12 @@
             <input type="number" id="h" step="any" min="0">
           </div>
           <div class="field">
-            <label for="minDim">Least horizontal dimension (<span id="lblMinDim">ft</span>)<button type="button" class="info-btn" data-info="minDim" aria-label="Learn more">i</button></label>
+            <label for="minDim">Bldg. width, B — perpendicular to wind (<span id="lblMinDim">ft</span>)<button type="button" class="info-btn" data-info="minDim" aria-label="Learn more">i</button></label>
             <input type="number" id="minDim" step="any" min="0">
+          </div>
+          <div class="field" id="buildingLRow" style="display:none;">
+            <label for="buildingL">Bldg. length, L — parallel to wind (<span id="lblBuildingL">ft</span>)</label>
+            <input type="number" id="buildingL" step="any" min="0">
           </div>
           <div class="field" id="roofTypeField">
             <label for="roofType">Roof type<button type="button" class="info-btn" data-info="roofType" aria-label="Learn more">i</button></label>
@@ -606,20 +610,51 @@
   </div>
 
   <div class="panel" data-mode="mwfrs">
-    <h2>MWFRS Design Pressures &mdash; Envelope Procedure <span class="ref">Eq. 28.3-1, Fig. 28.3-1/28.3-2</span><button type="button" class="info-btn" data-info="mwfrs" aria-label="Learn more">i</button></h2>
-    <h3>Load Case 1 (Zones 1&ndash;4, 1E&ndash;4E) &mdash; &theta;-dependent</h3>
-    <div id="mwfrsLC1Table"></div>
-    <h3>Load Case 2 (Zones 1&ndash;6, 1E&ndash;6E) &mdash; all &theta;</h3>
-    <div id="mwfrsLC2Table"></div>
-    <h3>Torsional Load Cases 3 &amp; 4 (T-zones) <span class="ref">Fig. 28.3-2</span></h3>
-    <div class="alert info" id="torsionNote"></div>
-    <div id="torsionDetails">
-      <p class="muted" style="margin-top:6px;">Load Case 3 = Load Case 1 zone pressures above, plus the following T-zones:</p>
-      <div id="mwfrsLC3Table"></div>
-      <p class="muted" style="margin-top:6px;">Load Case 4 = Load Case 2 zone pressures above, plus the following T-zones:</p>
-      <div id="mwfrsLC4Table"></div>
+    <h2>MWFRS Design Pressures <button type="button" class="info-btn" data-info="mwfrs" aria-label="Learn more">i</button></h2>
+
+    <!-- Procedure toggle: Envelope (Ch.28) vs Directional (Ch.27) -->
+    <div class="field" style="margin-bottom:14px;">
+      <label style="font-size:.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.04em;">MWFRS Procedure</label>
+      <div class="seg seg-light" id="mwfrsProcedureSeg" style="margin-top:4px;">
+        <button type="button" data-val="envelope" class="active">Envelope (Ch.28) &mdash; h &le; 60 ft</button>
+        <button type="button" data-val="directional">Directional (Ch.27) &mdash; all heights</button>
+      </div>
     </div>
-    <button type="button" id="torsionToggle" class="btn" style="display:none; margin-top:8px; font-size:.8rem; padding:4px 10px;"></button>
+
+    <!-- Ch.28 too-tall warning -->
+    <div class="alert warn" id="ch28TallWarning" style="display:none; margin-bottom:12px;">
+      &#9888;&#65039; Mean roof height h &gt; 60 ft or h &gt; least horizontal dimension &mdash;
+      the Envelope Procedure (Ch.28) is <strong>not applicable</strong> (Sec. 28.3.1).
+      Switch to the Directional Procedure (Ch.27) above.
+    </div>
+
+    <!-- Ch.28 Envelope Procedure results (default) -->
+    <div id="mwfrsEnvelopeResults">
+      <div class="muted" style="font-size:.8rem; margin-bottom:8px;">
+        <span class="ref">Eq. 28.3-1, Figs. 28.3-1/28.3-2</span>
+      </div>
+      <h3>Load Case 1 (Zones 1&ndash;4, 1E&ndash;4E) &mdash; &theta;-dependent</h3>
+      <div id="mwfrsLC1Table"></div>
+      <h3>Load Case 2 (Zones 1&ndash;6, 1E&ndash;6E) &mdash; all &theta;</h3>
+      <div id="mwfrsLC2Table"></div>
+      <h3>Torsional Load Cases 3 &amp; 4 (T-zones) <span class="ref">Fig. 28.3-2</span></h3>
+      <div class="alert info" id="torsionNote"></div>
+      <div id="torsionDetails">
+        <p class="muted" style="margin-top:6px;">Load Case 3 = Load Case 1 zone pressures above, plus the following T-zones:</p>
+        <div id="mwfrsLC3Table"></div>
+        <p class="muted" style="margin-top:6px;">Load Case 4 = Load Case 2 zone pressures above, plus the following T-zones:</p>
+        <div id="mwfrsLC4Table"></div>
+      </div>
+      <button type="button" id="torsionToggle" class="btn" style="display:none; margin-top:8px; font-size:.8rem; padding:4px 10px;"></button>
+    </div>
+
+    <!-- Ch.27 Directional Procedure results (hidden until toggled) -->
+    <div id="mwfrsDirect27Results" style="display:none;">
+      <div class="muted" style="font-size:.8rem; margin-bottom:8px;">
+        <span class="ref">Eq. 27.3-1, Fig. 27.3-1, Sec. 27.3.1</span>
+      </div>
+      <!-- Populated dynamically by renderResults() → reportCh27HTML() -->
+    </div>
   </div>
 
   <div class="panel" data-mode="cc">

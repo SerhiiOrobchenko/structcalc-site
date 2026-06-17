@@ -384,7 +384,11 @@ const state = {
   chkdBy: '',        // "Checked by" name
   chkdDate: '',      // "Checked" date, ISO yyyy-mm-dd
   appdBy: '',        // "Approved by" name
-  appdDate: ''       // "Approved" date, ISO yyyy-mm-dd
+  appdDate: '',      // "Approved" date, ISO yyyy-mm-dd
+
+  // Ch.27 Directional Procedure inputs (Sec. 27.3)
+  mwfrsProcedure: 'envelope', // 'envelope' (Ch.28, low-rise) | 'directional' (Ch.27, all heights)
+  buildingL: 60      // building dimension parallel to wind direction, ft (for L/B leeward Cp, Ch.27)
 };
 
 /* =====================================================================
@@ -712,6 +716,156 @@ function computeKzt(s, z) {
 
   const kzt = Math.pow(1 + K1 * K2 * K3, 2);
   return { kzt, auto: true, hLh, K1, K2, K3, mu, gamma, K1coeff };
+}
+
+
+/* =====================================================================
+   CHAPTER 27 — DIRECTIONAL PROCEDURE (MWFRS, ALL HEIGHTS)
+   ASCE 7-22 Sec. 27.3 / Eq. 27.3-1: p = qGC_p − q_i(GC_pi)
+   Sources:
+     - Fig. 27.3-1 (wall and roof Cp, including Note 3 for dual roof Cp values)
+     - Sec. 26.11.1 (G = 0.85 for rigid structures)
+     - Table 26.10-1 Note 1 (K_z formula — no Ch.28 footnote exception applies here)
+     - Sec. 27.1.5 (minimum design wind loads: walls ≥ 16 psf, roof ≥ 8 psf)
+   ===================================================================== */
+
+// Table 26.10-1 Note 1 formula for K_z at height z.
+// Ch.27 does NOT use the footnote (*) exception (K_h = 0.70 for Exp B, h < 30 ft) —
+// that footnote applies only to Chapter 28 (Envelope Procedure). Source: Table 26.10-1 footnote (*).
+function computeKzDirect(z, exposure) {
+  return khFromFormula(z, exposure);  // unmodified power-law formula
+}
+
+// Fig. 27.3-1: Leeward wall external pressure coefficient C_p.
+// Interpolated linearly on L/B (building length / building width).
+// Values: L/B ≤ 1 → −0.5; L/B = 2 → −0.3; L/B ≥ 4 → −0.2 (Fig. 27.3-1, Wall surfaces).
+function cpLeewardWall(LB) {
+  if (LB <= 1) return -0.50;
+  if (LB <= 2) return -0.50 + (LB - 1) * (-0.30 - -0.50);   // linear 1→2
+  if (LB <= 4) return -0.30 + (LB - 2) / 2 * (-0.20 - -0.30); // linear 2→4
+  return -0.20;
+}
+
+// Fig. 27.3-1: Roof C_p zones for flat / low-slope (θ ≤ 10°), wind normal to ridge.
+// Three zones measured from the windward edge (in multiples of h):
+//   Zone A: 0 to h    Zone B: h to 2h    Zone C: > 2h
+// Two C_p values per zone per Fig. 27.3-1 Note 3 (wind reattachment on large roofs).
+// Cp1 is the more negative (primary suction) value; Cp2 = −0.18 (always, per Note 3).
+// Cp1 linearly interpolated between h/L = 0.5 (−0.9/−0.5/−0.3) and h/L ≥ 1.0 (−1.3/−0.7/−0.7).
+// For h/L ≤ 0.5 the tabulated values at h/L = 0.5 are used.
+function roofZonesCp(hL) {
+  const t = Math.max(0, Math.min(1, (hL - 0.5) / 0.5)); // 0 at hL≤0.5, 1 at hL≥1.0
+  return [
+    { label: '0 to h',  cp1: -0.9 + t * (-1.3 - -0.9), cp2: -0.18 },
+    { label: 'h to 2h', cp1: -0.5 + t * (-0.7 - -0.5), cp2: -0.18 },
+    { label: '> 2h',    cp1: -0.3 + t * (-0.7 - -0.3), cp2: -0.18 }
+  ];
+}
+
+// Heights at which to evaluate the windward wall pressure profile for Ch.27.
+// Uses the standard heights from Table 26.10-1, limited to [15, h].
+function ch27HeightProfile(h) {
+  const STD_HTS = [15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200, 250, 300, 350, 400, 450, 500];
+  const result = [];
+  for (const z of STD_HTS) {
+    if (z < h - 0.5) result.push(z);  // include standard heights strictly below h
+  }
+  result.push(parseFloat(h.toFixed(2))); // always include mean roof height
+  return result;
+}
+
+// Main Ch.27 computation.
+function computeCh27(s) {
+  const G   = G_RIGID;  // 0.85, Sec. 26.11.1 (rigid structure, f ≥ 1 Hz)
+  const KD  = 0.85;     // Table 26.6-1, buildings
+  const ke  = computeKe(s.groundElev);
+
+  // Internal pressure coefficient (GCpi) — same table as Ch.28/30, Table 26.13-1
+  const gcpiMap = { enclosed: 0.18, partiallyEnclosed: 0.55, partiallyOpen: 0.18, openFreeRoof: 0.00 };
+  const gcpi = gcpiMap[s.enclosure] ?? 0.18;
+
+  // Velocity pressure at mean roof height h — Eq. 26.10-1, Table 26.10-1 Note 1
+  // K_z at h uses the standard formula (no Ch.28 footnote exception)
+  const kh   = computeKzDirect(s.h, s.exposure);
+  const kzth = computeKzt(s, s.h).kzt;
+  const qh   = 0.00256 * kh * kzth * ke * s.V * s.V;
+
+  // Building dimensions and ratios
+  const B  = Math.max(s.minDim, 1);    // width perpendicular to wind direction (= minDim), ft
+  const L  = Math.max(s.buildingL, 1); // length parallel to wind direction, ft
+  const LB = L / B;                    // L/B for leeward Cp
+  const hL = s.h / L;                  // h/L for roof zone Cp
+
+  // Cp values — Fig. 27.3-1
+  const CP_WW = 0.8;               // windward wall, all L/B
+  const CP_LW = cpLeewardWall(LB); // leeward wall
+  const CP_SW = -0.7;              // side walls, all cases
+
+  // ── Windward wall pressure profile ──
+  // q = q_z (at each height z), qi = q_h (enclosed/partially enclosed per Sec. 27.3.1)
+  // Eq. 27.3-1: p = q_z · G · C_p − q_h · (GC_pi)
+  //   LC1 (+GCpi): p = q_z·G·C_p − q_h·(+GCpi)  [positive internal pressure, reduces net]
+  //   LC2 (−GCpi): p = q_z·G·C_p − q_h·(−GCpi)  [negative internal pressure, increases net]
+  // Governing windward: LC2 (larger net pressure toward interior)
+  const heights = ch27HeightProfile(s.h);
+  const wwProfile = heights.map(z => {
+    const kz  = computeKzDirect(z, s.exposure);
+    const kztz = computeKzt(s, z).kzt;
+    const qz   = 0.00256 * kz * kztz * ke * s.V * s.V;
+    const pLC1 = qz * G * CP_WW - qh * gcpi;   // +GCpi
+    const pLC2 = qz * G * CP_WW + qh * gcpi;   // -GCpi → larger positive pressure
+    return { z, kz, qz, pLC1, pLC2 };
+  });
+
+  // ── Leeward and side wall pressures ──
+  // q = qh for all except windward (Sec. 27.3.1).
+  // Governing leeward/side: LC1 (+GCpi) — positive internal adds to outward suction
+  //   p_lw (LC1) = qh·G·Cp_lw − qh·(+GCpi) = qh·(G·Cp_lw − GCpi)  [most negative]
+  //   p_lw (LC2) = qh·G·Cp_lw + qh·(GCpi)                          [less negative]
+  const pLW_lc1 = qh * G * CP_LW - qh * gcpi; // governing suction, leeward
+  const pLW_lc2 = qh * G * CP_LW + qh * gcpi;
+  const pSW_lc1 = qh * G * CP_SW - qh * gcpi; // governing suction, side walls
+  const pSW_lc2 = qh * G * CP_SW + qh * gcpi;
+
+  // ── Roof zones (flat/low-slope only, θ ≤ 10°) ──
+  // q = qh, qi = qh (Sec. 27.3.1). Two Cp values per zone per Fig. 27.3-1 Note 3.
+  // Both Cp1 and Cp2 shall be used in design (governing condition per load combination).
+  const roofApplicable = s.theta <= 10;
+  let roofZones = null;
+  if (roofApplicable) {
+    roofZones = roofZonesCp(hL).map(zone => {
+      // Cp1 (primary suction): governing is +GCpi (internal adds to suction)
+      const p1_lc1 = qh * G * zone.cp1 - qh * gcpi;  // governing suction from Cp1
+      const p1_lc2 = qh * G * zone.cp1 + qh * gcpi;  // alternate
+      // Cp2 = −0.18 (near-zero/positive net): check with −GCpi for potential outward pressure
+      const p2_lc1 = qh * G * zone.cp2 - qh * gcpi;  // more suction
+      const p2_lc2 = qh * G * zone.cp2 + qh * gcpi;  // potential positive (governs uplift check from below)
+      return { ...zone, p1_lc1, p1_lc2, p2_lc1, p2_lc2 };
+    });
+  }
+
+  // ── Minimum design wind loads (Sec. 27.1.5) ──
+  // Walls ≥ 16 psf, roof ≥ 8 psf, net pressure in any horizontal direction.
+  const PSF_MIN_WALL = 16.0, PSF_MIN_ROOF = 8.0;
+  const wwAtH = wwProfile[wwProfile.length - 1];
+  const wwAtHGovern = Math.max(wwAtH.pLC1, wwAtH.pLC2);  // governing windward at h
+  // Combined windward + leeward for minimum check: Sec. 27.1.5 applies to the net horizontal load
+  // Conservative check: max(|p_ww at h|, |p_lw|) vs 16 psf
+  const wallMinGoverns = wwAtHGovern < PSF_MIN_WALL || Math.abs(pLW_lc1) < PSF_MIN_WALL;
+  const roofMinGoverns = roofZones
+    ? roofZones.some(z => Math.abs(z.p1_lc1) < PSF_MIN_ROOF)
+    : false;
+
+  return {
+    procedure: 'directional', G, KD, ke, qh, gcpi,
+    kh, B, L, LB, hL,
+    CP_WW, CP_LW, CP_SW,
+    wwProfile,
+    pLW_lc1, pLW_lc2, pSW_lc1, pSW_lc2,
+    roofApplicable, roofZones,
+    wallMinGoverns, roofMinGoverns,
+    PSF_MIN_WALL, PSF_MIN_ROOF
+  };
 }
 
 function compute(s) {
@@ -1077,11 +1231,15 @@ function compute(s) {
     result: ccMinResultText()
   });
 
+  // Ch.27 Directional Procedure (computed whenever state is available; used when mwfrsProcedure = 'directional')
+  const ch27 = (s.enclosure !== 'openFreeRoof') ? computeCh27(s) : null;
+
   return {
     kh, ke, kd: KD, qh, gcpi, a,
     steps, mwfrsLC1, mwfrsLC2, mwfrsLC3, mwfrsLC4, torsionApplies,
     ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, openRoof,
-    mwfrsMinCheck, mwfrsMinGoverns, ccMinCheck, ccMinGoverns
+    mwfrsMinCheck, mwfrsMinGoverns, ccMinCheck, ccMinGoverns,
+    ch27
   };
 }
 
@@ -1294,7 +1452,28 @@ function renderResults() {
   setCard('cardGCpi', '±' + fmt(r.gcpi.pos, 2));
   setCard('cardA', fmt(lengthOut(r.a), 2) + ' ' + (state.unitSystem === 'SI' ? 'm' : 'ft'));
 
-  // MWFRS tables
+  // Procedure toggle visibility (Ch.28 Envelope vs Ch.27 Directional)
+  const mwfrsEnvDiv  = document.getElementById('mwfrsEnvelopeResults');
+  const mwfrsDir27   = document.getElementById('mwfrsDirect27Results');
+  const buildingLRow = document.getElementById('buildingLRow');
+  const ch28Warning  = document.getElementById('ch28TallWarning');
+  const isDirectional = state.mwfrsProcedure === 'directional';
+  if (mwfrsEnvDiv)  mwfrsEnvDiv.style.display  = isDirectional ? 'none' : '';
+  if (mwfrsDir27)   mwfrsDir27.style.display   = isDirectional ? '' : 'none';
+  if (buildingLRow) buildingLRow.style.display  = isDirectional ? '' : 'none';
+  // Warning when h > 60 ft and Envelope is selected
+  if (ch28Warning) {
+    const tooTall = state.h > 60 || state.h > state.minDim;
+    ch28Warning.style.display = (!isDirectional && tooTall) ? '' : 'none';
+  }
+
+  // Render Ch.27 results
+  if (isDirectional && r.ch27) {
+    const el = document.getElementById('mwfrsDirect27Results');
+    if (el) el.innerHTML = reportCh27HTML(r);
+  }
+
+  // MWFRS tables (Ch.28 Envelope)
   zoneTable('mwfrsLC1Table', r.mwfrsLC1, false);
   zoneTable('mwfrsLC2Table', r.mwfrsLC2, false);
 
@@ -1507,6 +1686,115 @@ function reportDesignSummaryHTML(r) {
 
 // MWFRS Design Pressures section (Ch. 28 Envelope Procedure) — identical
 // tables/headings/citations to the on-screen data-mode="mwfrs" panel.
+
+// Ch.27 Directional Procedure — report section HTML
+function reportCh27HTML(r) {
+  const s  = state;
+  const c  = r.ch27;
+  if (!c) return '<p class="muted">Ch.27 result not available.</p>';
+
+  const pu  = pUnit();
+  const pf  = v => (pVal(v) >= 0 ? '+' : '') + fmt(pVal(v), 2) + ' ' + pu;
+  const gcpiVal = (r.gcpi && r.gcpi.pos != null) ? r.gcpi.pos : c.gcpi;
+
+  let html = '';
+
+  // ── Header note ──
+  html += '<p class="muted" style="margin-bottom:10px;">Eq. 27.3-1: p = qGC<sub>p</sub> &minus; q<sub>i</sub>(GC<sub>pi</sub>), '
+        + 'G = ' + fmt(c.G, 2)
+        + ', K<sub>d</sub> = ' + fmt(c.KD, 2)
+        + ', &plusmn;GC<sub>pi</sub> = &plusmn;' + fmt(gcpiVal, 2)
+        + ' &bull; q<sub>h</sub> = ' + fmt(pVal(c.qh), 2) + ' ' + pu
+        + ' &bull; L/B = ' + fmt(c.LB, 2)
+        + ', h/L = ' + fmt(c.hL, 3) + '</p>';
+
+  // ── Windward wall profile ──
+  html += '<h3>Windward Wall &mdash; Pressure Profile'
+        + ' <span class="ref">Fig. 27.3-1, C<sub>p</sub> = +0.8; Sec. 27.3.1</span></h3>';
+  html += '<p class="muted" style="margin-bottom:6px;">'
+        + 'q = q<sub>z</sub> at each height z (Table 26.10-1 formula). '
+        + 'LC2 (−GC<sub>pi</sub>) governs windward for enclosed buildings.</p>';
+  html += '<table class="report-input-table"><thead><tr>'
+        + '<th>z (ft)</th><th>K<sub>z</sub></th><th>q<sub>z</sub> (' + pu + ')</th>'
+        + '<th>LC1 (+GC<sub>pi</sub>) (' + pu + ')</th><th>LC2 (−GC<sub>pi</sub>) (' + pu + ')</th>'
+        + '</tr></thead><tbody>';
+  c.wwProfile.forEach(row => {
+    html += '<tr><td>' + fmt(row.z, 1) + '</td>'
+          + '<td>' + fmt(row.kz, 3) + '</td>'
+          + '<td>' + fmt(pVal(row.qz), 2) + '</td>'
+          + '<td>' + pf(row.pLC1) + '</td>'
+          + '<td>' + pf(row.pLC2) + '</td></tr>';
+  });
+  html += '</tbody></table>';
+
+  // ── Leeward + side walls ──
+  html += '<h3>Leeward and Side Walls'
+        + ' <span class="ref">Fig. 27.3-1; q = q<sub>h</sub></span></h3>';
+  html += '<p class="muted" style="margin-bottom:6px;">'
+        + 'LC1 (+GC<sub>pi</sub>) governs leeward/side (positive internal adds to suction).</p>';
+  html += '<table class="report-input-table"><thead><tr>'
+        + '<th>Surface</th><th>C<sub>p</sub></th>'
+        + '<th>LC1 (+GC<sub>pi</sub>) (' + pu + ')</th><th>LC2 (−GC<sub>pi</sub>) (' + pu + ')</th>'
+        + '</tr></thead><tbody>';
+  html += '<tr><td>Leeward wall (C<sub>p</sub> @ L/B=' + fmt(c.LB, 2) + ')</td>'
+        + '<td>' + fmt(c.CP_LW, 2) + '</td>'
+        + '<td>' + pf(c.pLW_lc1) + '</td><td>' + pf(c.pLW_lc2) + '</td></tr>';
+  html += '<tr><td>Side walls</td>'
+        + '<td>' + fmt(c.CP_SW, 1) + '</td>'
+        + '<td>' + pf(c.pSW_lc1) + '</td><td>' + pf(c.pSW_lc2) + '</td></tr>';
+  html += '</tbody></table>';
+
+  // ── Flat/low-slope roof zones ──
+  if (c.roofApplicable && c.roofZones) {
+    html += '<h3>Roof &mdash; Flat/Low-slope (&theta; &le; 10&deg;), Wind Normal to Ridge'
+          + ' <span class="ref">Fig. 27.3-1; q = q<sub>h</sub></span></h3>';
+    html += '<p class="muted" style="margin-bottom:6px;">'
+          + 'Both C<sub>p</sub> values shall be used (Fig. 27.3-1 Note 3). '
+          + 'C<sub>p1</sub> = primary suction; C<sub>p2</sub> = &minus;0.18 (wind reattachment check). '
+          + 'Zones measured from windward edge in multiples of h = ' + fmt(s.h, 0) + ' ft.</p>';
+    html += '<table class="report-input-table"><thead><tr>'
+          + '<th>Zone (from WW edge)</th>'
+          + '<th>C<sub>p1</sub></th><th>p(C<sub>p1</sub>, LC1) (' + pu + ')</th>'
+          + '<th>C<sub>p2</sub></th><th>p(C<sub>p2</sub>, LC2) (' + pu + ')</th>'
+          + '</tr></thead><tbody>';
+    c.roofZones.forEach(z => {
+      html += '<tr><td>' + z.label + '</td>'
+            + '<td>' + fmt(z.cp1, 2) + '</td><td>' + pf(z.p1_lc1) + '</td>'
+            + '<td>' + fmt(z.cp2, 2) + '</td><td>' + pf(z.p2_lc2) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    html += '<p class="muted" style="font-size:.8rem; margin-top:6px;">'
+          + 'p(C<sub>p2</sub>, LC2) = q<sub>h</sub>(G&sdot;C<sub>p2</sub> + GC<sub>pi</sub>) may be positive (downward pressure). '
+          + 'All four combinations [C<sub>p1</sub>/C<sub>p2</sub>] &times; [&plusmn;GC<sub>pi</sub>] must be checked per Fig. 27.3-1 Note 3.</p>';
+  } else if (!c.roofApplicable) {
+    html += '<div class="alert warn" style="margin-top:12px;">'
+          + 'Sloped roof C<sub>p</sub> (&theta; &gt; 10&deg;) from Fig. 27.3-1 is not yet implemented. '
+          + 'Verify roof pressures directly from ASCE 7-22 Fig. 27.3-1 for sloped roofs.'
+          + '</div>';
+  }
+
+  // ── Minimum pressure note ──
+  const minWarns = [];
+  if (c.wallMinGoverns) minWarns.push('wall pressures &lt; 16 psf minimum');
+  if (c.roofMinGoverns) minWarns.push('roof zone pressures &lt; 8 psf minimum');
+  if (minWarns.length) {
+    html += '<div class="alert warn" style="margin-top:12px;">'
+          + '&#9888;&#65039; Minimum wind load (Sec. 27.1.5) governs: '
+          + minWarns.join('; ')
+          + '. Use 16 psf (walls) / 8 psf (roof) in these locations.</div>';
+  }
+
+  // Design load cases note
+  html += '<div class="alert info" style="margin-top:12px;">'
+        + '<strong>Design Load Cases (Fig. 27.3-8):</strong> Case 1 (full load, shown above) and '
+        + 'Case 2 (75% with torsional eccentricity e = 0.15B) shall both be checked per Sec. 27.3.5. '
+        + 'Cases 3 and 4 (simultaneous orthogonal loads) apply where required. '
+        + 'Torsional load cases are not computed in this calculator &mdash; verify separately.'
+        + '</div>';
+
+  return html;
+}
+
 function reportMWFRSHTML(r) {
   const s = state;
   let html = '<h3>Load Case 1 (Zones 1&ndash;4, 1E&ndash;4E) &mdash; &theta;-dependent <span class="ref">Fig. 28.3-1</span></h3>' +
@@ -1744,7 +2032,13 @@ function buildReportHTML(r) {
   html += section('Building Geometry &amp; Pressure Zones', 'Figs. 28.3-1/30.3-1/30.3-2A&ndash;G, Notation', diagBody);
 
   if (s.mode === 'mwfrs') {
-    html += section('MWFRS Design Pressures &mdash; Envelope Procedure', 'Eq. 28.3-1, Figs. 28.3-1/28.3-2', reportMWFRSHTML(r));
+    if (s.mwfrsProcedure === 'directional') {
+      html += section('MWFRS Design Pressures &mdash; Directional Procedure (Ch.27)',
+        'Eq. 27.3-1, Fig. 27.3-1, Sec. 27.3.1', reportCh27HTML(r));
+    } else {
+      html += section('MWFRS Design Pressures &mdash; Envelope Procedure (Ch.28)',
+        'Eq. 28.3-1, Figs. 28.3-1/28.3-2', reportMWFRSHTML(r));
+    }
   } else {
     html += section('Components &amp; Cladding Design Pressures', 'Eq. 30.3-1, Figs. 30.3-1/30.3-2A&ndash;2G', reportCCHTML(r));
   }
@@ -2009,6 +2303,27 @@ function bindInputs() {
     state.minDim = toUSLength(isNaN(v) ? 0 : v, state.unitSystem);
     renderResults();
   });
+  // Ch.27 building length parallel to wind (L/B for leeward Cp)
+  const buildingLEl = document.getElementById('buildingL');
+  if (buildingLEl) {
+    buildingLEl.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      state.buildingL = toUSLength(isNaN(v) ? 0 : v, state.unitSystem);
+      renderResults();
+    });
+  }
+  // Ch.27 / Ch.28 procedure toggle
+  const mwfrsProcSeg = document.getElementById('mwfrsProcedureSeg');
+  if (mwfrsProcSeg) {
+    mwfrsProcSeg.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        mwfrsProcSeg.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.mwfrsProcedure = btn.dataset.val;
+        renderResults();
+      });
+    });
+  }
   document.getElementById('theta').addEventListener('input', e => {
     const v = parseFloat(e.target.value);
     state.theta = isNaN(v) ? 0 : v;
@@ -2185,6 +2500,7 @@ function updateUnitLabels() {
   set('lblGroundElev', sys === 'SI' ? 'm' : 'ft');
   set('lblH', sys === 'SI' ? 'm' : 'ft');
   set('lblMinDim', sys === 'SI' ? 'm' : 'ft');
+  set('lblBuildingL', sys === 'SI' ? 'm' : 'ft');
   set('lblAreaWall', sys === 'SI' ? 'm²' : 'ft²');
   set('lblAreaRoof', sys === 'SI' ? 'm²' : 'ft²');
   set('lblParapetHeight', sys === 'SI' ? 'm' : 'ft');
@@ -2202,6 +2518,8 @@ function setUnitSystem(sys) {
   document.getElementById('groundElev').value = fmt(lengthOut(state.groundElev), 1);
   document.getElementById('h').value = fmt(lengthOut(state.h), 2);
   document.getElementById('minDim').value = fmt(lengthOut(state.minDim), 2);
+  const blEl = document.getElementById('buildingL');
+  if (blEl) blEl.value = fmt(lengthOut(state.buildingL), 2);
   document.getElementById('areaWall').value = fmt(areaOut(state.areaWall), 2);
   document.getElementById('areaRoof').value = fmt(areaOut(state.areaRoof), 2);
   const parapetHeightEl = document.getElementById('parapetHeight');
@@ -3398,6 +3716,13 @@ function init() {
   document.getElementById('groundElev').value = state.groundElev;
   document.getElementById('h').value = state.h;
   document.getElementById('minDim').value = state.minDim;
+  const buildingLInit = document.getElementById('buildingL');
+  if (buildingLInit) buildingLInit.value = state.buildingL;
+  const mwfrsProcSegInit = document.getElementById('mwfrsProcedureSeg');
+  if (mwfrsProcSegInit) {
+    mwfrsProcSegInit.querySelectorAll('button').forEach(b =>
+      b.classList.toggle('active', b.dataset.val === state.mwfrsProcedure));
+  }
   document.getElementById('theta').value = state.theta;
   document.getElementById('areaWall').value = state.areaWall;
   document.getElementById('areaRoof').value = state.areaRoof;
@@ -3479,6 +3804,8 @@ document.addEventListener('DOMContentLoaded', init);
     document.getElementById('enclosure').value = state.enclosure;
     document.getElementById('h').value = fmt(lengthOut(state.h), 2);
     document.getElementById('minDim').value = fmt(lengthOut(state.minDim), 2);
+  const blEl = document.getElementById('buildingL');
+  if (blEl) blEl.value = fmt(lengthOut(state.buildingL), 2);
     document.getElementById('theta').value = state.theta;
     document.getElementById('areaWall').value = fmt(areaOut(state.areaWall), 2);
     document.getElementById('areaRoof').value = fmt(areaOut(state.areaRoof), 2);
