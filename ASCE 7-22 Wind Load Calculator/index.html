@@ -100,7 +100,7 @@
   .steps{font-size:.88rem;}
   table.steps-table{font-size:.86rem;}
   table.steps-table td, table.steps-table th{text-align:left; vertical-align:top;}
-  table.steps-table td.ref-col{width:14%; white-space:nowrap; color:var(--muted); font-size:.76rem; text-align:right;}
+  table.steps-table td.ref-col{width:14%; white-space:nowrap; color:var(--muted); font-size:.76rem;}
   table.steps-table td.calc-col{width:56%;}
   table.steps-table td.result-col{width:30%; font-weight:700;}
   table.steps-table .step-label{font-weight:700; color:var(--brand); font-size:.85rem; display:block; margin-bottom:3px;}
@@ -178,10 +178,11 @@
   #reportContent .panel h3{color:var(--brand); font-size:.95rem; border-bottom:1px dashed var(--line); padding-bottom:4px;}
   #reportContent svg{max-width:100%; height:auto;}
 
-  /* ---- Print title block (compact 2-row repeating header, Tekla Tedds /
-     SkyCiv style). Repeats on every print page via thead{display:
-     table-header-group} in the single report-page table that wraps all
-     sections. Populated by buildTitleBlockHTML() in engine.js. ---------- */
+  /* ---- Print title block (repeating per-page header, Tekla Tedds / SkyCiv
+     style). Populated by buildTitleBlockHTML() in engine.js. Fields are
+     user-entered Project Information metadata; "Sheet no." is a static
+     per-section index, not a live page counter (see comment on
+     buildTitleBlockHTML). ----------------------------------------------- */
   table.title-block{width:100%; border-collapse:collapse; font-size:.72rem; margin:0;}
   table.title-block td{border:1px solid #aaa; padding:2px 5px; vertical-align:middle;}
   table.title-block .tb-company{width:28%; font-weight:700; font-size:.85rem; color:var(--brand);}
@@ -189,7 +190,7 @@
   table.title-block .tb-signoff{width:33.33%;}
   table.title-block .tb-label{font-size:.62rem; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; margin-right:3px;}
 
-  /* ---- Cover page (print title page — no title block, just project info) - */
+  /* ---- Cover page --------------------------------------------------------- */
   .cover-page{border:1px solid #bbb; padding:1.5cm 2cm; box-sizing:border-box;
               display:flex; flex-direction:column; min-height:9in;}
   .cover-company{font-size:1rem; font-weight:700; color:var(--brand);}
@@ -202,21 +203,18 @@
 
   /* ---- Print report ------------------------------------------------------- */
   .print-only{display:none;}
-  /* All sections share one table.report-page; no forced per-section page
-     breaks — content fills pages naturally and the title block repeats
-     automatically at the top of each physical page via thead repeat. */
   table.report-page{width:100%; border-collapse:collapse;}
   table.report-page thead{display:table-header-group;}
   table.report-page > tbody > tr > td{padding:10px 0;}
   .report-section{margin-bottom:16px;}
   .report-section h2{font-size:.95rem; margin:14px 0 6px; color:var(--brand); border-bottom:1px solid var(--line); padding-bottom:3px;}
+  table.steps-table td.ref-col{width:14%; white-space:nowrap; color:var(--muted); font-size:.76rem; text-align:right;}
   @media print{
     header.topbar, .info-btn, .btn, footer.sources, #exportModal{display:none !important;}
     .intro, #projectInfoPanel, #diagramPanel, .grid{display:none !important;}
     .print-only{display:block;}
     body{background:#fff;}
     main{max-width:100%; padding:0;}
-    /* Cover page breaks to next page; report body follows without extra break */
     .cover-page{page-break-after:always; break-after:page;}
     table.report-page{page-break-before:avoid; break-before:avoid;}
   }
@@ -244,23 +242,17 @@
 
 <main>
 
-<!-- ======= Print / Export modal ======================================= -->
 <div id="exportModal" class="modal-overlay">
   <div class="modal-box" style="max-width:360px;">
     <button class="modal-close" id="exportModalClose" aria-label="Close">&times;</button>
     <h3>Print / Export</h3>
-
     <p style="font-size:.84rem; color:var(--muted); margin:0 0 12px;">Choose format, then click Export.</p>
-
-    <!-- Format selector -->
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
       <button type="button" class="btn fmt-btn active" data-fmt="pdf"  style="flex:1;">PDF</button>
       <button type="button" class="btn fmt-btn"        data-fmt="xlsx" style="flex:1;">Excel</button>
       <button type="button" class="btn fmt-btn"        data-fmt="docx" style="flex:1;">Word (.docx)</button>
       <button type="button" class="btn fmt-btn"        data-fmt="rtf"  style="flex:1;">RTF</button>
     </div>
-
-    <!-- PDF-only options (paper size + orientation) -->
     <div id="exportPdfOpts" style="margin-bottom:14px; font-size:.86rem;">
       <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
         Paper size
@@ -279,38 +271,32 @@
         </select>
       </label>
     </div>
-
     <button type="button" id="doExportBtn" class="btn" style="width:100%; padding:10px;">Export</button>
   </div>
 </div>
 
   <div class="print-only" id="printCover">
     <div class="cover-page">
-      <!-- Top: company + section -->
       <div>
         <div class="cover-company" id="coverCompany"></div>
         <div class="cover-section"  id="coverSection"></div>
       </div>
-      <!-- Centre: report title -->
       <div class="cover-title">
         <h1>Wind Load Report</h1>
         <div class="cover-subtitle">ASCE/SEI 7-22, Chapters 26&ndash;30</div>
       </div>
-      <!-- Project info table -->
       <table class="report-cover-table">
         <tr><td>Project name</td><td id="printProjectName">&ndash;</td></tr>
         <tr><td>Job Ref. / Location</td><td id="printProjectNumber">&ndash;</td></tr>
         <tr><td>Risk Category</td><td id="printRiskCategory">&ndash;</td></tr>
         <tr><td>Calculation procedure</td><td id="printMode">&ndash;</td></tr>
       </table>
-      <!-- Signoff row -->
       <div class="cover-signoff">
         <span><strong>Calc. by</strong> &nbsp;<span id="printEngineer">&ndash;</span></span>
         <span><strong>Date</strong> &nbsp;<span id="printProjectDate">&ndash;</span></span>
         <span><strong>Chk&rsquo;d by</strong> &nbsp;<span id="coverChkdBy">&ndash;</span></span>
         <span><strong>App&rsquo;d by</strong> &nbsp;<span id="coverAppdBy">&ndash;</span></span>
       </div>
-      <!-- Generated note at bottom -->
       <p style="color:var(--muted); font-size:.76rem; margin-top:auto; padding-top:1cm;" id="printGenerated"></p>
     </div>
   </div>
@@ -656,4 +642,27 @@
 
     <h3>Not yet included (planned next)</h3>
     <ul>
-      <li><strong>Roof corner downdraft / Zone 3&prime; high-suction corners</strong>, and <strong>rooftop equipment / appurt
+      <li><strong>Roof corner downdraft / Zone 3&prime; high-suction corners</strong>, and <strong>rooftop equipment / appurtenances</strong> (Sec. 29.4&ndash;29.5) &mdash; not yet included.</li>
+      <li><strong>Directional Procedure</strong> (Chapter 27, Parts 1&ndash;2) for enclosed/partially enclosed buildings of any height, and <strong>Chapter 27/30 Parts 3&ndash;6</strong> (stepped/sawtooth roofs, attached canopies, rooftop solar) &mdash; future modules. Open buildings with monoslope, pitched, or troughed free roofs (Sec. 27.3.2, Figs. 27.3-4&ndash;27.3-7) are now implemented via the "Open Building &mdash; Free Roof" enclosure option above.</li>
+      <li><strong>Topographic factor K<sub>zt</sub></strong> from Figure 26.8-1 (currently entered directly by the user).</li>
+      <li>Automatic lookup of <strong>basic wind speed V</strong> from the ASCE Hazard Tool (currently entered manually, as with p<sub>g</sub> in the Snow module).</li>
+    </ul>
+
+    <p>Site and calculations by StructCalc (working title) &mdash; built for Serhii. This is a working engineering tool: always verify the building meets the Sec. 28.3.1 / 30.3.1 applicability conditions for the Envelope Procedure, confirm V and Risk Category from the ASCE Hazard Tool, and check K<sub>zt</sub> per Fig. 26.8-1 before use in design.</p>
+  </div>
+</footer>
+
+<div class="modal-overlay" id="infoModal">
+  <div class="modal-box">
+    <button type="button" class="modal-close" id="infoModalClose" aria-label="Close">&times;</button>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<!-- SheetJS — Excel export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- docx — Word export (UMD build; exposes window.docx with all named exports) -->
+<script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
+<script src="engine.js"></script>
+</body>
+</html>
