@@ -348,7 +348,12 @@ const state = {
   roofShape: 'gable', // 'gable' or 'hip' — selects Fig. 30.3-2B/2C vs 2D-2G for theta>7 roof C&C
   V: 115,            // basic wind speed, mph (Sec. 26.5)
   exposure: 'C',     // B / C / D (Sec. 26.7)
-  kzt: 1.0,          // topographic factor (Sec. 26.8.2, Fig. 26.8-1)
+  kzt: 1.0,          // topographic factor — used when kztMode='manual' (Sec. 26.8)
+  kztMode: 'flat',   // 'flat' (K_zt=1.0) | 'auto' (compute from topo inputs) | 'manual'
+  topoFeature: '2DRidge', // '2DRidge' | '2DEscarp' | '3DHill'
+  topoH:  30,        // hill/ridge/escarpment height H, ft (Fig. 26.8-1)
+  topoLh: 150,       // horizontal dist. crest to H/2 on windward side, L_h, ft
+  topoX:  0,         // horiz. dist. from crest to site, ft (+ = downwind/leeward)
   groundElev: 0,     // ground elevation above sea level, ft (Sec. 26.9)
   enclosure: 'enclosed', // enclosed / partiallyEnclosed / partiallyOpen / open (Sec. 26.13)
   h: 20,             // mean roof height, ft (Sec. 26.2 / 26.3)
@@ -578,7 +583,7 @@ function gcpOverhang(roofZone, A, theta, roofShape) {
 function computeQp(s, kh_unused, ke, hp) {
   const zParapet = Math.max(s.h, 0) + Math.max(hp, 0);
   const khp = computeKh(zParapet, s.exposure);
-  return { zParapet, khp, qp: 0.00256 * khp * s.kzt * ke * s.V * s.V };
+  const kztP = computeKzt(s, zParapet); return { zParapet, khp, qp: 0.00256 * khp * kztP.kzt * ke * s.V * s.V };
 }
 
 // Parapets — C&C: Sec. 30.9 ("Parapets"), Eq. 30.9-1: p = qp[(GCp) - (GCpi)]. Per the
@@ -656,6 +661,59 @@ function cnFig277(loadCase, windFlow) {
   return CN_FIG277[loadCase][windFlow];
 }
 
+// ── K_zt — Topographic Factor (Sec. 26.8) ─────────────────────────────────
+// Source: ASCE/SEI 7-22 Sec. 26.8 and Table 26.8-1.
+// K_zt = (1 + K_1 · K_2 · K_3)²
+//   K_1 = (K_1/H_Lh_ratio) × (H/L_h)         — speed-up coefficient
+//   K_2 = max(0, 1 − |x| / (μ × L_h))         — horizontal attenuation
+//   K_3 = exp(−γ × z / L_h)                    — height decay
+// Applicability (Sec. 26.8.1): H/L_h ≥ 0.2; site in upper half of feature.
+// If H/L_h < 0.2 or kztMode='flat', K_zt = 1.0.
+
+const KZT_K1_COEFF = {      // Table 26.8-1: K_1/(H/L_h) per feature & exposure
+  '2DRidge':  { B: 1.30, C: 1.45, D: 1.55 },
+  '2DEscarp': { B: 0.75, C: 0.85, D: 0.95 },
+  '3DHill':   { B: 0.95, C: 1.05, D: 1.15 }
+};
+const KZT_MU = {             // μ for K_2 = 1 − |x|/(μ × L_h) — upwind/downwind
+  '2DRidge':  { up: 1.5, down: 1.5 },
+  '2DEscarp': { up: 2.5, down: 1.5 }, // escarpment: longer attenuation upwind
+  '3DHill':   { up: 1.5, down: 1.5 }
+};
+const KZT_GAMMA = { '2DRidge': 3, '2DEscarp': 2.5, '3DHill': 4 }; // γ for K_3
+
+function computeKzt(s, z) {
+  // z = evaluation height (typically mean roof height h, or z_parapet for parapets)
+  if (s.kztMode === 'manual') return { kzt: s.kzt, auto: false };
+  if (s.kztMode === 'flat')   return { kzt: 1.0,   auto: false };
+
+  const H  = s.topoH;
+  const Lh = s.topoLh;
+  const x  = s.topoX;
+  const ft = s.topoFeature;
+  const exp = s.exposure; // 'B'|'C'|'D'
+
+  if (!KZT_K1_COEFF[ft] || Lh <= 0) return { kzt: 1.0, auto: true, err: 'Invalid inputs' };
+
+  const hLh = H / Lh;
+  if (hLh < 0.2) {
+    // Sec. 26.8.1: K_zt = 1.0 when H/L_h < 0.2
+    return { kzt: 1.0, auto: true, hLh, K1: 0, K2: 0, K3: 0, note: 'H/L_h < 0.2 → K_zt = 1.0 (Sec. 26.8.1)' };
+  }
+
+  const K1coeff = KZT_K1_COEFF[ft][exp] || KZT_K1_COEFF[ft]['C'];
+  const K1 = K1coeff * hLh;
+
+  const mu = x >= 0 ? KZT_MU[ft].down : KZT_MU[ft].up;
+  const K2 = Math.max(0, 1 - Math.abs(x) / (mu * Lh));
+
+  const gamma = KZT_GAMMA[ft];
+  const K3 = Math.exp(-gamma * Math.max(0, z) / Lh);
+
+  const kzt = Math.pow(1 + K1 * K2 * K3, 2);
+  return { kzt, auto: true, hLh, K1, K2, K3, mu, gamma, K1coeff };
+}
+
 function compute(s) {
   const steps = [];
 
@@ -689,20 +747,72 @@ function compute(s) {
     result: 'K<sub>d</sub> = ' + fmt(KD, 2)
   });
 
-  // --- Topographic factor, Kzt (user-supplied) ---
-  steps.push({
-    label: 'Topographic Factor, K<sub>zt</sub>',
-    clause: 'Sec. 26.8.2, Fig. 26.8-1',
-    formula: 'User input (K<sub>zt</sub> = 1.0 if the site does not meet the Fig. 26.8-1 escarpment/ridge/hill criteria of Sec. 26.8.1)',
-    result: 'K<sub>zt</sub> = ' + fmt(s.kzt, 2)
-  });
+  // --- Topographic factor, Kzt (Sec. 26.8) ---
+  const kztObj = computeKzt(s, s.h);
+  const KZT = kztObj.kzt;
+
+  if (!kztObj.auto) {
+    // Flat terrain or manual override
+    const isManual = s.kztMode === 'manual';
+    steps.push({
+      label: 'Topographic Factor, K<sub>zt</sub>',
+      clause: 'Sec. 26.8',
+      formula: isManual
+        ? 'User-specified value'
+        : 'Flat terrain or site does not satisfy Sec. 26.8.1 criteria (H/L<sub>h</sub> ≥ 0.2, upper half of feature) → K<sub>zt</sub> = 1.0',
+      result: 'K<sub>zt</sub> = ' + fmt(KZT, 2)
+    });
+  } else if (kztObj.note) {
+    // H/Lh < 0.2 → auto but still 1.0
+    steps.push({
+      label: 'Topographic Factor, K<sub>zt</sub>',
+      clause: 'Sec. 26.8',
+      formula: 'H/L<sub>h</sub> = ' + fmt(kztObj.hLh, 3) + ' < 0.2 → K<sub>zt</sub> = 1.0 per Sec. 26.8.1',
+      result: 'K<sub>zt</sub> = 1.00'
+    });
+  } else {
+    // Full auto calculation
+    const FEAT_LABELS = { '2DRidge': '2D Ridge', '2DEscarp': '2D Escarpment', '3DHill': '3D Axisymmetric Hill' };
+    const fLabel = FEAT_LABELS[s.topoFeature] || s.topoFeature;
+    const xDir = s.topoX >= 0 ? 'downwind' : 'upwind';
+    steps.push({
+      label: 'Topographic Factor, K<sub>zt</sub> — Feature Parameters',
+      clause: 'Sec. 26.8, Table 26.8-1',
+      formula: 'Feature: ' + fLabel + '. H = ' + fmt(s.topoH, 1) + ' ft; L<sub>h</sub> = ' + fmt(s.topoLh, 1) + ' ft; H/L<sub>h</sub> = ' + fmt(kztObj.hLh, 3) + ' ≥ 0.2 ✓. x = ' + fmt(Math.abs(s.topoX), 1) + ' ft ' + xDir + ' of crest; z = h = ' + fmt(s.h, 1) + ' ft',
+      result: 'Inputs OK'
+    });
+    steps.push({
+      label: 'K<sub>1</sub> — Speed-Up Coefficient',
+      clause: 'Table 26.8-1',
+      formula: 'K<sub>1</sub> = (K<sub>1</sub>/[H/L<sub>h</sub>]) × (H/L<sub>h</sub>) = ' + fmt(kztObj.K1coeff, 2) + ' × ' + fmt(kztObj.hLh, 3),
+      result: 'K<sub>1</sub> = ' + fmt(kztObj.K1, 4)
+    });
+    steps.push({
+      label: 'K<sub>2</sub> — Horizontal Attenuation',
+      clause: 'Table 26.8-1',
+      formula: 'K<sub>2</sub> = 1 − |x| / (μ L<sub>h</sub>) = 1 − ' + fmt(Math.abs(s.topoX), 1) + ' / (' + fmt(kztObj.mu, 1) + ' × ' + fmt(s.topoLh, 1) + ')',
+      result: 'K<sub>2</sub> = ' + fmt(kztObj.K2, 4)
+    });
+    steps.push({
+      label: 'K<sub>3</sub> — Height Decay',
+      clause: 'Table 26.8-1',
+      formula: 'K<sub>3</sub> = e<sup>−γ z/L<sub>h</sub></sup> = e<sup>−' + fmt(kztObj.gamma, 1) + ' × ' + fmt(s.h, 1) + '/' + fmt(s.topoLh, 1) + '</sup>',
+      result: 'K<sub>3</sub> = ' + fmt(kztObj.K3, 4)
+    });
+    steps.push({
+      label: 'Topographic Factor, K<sub>zt</sub>',
+      clause: 'Eq. 26.8-1',
+      formula: 'K<sub>zt</sub> = (1 + K<sub>1</sub> K<sub>2</sub> K<sub>3</sub>)² = (1 + ' + fmt(kztObj.K1, 4) + ' × ' + fmt(kztObj.K2, 4) + ' × ' + fmt(kztObj.K3, 4) + ')²',
+      result: 'K<sub>zt</sub> = ' + fmt(KZT, 3)
+    });
+  }
 
   // --- Velocity pressure qh ---
-  const qh = 0.00256 * kh * s.kzt * ke * s.V * s.V;
+  const qh = 0.00256 * kh * KZT * ke * s.V * s.V;
   steps.push({
     label: 'Velocity Pressure at Mean Roof Height, q<sub>h</sub>',
     clause: 'Eq. 26.10-1',
-    formula: 'q<sub>h</sub> = 0.00256 K<sub>h</sub> K<sub>zt</sub> K<sub>e</sub> V² = 0.00256 × ' + fmt(kh, 3) + ' × ' + fmt(s.kzt, 2) + ' × ' + fmt(ke, 3) + ' × ' + fmt(s.V, 1) + '²',
+    formula: 'q<sub>h</sub> = 0.00256 K<sub>h</sub> K<sub>zt</sub> K<sub>e</sub> V² = 0.00256 × ' + fmt(kh, 3) + ' × ' + fmt(KZT, 3) + ' × ' + fmt(ke, 3) + ' × ' + fmt(s.V, 1) + '²',
     result: 'q<sub>h</sub> = ' + fmt(qh, 2) + ' psf'
   });
 
@@ -1275,6 +1385,13 @@ function renderResults() {
   renderDiagram(r);
   renderPrintCover();
 
+  // Show computed K_zt in auto mode UI
+  const kztResultEl = document.getElementById('kztAutoResult');
+  if (kztResultEl && state.kztMode === 'auto') {
+    const ko = computeKzt(state, state.h);
+    kztResultEl.innerHTML = 'K<sub>zt</sub> = <strong>' + fmt(ko.kzt, 3) + '</strong>' + (ko.note ? ' <span style="color:#888; font-size:.78rem;">(H/L<sub>h</sub> < 0.2)</span>' : '');
+  }
+
   lastResult = r;
   const reportEl = document.getElementById('reportContent');
   if (reportEl) reportEl.innerHTML = buildReportHTML(r);
@@ -1813,9 +1930,38 @@ function bindInputs() {
     state.exposure = e.target.value;
     renderResults();
   });
-  document.getElementById('kzt').addEventListener('input', e => {
+  // K_zt mode selector (Sec. 26.8)
+  document.getElementById('kztModeSeg').querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById('kztModeSeg').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.kztMode = btn.dataset.val;
+      document.getElementById('kztAutoInputs').style.display = state.kztMode === 'auto' ? '' : 'none';
+      document.getElementById('kztManualInput').style.display = state.kztMode === 'manual' ? '' : 'none';
+      renderResults();
+    });
+  });
+  const kztEl = document.getElementById('kzt');
+  if (kztEl) kztEl.addEventListener('input', e => {
     const v = parseFloat(e.target.value);
     state.kzt = isNaN(v) ? 1.0 : v;
+    renderResults();
+  });
+  const topoFeatureEl = document.getElementById('topoFeature');
+  if (topoFeatureEl) topoFeatureEl.addEventListener('change', e => { state.topoFeature = e.target.value; renderResults(); });
+  ['topoH', 'topoLh'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      state[id] = toUSLength(isNaN(v) ? 0 : v, state.unitSystem);
+      renderResults();
+    });
+  });
+  const topoXEl = document.getElementById('topoX');
+  if (topoXEl) topoXEl.addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    // topoX is a signed distance — convert magnitude but preserve sign
+    state.topoX = (isNaN(v) ? 0 : (v < 0 ? -1 : 1)) * toUSLength(Math.abs(isNaN(v) ? 0 : v), state.unitSystem);
     renderResults();
   });
   document.getElementById('groundElev').addEventListener('input', e => {
@@ -3232,7 +3378,23 @@ function init() {
   });
 
   document.getElementById('V').value = state.V;
-  document.getElementById('kzt').value = state.kzt;
+  // K_zt mode init
+  const kztModeSeg = document.getElementById('kztModeSeg');
+  if (kztModeSeg) {
+    kztModeSeg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.val === state.kztMode));
+    document.getElementById('kztAutoInputs').style.display = state.kztMode === 'auto' ? '' : 'none';
+    document.getElementById('kztManualInput').style.display = state.kztMode === 'manual' ? '' : 'none';
+  }
+  const kztValEl = document.getElementById('kzt');
+  if (kztValEl) kztValEl.value = state.kzt;
+  const topoFeatEl = document.getElementById('topoFeature');
+  if (topoFeatEl) topoFeatEl.value = state.topoFeature;
+  const topoHEl = document.getElementById('topoH');
+  if (topoHEl) topoHEl.value = state.topoH;
+  const topoLhEl = document.getElementById('topoLh');
+  if (topoLhEl) topoLhEl.value = state.topoLh;
+  const topoXEl2 = document.getElementById('topoX');
+  if (topoXEl2) topoXEl2.value = state.topoX;
   document.getElementById('groundElev').value = state.groundElev;
   document.getElementById('h').value = state.h;
   document.getElementById('minDim').value = state.minDim;
@@ -3312,7 +3474,7 @@ document.addEventListener('DOMContentLoaded', init);
 
     document.getElementById('V').value = fmt(speedOut(state.V), 1);
     document.getElementById('exposure').value = state.exposure;
-    document.getElementById('kzt').value = state.kzt;
+    if (document.getElementById('kzt')) document.getElementById('kzt').value = state.kzt;
     document.getElementById('groundElev').value = fmt(lengthOut(state.groundElev), 1);
     document.getElementById('enclosure').value = state.enclosure;
     document.getElementById('h').value = fmt(lengthOut(state.h), 2);

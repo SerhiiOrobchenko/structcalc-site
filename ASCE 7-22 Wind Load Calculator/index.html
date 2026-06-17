@@ -486,9 +486,48 @@
           </div>
         </div>
         <div class="row2">
-          <div class="field">
-            <label for="kzt">Topographic factor, K<sub>zt</sub><button type="button" class="info-btn" data-info="kzt" aria-label="Learn more">i</button></label>
-            <input type="number" id="kzt" step="any" min="1">
+          <div class="field field-full">
+            <label>Topographic factor, K<sub>zt</sub> <button type="button" class="info-btn" data-info="kzt" aria-label="Learn more">i</button></label>
+            <div class="seg seg-light" id="kztModeSeg" style="margin-top:4px;">
+              <button type="button" data-val="flat" class="active">Flat terrain</button>
+              <button type="button" data-val="auto">Topo feature</button>
+              <button type="button" data-val="manual">Manual</button>
+            </div>
+            <div id="kztAutoInputs" style="display:none; margin-top:8px;">
+              <div class="row2" style="margin-bottom:6px;">
+                <div class="field">
+                  <label for="topoFeature">Feature type</label>
+                  <select id="topoFeature">
+                    <option value="2DRidge">2D Ridge</option>
+                    <option value="2DEscarp">2D Escarpment</option>
+                    <option value="3DHill">3D Axisymmetric Hill</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label style="color:var(--brand); font-weight:700;" id="kztAutoResult">K<sub>zt</sub> = —</label>
+                </div>
+              </div>
+              <div class="row2">
+                <div class="field">
+                  <label for="topoH">H — hill height (<span class="unit-len">ft</span>)</label>
+                  <input type="number" id="topoH" step="any" min="0" value="30">
+                </div>
+                <div class="field">
+                  <label for="topoLh">L<sub>h</sub> — half-height distance (<span class="unit-len">ft</span>)</label>
+                  <input type="number" id="topoLh" step="any" min="1" value="150">
+                </div>
+              </div>
+              <div class="row2">
+                <div class="field">
+                  <label for="topoX">x — dist. from crest (<span class="unit-len">ft</span>, + = downwind)</label>
+                  <input type="number" id="topoX" step="any" value="0">
+                </div>
+                <div class="field"></div>
+              </div>
+            </div>
+            <div id="kztManualInput" style="display:none; margin-top:8px;">
+              <input type="number" id="kzt" step="any" min="1" value="1.0" style="max-width:120px;">
+            </div>
           </div>
           <div class="field">
             <label for="groundElev">Ground elevation, z<sub>e</sub> (<span id="lblGroundElev">ft</span>)<button type="button" class="info-btn" data-info="groundElev" aria-label="Learn more">i</button></label>
