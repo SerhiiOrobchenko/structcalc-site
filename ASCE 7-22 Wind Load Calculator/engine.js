@@ -919,13 +919,13 @@ function pUnit() { return state.unitSystem === 'SI' ? 'kPa' : 'psf'; }
 function pVal(psf) { return state.unitSystem === 'SI' ? psf / PSF_PER_KPA : psf; }
 
 function stepsTableHTML(steps) {
-  // SkyCiv-style "References | Calculations | Results" columnar layout
-  let html = '<table class="steps-table"><thead><tr><th>Reference</th><th>Calculation</th><th>Result</th></tr></thead><tbody>';
+  // Calculation | Result | Reference — Reference always on the right.
+  let html = '<table class="steps-table"><thead><tr><th>Calculation</th><th>Result</th><th>Reference</th></tr></thead><tbody>';
   steps.forEach(st => {
     html += '<tr>' +
-      '<td class="ref-col"><span class="src-tag">' + st.clause + '</span></td>' +
       '<td class="calc-col"><span class="step-label">' + st.label + '</span><div class="formula">' + st.formula + '</div></td>' +
       '<td class="result-col">' + st.result + '</td>' +
+      '<td class="ref-col"><span class="src-tag">' + st.clause + '</span></td>' +
       '</tr>';
   });
   html += '</tbody></table>';
@@ -1195,20 +1195,23 @@ function renderResults() {
    nothing here is computed.
    ===================================================================== */
 function renderPrintCover() {
-  const tbHost = document.getElementById('printTitleBlockHost');
-  if (tbHost) tbHost.innerHTML = buildTitleBlockHTML(1);
-
+  // Cover page is a clean title page — no title block header (that repeats on
+  // report pages via <thead>). Fields below populate the cover-page layout.
   const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  setTxt('printProjectName', state.projectName || '—');
-  setTxt('printProjectNumber', state.projectNumber || '—');
-  setTxt('printEngineer', state.engineer || '—');
-  setTxt('printProjectDate', state.projectDate
+  setTxt('coverCompany',      state.companyName  || '');
+  setTxt('coverSection',      state.sectionName  || '');
+  setTxt('printProjectName',  state.projectName  || '—');
+  setTxt('printProjectNumber',state.projectNumber || '—');
+  setTxt('printEngineer',     state.engineer     || '—');
+  setTxt('printProjectDate',  state.projectDate
     ? new Date(state.projectDate + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
     : '—');
   setTxt('printRiskCategory', state.riskCategory || '—');
   setTxt('printMode', state.mode === 'mwfrs'
     ? 'Main Wind Force Resisting System (MWFRS), Envelope Procedure (Ch. 28)'
     : 'Components & Cladding (Ch. 30)');
+  setTxt('coverChkdBy',  state.chkdBy  || '—');
+  setTxt('coverAppdBy',  state.appdBy  || '—');
 }
 
 /* =====================================================================
@@ -1419,47 +1422,45 @@ function reportOpenRoofHTML(r) {
 // DOM content (only inside @page margin boxes, which Chrome doesn't
 // support), so an honest running page count cannot be produced here. Users
 // should verify actual printed page numbers in the PDF/print preview.
-function buildTitleBlockHTML(sheetNo) {
+// Compact 2-row title block that repeats at the top of every print page via
+// <thead>{display:table-header-group} in table.report-page (single table for
+// the entire report body). "Sheet no." removed — with a continuous single
+// table, per-physical-page numbering requires CSS Paged Media counters which
+// Chrome does not support for DOM content; Word export uses PageNumber.CURRENT.
+function buildTitleBlockHTML() {
   const s = state;
-  const dateStr = (iso) => iso
+  const d = (iso) => iso
     ? new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
     : '&ndash;';
+  const v = (val) => val ? escHtml(val) : '&ndash;';
   return '<table class="title-block"><tbody>' +
     '<tr>' +
-      '<td class="tb-company">' + (s.companyName ? escHtml(s.companyName) : '&ndash;') + '</td>' +
-      '<td class="tb-project">' +
-        '<div class="tb-label">Project</div><div>' + (s.projectName ? escHtml(s.projectName) : '&ndash;') + '</div>' +
-        '<div class="tb-label">Section</div><div>' + (s.sectionName ? escHtml(s.sectionName) : '&ndash;') + '</div>' +
-      '</td>' +
-      '<td class="tb-ref">' +
-        '<div class="tb-label">Job Ref.</div><div>' + (s.jobRef ? escHtml(s.jobRef) : '&ndash;') + '</div>' +
-        '<div class="tb-label">Sheet no.</div><div>' + sheetNo + '</div>' +
-      '</td>' +
+      '<td class="tb-company">' + v(s.companyName) + '</td>' +
+      '<td class="tb-project"><span class="tb-label">Project</span> ' + v(s.projectName) +
+        ' &nbsp;&bull;&nbsp; <span class="tb-label">Section</span> ' + v(s.sectionName) + '</td>' +
+      '<td class="tb-ref"><span class="tb-label">Job Ref.</span> ' + v(s.jobRef) + '</td>' +
     '</tr>' +
     '<tr>' +
-      '<td class="tb-signoff"><div class="tb-label">Calc. by</div><div>' + (s.engineer ? escHtml(s.engineer) : '&ndash;') + '</div><div class="tb-label">Date</div><div>' + dateStr(s.projectDate) + '</div></td>' +
-      '<td class="tb-signoff"><div class="tb-label">Chk&rsquo;d by</div><div>' + (s.chkdBy ? escHtml(s.chkdBy) : '&ndash;') + '</div><div class="tb-label">Date</div><div>' + dateStr(s.chkdDate) + '</div></td>' +
-      '<td class="tb-signoff"><div class="tb-label">App&rsquo;d by</div><div>' + (s.appdBy ? escHtml(s.appdBy) : '&ndash;') + '</div><div class="tb-label">Date</div><div>' + dateStr(s.appdDate) + '</div></td>' +
+      '<td class="tb-signoff"><span class="tb-label">Calc. by</span> ' + v(s.engineer) + ' <span class="tb-label">Date</span> ' + d(s.projectDate) + '</td>' +
+      '<td class="tb-signoff"><span class="tb-label">Chk&rsquo;d by</span> ' + v(s.chkdBy) + ' <span class="tb-label">Date</span> ' + d(s.chkdDate) + '</td>' +
+      '<td class="tb-signoff"><span class="tb-label">App&rsquo;d by</span> ' + v(s.appdBy) + ' <span class="tb-label">Date</span> ' + d(s.appdDate) + '</td>' +
     '</tr>' +
   '</tbody></table>';
 }
 
-// Assembles the full printable report from r/state. Sections are numbered
-// sequentially and conditional sections (Parapet, Open Roof) are appended
-// only when applicable — mirrors what is actually shown on screen. Each
-// section is wrapped in a <table class="report-page"> whose <thead> holds
-// the repeating title block (sheet no. = section index + 1; sheet 1 is the
-// cover page built by renderPrintCover()).
+// Assembles the full printable report from r/state. All sections flow in ONE
+// <table class="report-page"> so content fills pages naturally without forced
+// per-section page breaks. The title block repeats at the top of every print
+// page via <thead>{display:table-header-group}. Section numbering is still
+// sequential; conditional sections are appended only when applicable.
 function buildReportHTML(r) {
   const s = state;
   let secNum = 0;
+  // section() now produces a plain div — no table wrapper, no page break.
   const section = (title, ref, body) => {
     secNum++;
-    const inner = '<div class="panel report-section"><h2>' + secNum + '. ' + title +
+    return '<div class="report-section"><h2>' + secNum + '. ' + title +
       (ref ? ' <span class="ref">' + ref + '</span>' : '') + '</h2>' + body + '</div>';
-    // Sheet 1 = cover page (renderPrintCover); sections start at sheet 2.
-    return '<table class="report-page"><thead><tr><th>' + buildTitleBlockHTML(secNum + 1) +
-      '</th></tr></thead><tbody><tr><td>' + inner + '</td></tr></tbody></table>';
   };
 
   let html = '';
@@ -1505,7 +1506,12 @@ function buildReportHTML(r) {
   // stepsTableHTML), so a separate end-of-report reference list would only
   // duplicate citations the reader has already seen in context.
 
-  return html;
+  // Wrap all sections in a single report-page table. The <thead> title block
+  // repeats at the top of every physical print page automatically via
+  // thead{display:table-header-group} — no forced per-section page breaks, so
+  // content fills pages evenly and naturally.
+  return '<table class="report-page"><thead><tr><th>' + buildTitleBlockHTML() +
+    '</th></tr></thead><tbody><tr><td>' + html + '</td></tr></tbody></table>';
 }
 
 /* =====================================================================
@@ -2161,47 +2167,62 @@ function bindInfoModal() {
    PRINT / EXPORT REPORT
    ===================================================================== */
 function bindPrintButton() {
-  const btn = document.getElementById('printBtn');
+  // Keep "generated" text current.
   const genEl = document.getElementById('printGenerated');
   if (genEl) {
-    genEl.textContent = 'Report generated ' + new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) + ' — values reflect the inputs and computed results shown below at the time of printing.';
+    genEl.textContent = 'Report generated ' +
+      new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) +
+      ' — values reflect the inputs and computed results at the time of export.';
   }
 
-  // Paper size/orientation: rewrites the @page CSS rule in #printPageStyle
-  // so Chrome's print/Save-as-PDF uses the selected paper and orientation.
-  // Source: CSS Paged Media — @page { size: <named-size> <orientation>; }
-  // Chrome fully supports this. Firefox/Safari may ignore the size property.
+  // @page CSS size/orientation — updated when selects change in the modal.
+  // CSS Paged Media: Chrome honours this for Save-as-PDF; Firefox/Safari may not.
   function updatePageStyle() {
     const size   = (document.getElementById('paperSize')   || {}).value || 'letter';
     const orient = (document.getElementById('paperOrient') || {}).value || 'portrait';
     const styleEl = document.getElementById('printPageStyle');
     if (styleEl) styleEl.textContent = '@page{size:' + size + ' ' + orient + ';margin:.75in .5in;}';
   }
-
   const sizeSel   = document.getElementById('paperSize');
   const orientSel = document.getElementById('paperOrient');
   if (sizeSel)   sizeSel.addEventListener('change', updatePageStyle);
   if (orientSel) orientSel.addEventListener('change', updatePageStyle);
-  updatePageStyle(); // apply default (letter portrait) immediately on init
+  updatePageStyle();
 
-  if (btn) {
-    btn.addEventListener('click', () => window.print());
-  }
+  // ---- Export modal wiring ----
+  const openBtn  = document.getElementById('printBtn');
+  const modal    = document.getElementById('exportModal');
+  const closeBtn = document.getElementById('exportModalClose');
+  const doBtn    = document.getElementById('doExportBtn');
+  const pdfOpts  = document.getElementById('exportPdfOpts');
+  let currentFmt = 'pdf';
 
-  const xlsxBtn = document.getElementById('exportXlsxBtn');
-  if (xlsxBtn) {
-    xlsxBtn.addEventListener('click', () => exportReportXLSX(lastResult));
-  }
+  function openModal() { if (modal) modal.classList.add('open'); }
+  function closeModal() { if (modal) modal.classList.remove('open'); }
 
-  const docxBtn = document.getElementById('exportDocxBtn');
-  if (docxBtn) {
-    docxBtn.addEventListener('click', () => exportReportDOCX(lastResult));
-  }
+  if (openBtn) openBtn.addEventListener('click', openModal);
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  if (modal) modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-  const rtfBtn = document.getElementById('exportRtfBtn');
-  if (rtfBtn) {
-    rtfBtn.addEventListener('click', () => exportReportRTF(lastResult));
-  }
+  // Format selector buttons
+  document.querySelectorAll('#exportModal .fmt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#exportModal .fmt-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFmt = btn.dataset.fmt;
+      if (pdfOpts) pdfOpts.style.display = currentFmt === 'pdf' ? '' : 'none';
+    });
+  });
+
+  // Execute export
+  if (doBtn) doBtn.addEventListener('click', () => {
+    closeModal();
+    if      (currentFmt === 'pdf')  { window.print(); }
+    else if (currentFmt === 'xlsx') { exportReportXLSX(lastResult); }
+    else if (currentFmt === 'docx') { exportReportDOCX(lastResult); }
+    else if (currentFmt === 'rtf')  { exportReportRTF(lastResult);  }
+  });
 }
 
 /* =====================================================================
@@ -3210,39 +3231,4 @@ document.addEventListener('DOMContentLoaded', init);
     document.getElementById('projectDate').value = state.projectDate;
     document.getElementById('riskCategory').value = state.riskCategory || 'II';
 
-    // Print title block fields (Phase 3 / report header)
-    document.getElementById('companyName').value = state.companyName || '';
-    document.getElementById('sectionName').value = state.sectionName || '';
-    document.getElementById('jobRef').value = state.jobRef || '';
-    document.getElementById('chkdBy').value = state.chkdBy || '';
-    document.getElementById('chkdDate').value = state.chkdDate || '';
-    document.getElementById('appdBy').value = state.appdBy || '';
-    document.getElementById('appdDate').value = state.appdDate || '';
-
-    document.getElementById('unitSI').classList.toggle('active', state.unitSystem === 'SI');
-    document.getElementById('unitUS').classList.toggle('active', state.unitSystem === 'US');
-
-    applyModeVisibility();
-    applyRoofTypeVisibility();
-    applyEnclosureVisibility();
-    updateUnitLabels();
-    renderResults();
-  }
-
-  window.addEventListener('message', (event) => {
-    const msg = event.data;
-    if (!msg || typeof msg !== 'object') return;
-    if (msg.type === 'loadState') {
-      applyState(msg.state);
-      if (msg.unitSystem) setUnitSystem(msg.unitSystem);
-    } else if (msg.type === 'requestState') {
-      postState();
-    }
-  });
-
-  const origRender = renderResults;
-  renderResults = function () {
-    origRender();
-    postState();
-  };
-})();
+    // Print title block fields (Phase 
