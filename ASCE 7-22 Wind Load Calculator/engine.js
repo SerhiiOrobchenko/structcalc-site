@@ -2166,6 +2166,24 @@ function bindPrintButton() {
   if (genEl) {
     genEl.textContent = 'Report generated ' + new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) + ' — values reflect the inputs and computed results shown below at the time of printing.';
   }
+
+  // Paper size/orientation: rewrites the @page CSS rule in #printPageStyle
+  // so Chrome's print/Save-as-PDF uses the selected paper and orientation.
+  // Source: CSS Paged Media — @page { size: <named-size> <orientation>; }
+  // Chrome fully supports this. Firefox/Safari may ignore the size property.
+  function updatePageStyle() {
+    const size   = (document.getElementById('paperSize')   || {}).value || 'letter';
+    const orient = (document.getElementById('paperOrient') || {}).value || 'portrait';
+    const styleEl = document.getElementById('printPageStyle');
+    if (styleEl) styleEl.textContent = '@page{size:' + size + ' ' + orient + ';margin:.75in .5in;}';
+  }
+
+  const sizeSel   = document.getElementById('paperSize');
+  const orientSel = document.getElementById('paperOrient');
+  if (sizeSel)   sizeSel.addEventListener('change', updatePageStyle);
+  if (orientSel) orientSel.addEventListener('change', updatePageStyle);
+  updatePageStyle(); // apply default (letter portrait) immediately on init
+
   if (btn) {
     btn.addEventListener('click', () => window.print());
   }
@@ -2174,6 +2192,645 @@ function bindPrintButton() {
   if (xlsxBtn) {
     xlsxBtn.addEventListener('click', () => exportReportXLSX(lastResult));
   }
+
+  const docxBtn = document.getElementById('exportDocxBtn');
+  if (docxBtn) {
+    docxBtn.addEventListener('click', () => exportReportDOCX(lastResult));
+  }
+
+  const rtfBtn = document.getElementById('exportRtfBtn');
+  if (rtfBtn) {
+    rtfBtn.addEventListener('click', () => exportReportRTF(lastResult));
+  }
+}
+
+/* =====================================================================
+   WORD (.docx) EXPORT  (docx library — loaded from unpkg CDN)
+   Produces a .docx calculation package matching the print report:
+   • Repeating title block in the Word Header (company, project, job ref,
+     calc/chkd/app'd by + dates, true running page numbers via Word's
+     PageNumber.CURRENT / PageNumber.TOTAL_PAGES field codes — unlike the
+     PDF approach which cannot produce reliable CSS page-counters).
+   • Input Data, Design Summary, Step-by-Step Calculation, and pressure
+     zone tables (MWFRS/C&C/Parapet/Open Roof as applicable).
+   • Coefficient subscripts rendered as Word subScript TextRuns (e.g.
+     K<sub>h</sub> → TextRun("K") + TextRun("h", subScript:true))
+     so every cell is editable in Word and subscripts are native Word
+     formatting, not images.
+   Source: docx npm library — https://github.com/dolanmiu/docx
+   ===================================================================== */
+
+// Parse an HTML fragment containing <sub>/<sup> tags and common HTML
+// entities into an array of docx TextRun objects. Sub/superscript parts
+// become TextRuns with subScript/superScript:true. All values come from
+// the same r/state HTML already verified in buildReportHTML — no new
+// content is generated here.
+function htmlToRuns(html, runProps) {
+  if (!html) return [new docx.TextRun(Object.assign({ text: '' }, runProps))];
+  const decode = s => s
+    .replace(/&mdash;/g,  '—').replace(/&ndash;/g,  '–').replace(/&minus;/g, '−')
+    .replace(/&times;/g,  '×').replace(/&plusmn;/g, '±').replace(/&deg;/g,   '°')
+    .replace(/&le;/g,     '≤').replace(/&ge;/g,     '≥').replace(/&ne;/g,    '≠')
+    .replace(/&rarr;/g,   '→').replace(/&larr;/g,   '←').replace(/&infin;/g, '∞')
+    .replace(/&amp;/g,    '&').replace(/&lt;/g,      '<').replace(/&gt;/g,    '>')
+    .replace(/&nbsp;/g,   ' ').replace(/&rsquo;/g,  '’').replace(/&#39;/g, "'")
+    .replace(/&ldquo;/g, '“').replace(/&rdquo;/g, '”')
+    .replace(/&#\d+;/g, m => String.fromCharCode(parseInt(m.slice(2), 10)));
+
+  const runs = [];
+  // Split on <sub>...</sub> and <sup>...</sup> tokens (non-greedy)
+  const parts = html.split(/(<sub>[\s\S]*?<\/sub>|<sup>[\s\S]*?<\/sup>)/i);
+  parts.forEach(part => {
+    const subMatch = part.match(/^<sub>([\s\S]*?)<\/sub>$/i);
+    const supMatch = part.match(/^<sup>([\s\S]*?)<\/sup>$/i);
+    if (subMatch) {
+      const text = decode(subMatch[1].replace(/<[^>]+>/g, ''));
+      if (text) runs.push(new docx.TextRun(Object.assign({ text, subScript: true  }, runProps)));
+    } else if (supMatch) {
+      const text = decode(supMatch[1].replace(/<[^>]+>/g, ''));
+      if (text) runs.push(new docx.TextRun(Object.assign({ text, superScript: true }, runProps)));
+    } else {
+      const text = decode(part.replace(/<[^>]+>/g, ''));
+      if (text) runs.push(new docx.TextRun(Object.assign({ text }, runProps)));
+    }
+  });
+  return runs.length ? runs : [new docx.TextRun(Object.assign({ text: '' }, runProps))];
+}
+
+// Convert an AOA (array of arrays, same format as Excel helpers) to a
+// docx Table. First row = header (shaded). colWidths: DXA array, must
+// sum to the content width (9360 DXA for Letter, 1" margins).
+// Cell text may contain HTML sub/sup, decoded via htmlToRuns().
+function aoaToWordTable(aoa, colWidths) {
+  const borderDef = { style: docx.BorderStyle.SINGLE, size: 1, color: '999999' };
+  const borders   = { top: borderDef, bottom: borderDef, left: borderDef, right: borderDef };
+  const CM = { top: 60, bottom: 60, left: 100, right: 100 }; // cell margins
+
+  return new docx.Table({
+    width: { size: colWidths.reduce((a, b) => a + b, 0), type: docx.WidthType.DXA },
+    columnWidths: colWidths,
+    rows: aoa.map((row, ri) => {
+      const isHeader = ri === 0;
+      return new docx.TableRow({
+        tableHeader: isHeader,
+        children: row.map((cell, ci) => {
+          const cellStr = cell == null ? '' : String(cell);
+          return new docx.TableCell({
+            borders,
+            margins: CM,
+            width: { size: colWidths[ci] || colWidths[colWidths.length - 1], type: docx.WidthType.DXA },
+            shading: isHeader
+              ? { fill: 'D5E8F0', type: docx.ShadingType.CLEAR }
+              : { fill: 'FFFFFF', type: docx.ShadingType.CLEAR },
+            children: [new docx.Paragraph({
+              children: htmlToRuns(cellStr, isHeader ? { bold: true, size: 18 } : { size: 18 }),
+              spacing: { before: 0, after: 0 },
+            })],
+          });
+        }),
+      });
+    }),
+  });
+}
+
+// Section heading paragraph (Heading 2 style).
+function docxHeading(text) {
+  return new docx.Paragraph({
+    heading: docx.HeadingLevel.HEADING_2,
+    children: [new docx.TextRun({ text, bold: true, size: 22, font: 'Arial' })],
+    spacing: { before: 200, after: 80 },
+  });
+}
+
+// Build and download a Word (.docx) calculation report.
+// r = lastResult (the most recent compute() output); all values come
+// directly from r/state — no new calculations or citations are added.
+async function exportReportDOCX(r) {
+  if (typeof docx === 'undefined') {
+    alert('Word export library failed to load (requires internet access to unpkg.com). Please check your connection and try again.');
+    return;
+  }
+  if (!r) {
+    alert('No results to export yet — please check the inputs above.');
+    return;
+  }
+  const s = state;
+
+  // ---- Title block: appears in the Word Header (repeats every page) ----
+  // Uses true Word page-number fields (PageNumber.CURRENT/TOTAL_PAGES),
+  // not a static per-section index — unlike the PDF/print approach where
+  // CSS @page counters are unsupported by Chrome for DOM content.
+  const fmtDate = iso => iso
+    ? new Date(iso + 'T00:00:00').toLocaleDateString(undefined,
+        { year: 'numeric', month: 'short', day: 'numeric' })
+    : '—';
+
+  const BDR = { style: docx.BorderStyle.SINGLE, size: 1, color: '999999' };
+  const TBDR = { top: BDR, bottom: BDR, left: BDR, right: BDR };
+  const TCM  = { top: 60, bottom: 60, left: 100, right: 100 };
+  const TBLW = 9360; // content width DXA (Letter, 1" margins)
+
+  function tbCell(children, width, opts) {
+    return new docx.TableCell({
+      borders: TBDR, margins: TCM,
+      width: { size: width, type: docx.WidthType.DXA },
+      shading: { fill: 'FFFFFF', type: docx.ShadingType.CLEAR },
+      ...opts,
+      children,
+    });
+  }
+  function tbPara(runs, opts) {
+    return new docx.Paragraph({ children: runs, spacing: { before: 0, after: 0 }, ...opts });
+  }
+  function tbLabel(text) {
+    return new docx.TextRun({ text, size: 14, color: '666666', bold: false, font: 'Arial' });
+  }
+  function tbVal(text) {
+    return new docx.TextRun({ text: text || '—', size: 18, bold: false, font: 'Arial' });
+  }
+  function tbValBold(text) {
+    return new docx.TextRun({ text: text || '—', size: 22, bold: true, font: 'Arial' });
+  }
+
+  const titleBlockTable = new docx.Table({
+    width: { size: TBLW, type: docx.WidthType.DXA },
+    columnWidths: [3000, 3680, 2680],
+    rows: [
+      // Row 1: Company | Project + Section | Job Ref + Sheet no.
+      new docx.TableRow({ children: [
+        tbCell([tbPara([tbValBold(s.companyName || 'Company')])], 3000,
+               { shading: { fill: 'EAF3FB', type: docx.ShadingType.CLEAR }, verticalAlign: docx.VerticalAlign.CENTER }),
+        tbCell([
+          tbPara([tbLabel('Project: '), tbVal(s.projectName)]),
+          tbPara([tbLabel('Section: '), tbVal(s.sectionName)]),
+        ], 3680),
+        tbCell([
+          tbPara([tbLabel('Job Ref.: '), tbVal(s.jobRef)]),
+          tbPara([
+            tbLabel('Sheet: '),
+            new docx.TextRun({ children: [docx.PageNumber.CURRENT], size: 18, font: 'Arial' }),
+            new docx.TextRun({ text: ' / ', size: 18, font: 'Arial' }),
+            new docx.TextRun({ children: [docx.PageNumber.TOTAL_PAGES], size: 18, font: 'Arial' }),
+          ]),
+        ], 2680),
+      ]}),
+      // Row 2: Calc. by | Chk'd by | App'd by
+      new docx.TableRow({ children: [
+        tbCell([
+          tbPara([tbLabel('Calc. by: '), tbVal(s.engineer)]),
+          tbPara([tbLabel('Date: '),     tbVal(fmtDate(s.projectDate))]),
+        ], 3000),
+        tbCell([
+          tbPara([tbLabel('Chk’d by: '), tbVal(s.chkdBy)]),
+          tbPara([tbLabel('Date: '),          tbVal(fmtDate(s.chkdDate))]),
+        ], 3680),
+        tbCell([
+          tbPara([tbLabel('App’d by: '), tbVal(s.appdBy)]),
+          tbPara([tbLabel('Date: '),          tbVal(fmtDate(s.appdDate))]),
+        ], 2680),
+      ]}),
+    ],
+  });
+
+  // ---- Document body -------------------------------------------------------
+  const children = [];
+
+  // Report title
+  children.push(new docx.Paragraph({
+    heading: docx.HeadingLevel.HEADING_1,
+    children: [new docx.TextRun({
+      text: 'Wind Load Report — ASCE/SEI 7-22, Chapters 26–30',
+      bold: true, size: 28, font: 'Arial',
+    })],
+    spacing: { before: 0, after: 120 },
+  }));
+
+  // Generated note
+  const modeTxt = s.mode === 'mwfrs'
+    ? 'Main Wind Force Resisting System (MWFRS) — Envelope Procedure (Ch. 28)'
+    : 'Components & Cladding (C&C) (Ch. 30)';
+  children.push(new docx.Paragraph({
+    children: [new docx.TextRun({
+      text: 'Calculation procedure: ' + modeTxt + '  |  '
+          + 'Report generated ' + new Date().toLocaleDateString(undefined,
+            { year: 'numeric', month: 'long', day: 'numeric' })
+          + ' — values reflect the inputs and computed results at the time of export.',
+      size: 16, italics: true, color: '666666', font: 'Arial',
+    })],
+    spacing: { before: 0, after: 240 },
+  }));
+
+  // 1. Input Data
+  children.push(docxHeading('1. Project & Input Data — ASCE/SEI 7-22, Chapters 26–30'));
+  children.push(aoaToWordTable(inputDataAOA(r), [3400, 2900, 3060]));
+  children.push(new docx.Paragraph({ children: [], spacing: { before: 160, after: 0 } }));
+
+  // 2. Design Summary
+  children.push(docxHeading('2. Design Summary'));
+  children.push(aoaToWordTable(designSummaryAOA(r), [6000, 3360]));
+  children.push(new docx.Paragraph({ children: [], spacing: { before: 160, after: 0 } }));
+
+  // 3. Step-by-Step Calculation
+  children.push(docxHeading('3. Step-by-Step Calculation — ASCE/SEI 7-22 Ch. 26'));
+  children.push(aoaToWordTable(stepsAOA(r.steps), [1300, 2300, 4000, 1760]));
+  children.push(new docx.Paragraph({ children: [], spacing: { before: 160, after: 0 } }));
+
+  // 4. Pressure zone tables
+  if (s.mode === 'mwfrs') {
+    children.push(docxHeading('4. MWFRS Design Pressures — Eq. 28.3-1, Figs. 28.3-1/28.3-2'));
+    children.push(new docx.Paragraph({ children: [new docx.TextRun({ text: 'Load Case 1 (Zones 1–4, 1E–4E) — Fig. 28.3-1', bold: true, size: 18, font: 'Arial' })], spacing: { before: 80, after: 40 } }));
+    const lc1Aoa = zoneTableAOA(r.mwfrsLC1, false);
+    const lc1Cols = lc1Aoa[0] ? distributeWidth(lc1Aoa[0].length, TBLW) : [TBLW];
+    children.push(aoaToWordTable(lc1Aoa, lc1Cols));
+    children.push(new docx.Paragraph({ children: [], spacing: { before: 120, after: 40 } }));
+    children.push(new docx.Paragraph({ children: [new docx.TextRun({ text: 'Load Case 2 (Zones 1–6, 1E–6E) — Fig. 28.3-1', bold: true, size: 18, font: 'Arial' })], spacing: { before: 0, after: 40 } }));
+    const lc2Aoa = zoneTableAOA(r.mwfrsLC2, false);
+    const lc2Cols = lc2Aoa[0] ? distributeWidth(lc2Aoa[0].length, TBLW) : [TBLW];
+    children.push(aoaToWordTable(lc2Aoa, lc2Cols));
+  } else {
+    children.push(docxHeading('4. C&C Design Pressures — Eq. 30.3-1, Figs. 30.3-1/30.3-2'));
+    children.push(new docx.Paragraph({ children: [new docx.TextRun({ text: 'Walls — Zones 4 & 5 — Fig. 30.3-1', bold: true, size: 18, font: 'Arial' })], spacing: { before: 80, after: 40 } }));
+    const wallAoa = zoneTableAOA(r.ccWall, true);
+    children.push(aoaToWordTable(wallAoa, distributeWidth(wallAoa[0] ? wallAoa[0].length : 3, TBLW)));
+    children.push(new docx.Paragraph({ children: [], spacing: { before: 120, after: 40 } }));
+    children.push(new docx.Paragraph({ children: [new docx.TextRun({ text: 'Roof — Fig. 30.3-2', bold: true, size: 18, font: 'Arial' })], spacing: { before: 0, after: 40 } }));
+    const roofAoa = zoneTableAOA(r.ccRoof, true);
+    children.push(aoaToWordTable(roofAoa, distributeWidth(roofAoa[0] ? roofAoa[0].length : 3, TBLW)));
+    if (s.hasOverhang && r.ccOverhang) {
+      children.push(new docx.Paragraph({ children: [], spacing: { before: 120, after: 40 } }));
+      children.push(new docx.Paragraph({ children: [new docx.TextRun({ text: 'Roof Overhangs — Sec. 30.7', bold: true, size: 18, font: 'Arial' })], spacing: { before: 0, after: 40 } }));
+      const ohAoa = zoneTableAOA(r.ccOverhang, true, OVERHANG_ZONE_LABELS);
+      children.push(aoaToWordTable(ohAoa, distributeWidth(ohAoa[0] ? ohAoa[0].length : 3, TBLW)));
+    }
+  }
+
+  // 5. Parapet (conditional)
+  if (s.hasParapet && r.parapet) {
+    const p = r.parapet;
+    const lenUnit = s.unitSystem === 'SI' ? 'm' : 'ft';
+    children.push(new docx.Paragraph({ children: [], spacing: { before: 160, after: 0 } }));
+    children.push(docxHeading('5. Parapet Wind Pressures — Sec. 27.3.4/28.3.4 (MWFRS); Sec. 30.9 (C&C)'));
+    const parapetAoa = [
+      ['Quantity', 'Value'],
+      ['z (top of parapet), ' + lenUnit, fmt(lengthOut(p.zParapet), 1)],
+      ['Kh at parapet', fmt(p.khp, 3)],
+      ['qp, ' + pUnit(), fmt(pVal(p.qp), 2)],
+      ['pp windward (GCpn=+1.5), ' + pUnit(), fmt(pVal(p.ppWindward), 2)],
+      ['pp leeward (GCpn=−1.0), ' + pUnit(), fmt(pVal(p.ppLeeward), 2)],
+      ['Total combined pp, ' + pUnit(), fmt(pVal(p.ppTotal), 2)],
+    ];
+    children.push(aoaToWordTable(parapetAoa, [6000, 3360]));
+    children.push(new docx.Paragraph({ children: [], spacing: { before: 80, after: 40 } }));
+    const ccpAoa = ccParapetAOA(p.ccParapet, PARAPET_ZONE_LABELS);
+    children.push(aoaToWordTable(ccpAoa, distributeWidth(ccpAoa[0] ? ccpAoa[0].length : 3, TBLW)));
+  }
+
+  // 6. Open Building — Free Roof (conditional)
+  if (r.openRoof) {
+    const o = r.openRoof;
+    const secNum = (s.hasParapet && r.parapet) ? 6 : 5;
+    children.push(new docx.Paragraph({ children: [], spacing: { before: 160, after: 0 } }));
+    children.push(docxHeading(secNum + '. Open Building — Free Roof — Sec. 27.3.2, Eq. 27.3-2'));
+    const openSummaryAoa = [
+      ['Quantity', 'Value'],
+      ['Gust factor, G', fmt(o.G, 2)],
+      ['h / L', fmt(o.hL, 3)],
+    ];
+    children.push(aoaToWordTable(openSummaryAoa, [6000, 3360]));
+    if (!o.note4Applies && o.gamma0180) {
+      children.push(new docx.Paragraph({ children: [], spacing: { before: 80, after: 40 } }));
+      const gAoa = openRoofGammaAOA(o.gamma0180);
+      children.push(aoaToWordTable(gAoa, distributeWidth(gAoa[0] ? gAoa[0].length : 4, TBLW)));
+    }
+    if (o.fig277) {
+      children.push(new docx.Paragraph({ children: [], spacing: { before: 80, after: 40 } }));
+      const zAoa = openRoofZoneAOA(o.fig277);
+      children.push(aoaToWordTable(zAoa, distributeWidth(zAoa[0] ? zAoa[0].length : 4, TBLW)));
+    }
+  }
+
+  // ---- Assemble document --------------------------------------------------
+  const wordDoc = new docx.Document({
+    styles: {
+      default: {
+        document: { run: { font: 'Arial', size: 20 } },
+      },
+      paragraphStyles: [
+        { id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', quickFormat: true,
+          run:       { size: 28, bold: true, font: 'Arial', color: '2E75B6' },
+          paragraph: { spacing: { before: 0, after: 120 }, outlineLevel: 0 } },
+        { id: 'Heading2', name: 'Heading 2', basedOn: 'Normal', next: 'Normal', quickFormat: true,
+          run:       { size: 22, bold: true, font: 'Arial', color: '2E75B6' },
+          paragraph: { spacing: { before: 200, after: 80 }, outlineLevel: 1 } },
+      ],
+    },
+    sections: [{
+      properties: {
+        page: {
+          size:   { width: 12240, height: 15840 }, // US Letter (DXA: 1440 per inch)
+          margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 }, // 1" margins
+        },
+      },
+      headers: {
+        default: new docx.Header({
+          children: [
+            titleBlockTable,
+            new docx.Paragraph({ children: [], spacing: { before: 60, after: 60 } }),
+          ],
+        }),
+      },
+      children,
+    }],
+  });
+
+  // ---- Download -----------------------------------------------------------
+  const blob = await docx.Packer.toBlob(wordDoc);
+  const nameBase = (s.projectName || 'Wind_Load_Report')
+    .replace(/[\\/:*?"<>|]+/g, '_').trim() || 'Wind_Load_Report';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = nameBase + '_ASCE7-22_Wind.docx';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
+
+// Distribute totalDXA evenly across nCols, first col gets any remainder.
+function distributeWidth(nCols, totalDXA) {
+  if (!nCols) return [totalDXA];
+  const base = Math.floor(totalDXA / nCols);
+  const rem  = totalDXA - base * nCols;
+  return Array.from({ length: nCols }, (_, i) => i === 0 ? base + rem : base);
+}
+
+/* =====================================================================
+   RTF EXPORT — Pure JavaScript, no external library required.
+   Data source: same AOA helper functions used by Excel and Word exports.
+   RTF control-word references: Microsoft RTF Specification 1.9.1.
+   ===================================================================== */
+
+// Escape RTF special characters (\, {, }) and encode non-ASCII as \uN?
+// unicode escapes.  Must be called on plain-text strings (after entity
+// decoding), NOT on strings that already contain RTF control words.
+function rtfEsc(s) {
+  let o = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i], code = s.charCodeAt(i);
+    if      (c === '\\') o += '\\\\';
+    else if (c === '{')  o += '\\{';
+    else if (c === '}')  o += '\\}';
+    else if (code > 127) o += '\\u' + code + '?';  // RTF 1.9.1 §2.1.1
+    else                 o += c;
+  }
+  return o;
+}
+
+// Convert HTML fragment (plain text + <sub>/<sup>/<b>/<i> inline tags +
+// HTML entities) into an RTF inline string.  Uses the DOM to decode
+// entities (&mdash; &deg; etc.) — same approach as stripHtml().
+// Produces RTF \sub / \super control words for subscript/superscript —
+// these are native RTF inline formatting (RTF spec §2.6.3).
+function htmlToRtf(html) {
+  if (html == null) return '';
+  const s = String(html);
+  const toks = [];
+  const re = /<(\/?)([a-zA-Z][a-zA-Z0-9]*)[^>]*>/g;
+  let pos = 0, m;
+  while ((m = re.exec(s)) !== null) {
+    if (m.index > pos) toks.push({ t: 'txt', v: s.slice(pos, m.index) });
+    toks.push({ t: 'tag', close: m[1] === '/', tag: m[2].toLowerCase() });
+    pos = re.lastIndex;
+  }
+  if (pos < s.length) toks.push({ t: 'txt', v: s.slice(pos) });
+
+  const el = document.createElement('div');
+  let out = '';
+  for (const tok of toks) {
+    if (tok.t === 'tag') {
+      if (!tok.close) {
+        if (tok.tag === 'sub')             out += '{\\sub ';
+        else if (tok.tag === 'sup')        out += '{\\super ';
+        else if (tok.tag === 'b')          out += '{\\b ';
+        else if (tok.tag === 'i')          out += '{\\i ';
+      } else {
+        if (tok.tag === 'sub' || tok.tag === 'sup') out += '\\nosupersub}';
+        else if (tok.tag === 'b' || tok.tag === 'i') out += '}';
+      }
+    } else {
+      el.innerHTML = tok.v;   // decode &mdash; &deg; &times; etc. via DOM
+      out += rtfEsc(el.textContent || el.innerText || '');
+    }
+  }
+  return out;
+}
+
+// Convert AOA (array-of-arrays) to an RTF table string.
+// colWidths: column widths in twips (1440 twips = 1 inch).
+// Row 0 = header row: bold text + light-blue cell fill (\clcbpat3 → #D5E8F0).
+// Cell borders: single 0.75pt rule on all four sides.
+function aoaToRtfTable(aoa, colWidths) {
+  if (!aoa || !aoa.length) return '';
+  // RTF border spec — same on all sides, 0.75pt (10 half-points)
+  const BDR = '\\clbrdrt\\brdrs\\brdrw10\\clbrdrl\\brdrs\\brdrw10' +
+              '\\clbrdrb\\brdrs\\brdrw10\\clbrdrr\\brdrs\\brdrw10';
+  let rtf = '';
+  aoa.forEach((row, ri) => {
+    const isHdr = ri === 0;
+    const n = row.length;
+    // Row header: \trowd = start row; \trgaph108 = default cell spacing
+    rtf += '\\trowd\\trgaph108\\trleft0\n';
+    // Cell definitions — cumulative right-edge positions (\cellxN)
+    let cumX = 0;
+    for (let ci = 0; ci < n; ci++) {
+      const w = (colWidths && colWidths[ci]) || Math.floor(9360 / n);
+      cumX += w;
+      // \clcbpat3 → background colour 3 from \colortbl (#D5E8F0, light blue)
+      rtf += BDR + (isHdr ? ' \\clcbpat3' : '') + ' \\cellx' + cumX + '\n';
+    }
+    // Cell content: \pard\intbl resets paragraph props inside a table cell
+    for (let ci = 0; ci < n; ci++) {
+      const v = row[ci] != null ? String(row[ci]) : '';
+      const inner = htmlToRtf(v);
+      rtf += '\\pard\\intbl\\sa0\\sb0' +
+             (isHdr ? '{\\b ' + inner + '}' : inner) + '\\cell\n';
+    }
+    rtf += '\\row\n';
+  });
+  // \pard after \row resets paragraph context (required after RTF table)
+  rtf += '\\pard\\sa0\\par\n';
+  return rtf;
+}
+
+// RTF Heading-2 style paragraph: bold 12pt (#2 blue), space before/after.
+function rtfH2(text) {
+  return '\\pard\\sb200\\sa80{\\b\\fs24\\cf2 ' + rtfEsc(text) + '}\\cf1\\par\n';
+}
+
+// Build and download a Rich Text Format (.rtf) wind-load report.
+// r = result object returned by compute().  No external library needed —
+// RTF is plain text with control words, assembled and downloaded via Blob.
+function exportReportRTF(r) {
+  if (!r) { alert('No results to export yet — please check the inputs above.'); return; }
+  const s = state;
+
+  const fmtDate = iso => {
+    if (!iso) return '—';
+    const d = new Date(iso + 'T00:00:00');
+    return isNaN(d) ? iso : d.toLocaleDateString(undefined,
+      { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
+  // --- RTF document header ---
+  // \colortbl colour indices (1-based):
+  //   1 = default black  (#000000)
+  //   2 = brand blue     (#1565C0)
+  //   3 = header fill    (#D5E8F0)  — matches table.title-block CSS
+  //   4 = muted label    (#64748B)
+  const colorTbl =
+    '{\\colortbl;' +
+    '\\red0\\green0\\blue0;' +            // 1 — default text
+    '\\red21\\green101\\blue192;' +       // 2 — brand blue (#1565C0)
+    '\\red213\\green232\\blue240;' +      // 3 — header fill (#D5E8F0)
+    '\\red100\\green116\\blue139;}';      // 4 — muted (#64748B)
+
+  const chunks = [
+    '{\\rtf1\\ansi\\ansicpg1252\\deff0',
+    '{\\fonttbl{\\f0\\fswiss\\fcharset0 Arial;}}',
+    colorTbl,
+    // Page size: US Letter 8.5"×11" = 12240×15840 twips (1440 twips = 1")
+    // Margins: 1" all sides = 1440 twips
+    '\\paperw12240\\paperh15840\\margl1440\\margr1440\\margt1440\\margb1440',
+    '\\widowctrl\\hyphauto0',
+  ];
+
+  // --- Title-block info table (4 cols) ---
+  // Mirrors the 2-row title block from buildTitleBlockHTML(), but condensed
+  // to 2 rows × 4 cols so it fits the RTF table model without page headers.
+  const tbAoa = [
+    ['Company', 'Project', 'Section', 'Job Ref.'],
+    [
+      s.companyName || '—',
+      (s.projectName || '—') + (s.projectNumber ? ' (' + s.projectNumber + ')' : ''),
+      s.sectionName  || '—',
+      s.jobRef       || '—',
+    ],
+    ['Calc. by / Date', "Chk’d by / Date", "App’d by / Date", 'Risk Category'],
+    [
+      (s.engineer || '—') + '   ' + fmtDate(s.projectDate),
+      (s.chkdBy   || '—') + '   ' + fmtDate(s.chkdDate),
+      (s.appdBy   || '—') + '   ' + fmtDate(s.appdDate),
+      s.riskCategory || '—',
+    ],
+  ];
+  chunks.push(aoaToRtfTable(tbAoa, distributeWidth(4, 9360)));
+
+  // --- Report title ---
+  chunks.push(
+    '\\pard\\sb120\\sa60{\\b\\fs32\\cf2 ' +
+    rtfEsc('Wind Load Report — ASCE/SEI 7-22, Chapters 26–30') +
+    '}\\cf1\\par'
+  );
+  const modeTxt = s.mode === 'mwfrs'
+    ? 'Main Wind Force Resisting System (MWFRS) — Envelope Procedure (Ch. 28)'
+    : 'Components & Cladding (C&C) (Ch. 30)';
+  chunks.push(
+    '\\pard\\sa120{\\fs18\\cf4 Procedure: ' + rtfEsc(modeTxt) +
+    '  |  Report generated ' + rtfEsc(new Date().toLocaleDateString(undefined,
+      { year: 'numeric', month: 'long', day: 'numeric' })) +
+    '}\\cf1\\par'
+  );
+
+  // --- 1. Input Data ---
+  chunks.push(rtfH2('1. Project & Input Data — ASCE/SEI 7-22, Chapters 26–30'));
+  chunks.push(aoaToRtfTable(inputDataAOA(r), [3400, 2900, 3060]));
+
+  // --- 2. Design Summary ---
+  chunks.push(rtfH2('2. Design Summary'));
+  chunks.push(aoaToRtfTable(designSummaryAOA(r), [6000, 3360]));
+
+  // --- 3. Step-by-Step Calculation ---
+  chunks.push(rtfH2('3. Step-by-Step Calculation — ASCE/SEI 7-22 Ch. 26'));
+  chunks.push(aoaToRtfTable(stepsAOA(r.steps), [1300, 2300, 4000, 1760]));
+
+  // --- 4. Pressure zone tables (MWFRS or C&C) ---
+  if (s.mode === 'mwfrs') {
+    chunks.push(rtfH2('4. MWFRS Design Pressures — Eq. 28.3-1, Figs. 28.3-1/28.3-2'));
+    chunks.push('\\pard\\sb80\\sa40{\\b ' + rtfEsc('Load Case 1 (Zones 1–4, 1E–4E) — Fig. 28.3-1') + '}\\par\n');
+    const lc1 = zoneTableAOA(r.mwfrsLC1, false);
+    chunks.push(aoaToRtfTable(lc1, distributeWidth(lc1[0] ? lc1[0].length : 4, 9360)));
+    chunks.push('\\pard\\sb80\\sa40{\\b ' + rtfEsc('Load Case 2 (Zones 1–6, 1E–6E) — Fig. 28.3-1') + '}\\par\n');
+    const lc2 = zoneTableAOA(r.mwfrsLC2, false);
+    chunks.push(aoaToRtfTable(lc2, distributeWidth(lc2[0] ? lc2[0].length : 4, 9360)));
+  } else {
+    chunks.push(rtfH2('4. C&C Design Pressures — Eq. 30.3-1, Figs. 30.3-1/30.3-2'));
+    chunks.push('\\pard\\sb80\\sa40{\\b ' + rtfEsc('Walls — Zones 4 & 5 — Fig. 30.3-1') + '}\\par\n');
+    const wallAoa = zoneTableAOA(r.ccWall, true);
+    chunks.push(aoaToRtfTable(wallAoa, distributeWidth(wallAoa[0] ? wallAoa[0].length : 3, 9360)));
+    chunks.push('\\pard\\sb80\\sa40{\\b ' + rtfEsc('Roof — Fig. 30.3-2') + '}\\par\n');
+    const roofAoa = zoneTableAOA(r.ccRoof, true);
+    chunks.push(aoaToRtfTable(roofAoa, distributeWidth(roofAoa[0] ? roofAoa[0].length : 3, 9360)));
+    if (s.hasOverhang && r.ccOverhang) {
+      chunks.push('\\pard\\sb80\\sa40{\\b ' + rtfEsc('Roof Overhangs — Sec. 30.7') + '}\\par\n');
+      const ohAoa = zoneTableAOA(r.ccOverhang, true, OVERHANG_ZONE_LABELS);
+      chunks.push(aoaToRtfTable(ohAoa, distributeWidth(ohAoa[0] ? ohAoa[0].length : 3, 9360)));
+    }
+  }
+
+  // --- 5. Parapet (conditional) ---
+  if (s.hasParapet && r.parapet) {
+    const p = r.parapet;
+    const lenUnit = s.unitSystem === 'SI' ? 'm' : 'ft';
+    chunks.push(rtfH2('5. Parapet Wind Pressures — Sec. 27.3.4/28.3.4 (MWFRS); Sec. 30.9 (C&C)'));
+    // Plain-text labels (no sub/super needed here — matches Word export style)
+    const parapetSumAoa = [
+      ['Quantity', 'Value'],
+      ['z (top of parapet), ' + lenUnit,           fmt(lengthOut(p.zParapet), 1)],
+      ['Kh at parapet',                             fmt(p.khp, 3)],
+      ['qp, ' + pUnit(),                            fmt(pVal(p.qp), 2)],
+      ['pp windward (GCpn=+1.5), ' + pUnit(),       fmt(pVal(p.ppWindward), 2)],
+      ['pp leeward (GCpn=-1.0), ' + pUnit(),        fmt(pVal(p.ppLeeward), 2)],
+      ['Total combined pp, ' + pUnit(),              fmt(pVal(p.ppTotal), 2)],
+    ];
+    chunks.push(aoaToRtfTable(parapetSumAoa, [6000, 3360]));
+    const ccpAoa = ccParapetAOA(p.ccParapet, PARAPET_ZONE_LABELS);
+    chunks.push(aoaToRtfTable(ccpAoa, distributeWidth(ccpAoa[0] ? ccpAoa[0].length : 3, 9360)));
+  }
+
+  // --- 6. Open Building — Free Roof (conditional) ---
+  if (r.openRoof) {
+    const o = r.openRoof;
+    const secNum = (s.hasParapet && r.parapet) ? 6 : 5;
+    chunks.push(rtfH2(secNum + '. Open Building — Free Roof — Sec. 27.3.2, Eq. 27.3-2'));
+    const openSumAoa = [
+      ['Quantity', 'Value'],
+      ['Gust factor, G', fmt(o.G, 2)],
+      ['h / L',          fmt(o.hL, 3)],
+    ];
+    chunks.push(aoaToRtfTable(openSumAoa, [6000, 3360]));
+    if (!o.note4Applies && o.gamma0180) {
+      const gAoa = openRoofGammaAOA(o.gamma0180);
+      chunks.push(aoaToRtfTable(gAoa, distributeWidth(gAoa[0] ? gAoa[0].length : 4, 9360)));
+    }
+    if (o.fig277) {
+      const zAoa = openRoofZoneAOA(o.fig277);
+      chunks.push(aoaToRtfTable(zAoa, distributeWidth(zAoa[0] ? zAoa[0].length : 4, 9360)));
+    }
+  }
+
+  chunks.push('}');   // close \rtf1 root group
+
+  // --- Download ---
+  const blob = new Blob([chunks.join('\n')], { type: 'application/rtf' });
+  const nameBase = (s.projectName || 'Wind_Load_Report')
+    .replace(/[\\/:*?"<>|]+/g, '_').trim() || 'Wind_Load_Report';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = nameBase + '_ASCE7-22_Wind.rtf';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
 }
 
 /* =====================================================================
@@ -2299,7 +2956,11 @@ function appendAoaSheet(wb, sheetName, title, aoa) {
   XLSX.utils.book_append_sheet(wb, ws, sheetName.substring(0, 31));
 }
 
-// Builds and downloads the full workbook mirroring buildReportHTML(r).
+// Builds and downloads a workbook containing data tables only (Phase 4
+// rescope): Project Info header, Input Data, Design Summary, and the
+// applicable pressure-zone tables. The step-by-step Calc Steps and
+// standalone References sheets are intentionally omitted — the PDF/print
+// report carries those; Excel is for tabular data exchange only.
 // r should be lastResult (the most recent compute() output).
 function exportReportXLSX(r) {
   if (typeof XLSX === 'undefined') {
@@ -2313,9 +2974,37 @@ function exportReportXLSX(r) {
   const s = state;
   const wb = XLSX.utils.book_new();
 
+  // --- Project Information cover sheet (Phase 3 title-block fields) --------
+  // All values are user-entered metadata — nothing here is computed.
+  const fmtDate = (iso) => iso
+    ? new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+    : '';
+  const infoAOA = [
+    ['Field', 'Value'],
+    ['Company', s.companyName || ''],
+    ['Project', s.projectName || ''],
+    ['Project No. / Location', s.projectNumber || ''],
+    ['Section', s.sectionName || ''],
+    ['Job Ref.', s.jobRef || ''],
+    ['Risk Category', s.riskCategory || ''],
+    ['Calculation Procedure', s.mode === 'mwfrs'
+      ? 'Main Wind Force Resisting System (MWFRS) — Envelope Procedure (Ch. 28)'
+      : 'Components & Cladding (C&C) (Ch. 30)'],
+    [],
+    ['Calc. by', s.engineer || ''],
+    ['Date', fmtDate(s.projectDate)],
+    ['Chk\'d by', s.chkdBy || ''],
+    ['Chk\'d date', fmtDate(s.chkdDate)],
+    ['App\'d by', s.appdBy || ''],
+    ['App\'d date', fmtDate(s.appdDate)],
+  ];
+  appendAoaSheet(wb, 'Project Info', 'ASCE/SEI 7-22 Wind Load Calculation — Project Information', infoAOA);
+
+  // --- Data tables ----------------------------------------------------------
   appendAoaSheet(wb, 'Input Data', 'ASCE/SEI 7-22 Wind Load Calculation — Input Data', inputDataAOA(r));
   appendAoaSheet(wb, 'Design Summary', 'Design Summary', designSummaryAOA(r));
-  appendAoaSheet(wb, 'Calc Steps', 'Step-by-Step Calculation (ASCE/SEI 7-22 Ch. 26)', stepsAOA(r.steps));
+  // Calc Steps sheet intentionally omitted (step-by-step derivation belongs
+  // in the PDF/print report, not in a data-table workbook).
 
   if (s.mode === 'mwfrs') {
     appendAoaSheet(wb, 'MWFRS LC1', 'MWFRS Load Case 1 (Zones 1-4, 1E-4E) — Fig. 28.3-1', zoneTableAOA(r.mwfrsLC1, false));
@@ -2362,7 +3051,11 @@ function exportReportXLSX(r) {
     appendAoaSheet(wb, 'Open Roof', 'Open Building — Free Roof Pressures — Sec. 27.3.2, Eq. 27.3-2', aoa);
   }
 
-  appendAoaSheet(wb, 'References', 'Where These Formulas Come From', referencesAOA());
+  // References sheet intentionally omitted (Phase 4): every table row
+  // already carries an inline ASCE 7-22 clause/figure/equation citation
+  // in its "Reference" column — a standalone sheet would only duplicate
+  // what the reader already sees in context. Consistent with Phase 2
+  // removal of the same section from the PDF/print report.
 
   const nameBase = (s.projectName || 'Wind_Load_Report').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'Wind_Load_Report';
   XLSX.writeFile(wb, nameBase + '_ASCE7-22_Wind.xlsx');

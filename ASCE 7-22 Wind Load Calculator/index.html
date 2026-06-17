@@ -216,6 +216,11 @@
     table.report-page:first-of-type{page-break-before:avoid; break-before:avoid;}
   }
 </style>
+<!-- Print paper size/orientation — updated by JS via updatePageStyle()
+     using CSS @page { size: <paper> <orientation>; }.
+     Chrome honours this for both browser print and "Save as PDF".
+     Other browsers (Firefox, Safari) may partially or fully ignore it. -->
+<style id="printPageStyle">@page{size:letter portrait;margin:.75in .5in;}</style>
 </head>
 <body>
 
@@ -228,8 +233,21 @@
       <button id="unitSI" data-units="SI">SI (kPa, m)</button>
       <button id="unitUS" data-units="US" class="active">US / Imperial (psf, ft)</button>
     </div>
+    <label for="paperSize" style="font-size:.8rem; color:#c5daf0; margin-right:2px;">Page:</label>
+    <select id="paperSize" style="font-size:.8rem; padding:3px 5px; border-radius:4px; border:1px solid #9fc6ea; background:transparent; color:inherit; cursor:pointer;">
+      <option value="letter">Letter (8.5×11&Prime;)</option>
+      <option value="legal">Legal (8.5×14&Prime;)</option>
+      <option value="tabloid">Tabloid (11×17&Prime;)</option>
+      <option value="A4">A4</option>
+    </select>
+    <select id="paperOrient" style="font-size:.8rem; padding:3px 5px; border-radius:4px; border:1px solid #9fc6ea; background:transparent; color:inherit; cursor:pointer;">
+      <option value="portrait">Portrait</option>
+      <option value="landscape">Landscape</option>
+    </select>
     <button type="button" id="printBtn" class="btn" style="background:transparent; border:1px solid #9fc6ea;">Export PDF</button>
     <button type="button" id="exportXlsxBtn" class="btn" style="background:transparent; border:1px solid #9fc6ea;">Export Excel</button>
+    <button type="button" id="exportDocxBtn" class="btn" style="background:transparent; border:1px solid #9fc6ea;">Export Word</button>
+    <button type="button" id="exportRtfBtn"  class="btn" style="background:transparent; border:1px solid #9fc6ea;">Export RTF</button>
   </div>
 </header>
 
@@ -611,7 +629,10 @@
   </div>
 </div>
 
+<!-- SheetJS — Excel export -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- docx — Word export (UMD build; exposes window.docx with all named exports) -->
+<script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
 <script src="engine.js"></script>
 </body>
 </html>
