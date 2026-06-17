@@ -1426,8 +1426,12 @@ function buildTitleBlockHTML() {
     ? new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
     : '&ndash;';
   const v = (val) => val ? escHtml(val) : '&ndash;';
+  const logoHTML = s.companyLogo
+    ? '<img src="' + s.companyLogo + '" style="max-width:100%; max-height:52px; object-fit:contain;">'
+    : '<div class="tb-logo-placeholder">LOGO</div>';
   return '<table class="title-block"><tbody>' +
     '<tr>' +
+      '<td class="tb-logo" rowspan="2">' + logoHTML + '</td>' +
       '<td class="tb-company">' + v(s.companyName) + '</td>' +
       '<td class="tb-project"><span class="tb-label">Project</span> ' + v(s.projectName) +
         ' &nbsp;&bull;&nbsp; <span class="tb-label">Section</span> ' + v(s.sectionName) + '</td>' +
