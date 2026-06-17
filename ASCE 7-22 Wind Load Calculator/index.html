@@ -185,17 +185,17 @@
      buildTitleBlockHTML). ----------------------------------------------- */
   /* ---- Title block (integrated into black page frame) --------------------- */
   table.title-block{width:100%; border-collapse:collapse; font-size:.72rem; margin:0;}
-  table.title-block td{border:1px solid #000; padding:3px 6px; vertical-align:middle;}
-  table.title-block .tb-logo{width:16%; border-right:2px solid #000; text-align:center; padding:4px;}
-  .tb-logo-placeholder{color:#bbb; font-size:.65rem; border:1px dashed #ccc; padding:8px 4px; letter-spacing:.05em;}
-  table.title-block .tb-company{width:22%; font-weight:700; font-size:.82rem;}
-  table.title-block .tb-project{width:38%;}
-  table.title-block .tb-ref{width:24%;}
-  table.title-block .tb-signoff{width:28%;}
+  table.title-block td{border:1px solid rgb(50,50,50); padding:3px 6px; vertical-align:middle;}
+  table.title-block .tb-logo{width:22%; border-right:2px solid rgb(50,50,50); text-align:center; padding:8px; vertical-align:middle;}
+  .tb-logo-placeholder{color:#aaa; font-size:.7rem; border:1px dashed #bbb; padding:24px 8px; letter-spacing:.06em; text-align:center;}
+  table.title-block .tb-fl{width:5%; font-size:.6rem; font-weight:700; color:#444; white-space:nowrap; vertical-align:top; padding:3px 4px;}
+  table.title-block .tb-fv{vertical-align:top; padding:3px 6px; font-size:.78rem;}
+  table.title-block .tb-fv-wide{font-weight:700;}
+  table.title-block .tb-company{font-weight:700; font-size:.78rem; vertical-align:middle;}
   table.title-block .tb-label{font-size:.58rem; color:#555; text-transform:uppercase; letter-spacing:.04em; margin-right:3px; display:block;}
 
   /* ---- Cover page --------------------------------------------------------- */
-  .cover-page{border:2px solid #000; padding:1.5cm 2cm; box-sizing:border-box;
+  .cover-page{border:2px solid rgb(50,50,50); padding:1.5cm 2cm; box-sizing:border-box;
               display:flex; flex-direction:column; min-height:9in;}
   .cover-company{font-size:1rem; font-weight:700; color:var(--brand);}
   .cover-section{font-size:.85rem; color:var(--muted); margin-top:2px;}
@@ -207,13 +207,21 @@
 
   /* ---- Print report ------------------------------------------------------- */
   .print-only{display:none;}
-  table.report-page{width:100%; border-collapse:collapse; border:2px solid #000;}
+  table.report-page{width:100%; border-collapse:collapse; border:2px solid rgb(50,50,50);}
   table.report-page thead{display:table-header-group;}
-  table.report-page > thead > tr > th{padding:0; border-bottom:2px solid #000;}
+  table.report-page > thead > tr > th{padding:0; border-bottom:2px solid rgb(50,50,50);}
   table.report-page > tbody > tr > td{padding:10px 12px;}
   .report-section{margin-bottom:14px;}
-  .report-section h2{font-size:.95rem; margin:14px 0 5px; color:var(--brand); border-bottom:none; padding-bottom:0; font-weight:700;}
-  table.steps-table td.ref-col, table.steps-table th:last-child{width:9%; white-space:nowrap; color:var(--muted); font-size:.74rem; text-align:right;}
+  .report-section h2{font-size:.9rem; margin:14px 0 4px; color:rgb(50,50,50); border-bottom:1px solid rgb(50,50,50); padding-bottom:2px; font-weight:700; letter-spacing:.01em;}
+  table.steps-table{border-collapse:collapse; width:100%;}
+  table.steps-table td, table.steps-table th{border:none; padding:2px 6px 2px 0; vertical-align:top;}
+  table.steps-table thead tr{border-bottom:1px solid rgb(50,50,50);}
+  table.steps-table .step-label{font-weight:600; font-size:.86rem; display:block;}
+  table.steps-table .formula{font-size:.84rem; color:#333; font-style:italic;}
+  table.steps-table td.ref-col, table.steps-table th:last-child{width:9%; white-space:nowrap; color:#888; font-size:.7rem; text-align:right; padding-right:0;}
+  table.report-input-table{border-collapse:collapse; width:100%;}
+  table.report-input-table td, table.report-input-table th{border:none; padding:2px 6px; vertical-align:top;}
+  table.report-input-table thead tr{border-bottom:1px solid rgb(50,50,50);}
   table.report-input-table td:nth-child(3), table.report-input-table th:nth-child(3){width:12%; white-space:nowrap;}
   @media print{
     header.topbar, .info-btn, .btn, footer.sources, #exportModal{display:none !important;}

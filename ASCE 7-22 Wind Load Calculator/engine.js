@@ -1427,20 +1427,31 @@ function buildTitleBlockHTML() {
     : '&ndash;';
   const v = (val) => val ? escHtml(val) : '&ndash;';
   const logoHTML = s.companyLogo
-    ? '<img src="' + s.companyLogo + '" style="max-width:100%; max-height:52px; object-fit:contain;">'
+    ? '<img src="' + s.companyLogo + '" style="max-width:100%; max-height:80px; object-fit:contain;">'
     : '<div class="tb-logo-placeholder">LOGO</div>';
+  // Tedds-style 3-row title block:
+  // Row 1: Logo(rowspan=3) | Project label | project name | Job Ref. label | job ref value
+  // Row 2: (logo)          | Section label | section name | Sheet label    | sheet no.
+  // Row 3: (logo)          | Company name  | Calc.by+Date | Chk'd by+Date  | App'd by+Date
   return '<table class="title-block"><tbody>' +
     '<tr>' +
-      '<td class="tb-logo" rowspan="2">' + logoHTML + '</td>' +
-      '<td class="tb-company">' + v(s.companyName) + '</td>' +
-      '<td class="tb-project"><span class="tb-label">Project</span> ' + v(s.projectName) +
-        ' &nbsp;&bull;&nbsp; <span class="tb-label">Section</span> ' + v(s.sectionName) + '</td>' +
-      '<td class="tb-ref"><span class="tb-label">Job Ref.</span> ' + v(s.jobRef) + '</td>' +
+      '<td class="tb-logo" rowspan="3">' + logoHTML + '</td>' +
+      '<td class="tb-fl">Project</td>' +
+      '<td class="tb-fv tb-fv-wide">' + v(s.projectName) + '</td>' +
+      '<td class="tb-fl">Job Ref.</td>' +
+      '<td class="tb-fv">' + v(s.jobRef) + '</td>' +
     '</tr>' +
     '<tr>' +
-      '<td class="tb-signoff"><span class="tb-label">Calc. by</span> ' + v(s.engineer) + ' <span class="tb-label">Date</span> ' + d(s.projectDate) + '</td>' +
-      '<td class="tb-signoff"><span class="tb-label">Chk&rsquo;d by</span> ' + v(s.chkdBy) + ' <span class="tb-label">Date</span> ' + d(s.chkdDate) + '</td>' +
-      '<td class="tb-signoff"><span class="tb-label">App&rsquo;d by</span> ' + v(s.appdBy) + ' <span class="tb-label">Date</span> ' + d(s.appdDate) + '</td>' +
+      '<td class="tb-fl">Section</td>' +
+      '<td class="tb-fv">' + v(s.sectionName) + '</td>' +
+      '<td class="tb-fl">Sheet no.</td>' +
+      '<td class="tb-fv">1</td>' +
+    '</tr>' +
+    '<tr>' +
+      '<td class="tb-company">' + v(s.companyName) + '</td>' +
+      '<td class="tb-signoff"><span class="tb-label">Calc. by</span> ' + v(s.engineer) + '<span class="tb-label">Date</span> ' + d(s.projectDate) + '</td>' +
+      '<td class="tb-signoff"><span class="tb-label">Chk&rsquo;d by</span> ' + v(s.chkdBy) + '<span class="tb-label">Date</span> ' + d(s.chkdDate) + '</td>' +
+      '<td class="tb-signoff"><span class="tb-label">App&rsquo;d by</span> ' + v(s.appdBy) + '<span class="tb-label">Date</span> ' + d(s.appdDate) + '</td>' +
     '</tr>' +
   '</tbody></table>';
 }
