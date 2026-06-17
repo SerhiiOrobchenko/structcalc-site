@@ -100,9 +100,9 @@
   .steps{font-size:.88rem;}
   table.steps-table{font-size:.86rem;}
   table.steps-table td, table.steps-table th{text-align:left; vertical-align:top;}
-  table.steps-table td.ref-col{width:14%; white-space:nowrap; color:var(--muted); font-size:.76rem;}
-  table.steps-table td.calc-col{width:56%;}
-  table.steps-table td.result-col{width:30%; font-weight:700;}
+  table.steps-table td.ref-col{width:4%; white-space:nowrap; color:var(--muted); font-size:.76rem;}
+  table.steps-table td.calc-col{width:63%;}
+  table.steps-table td.result-col{width:33%; font-weight:700;}
   table.steps-table .step-label{font-weight:700; color:var(--brand); font-size:.85rem; display:block; margin-bottom:3px;}
   table.steps-table .formula{font-family:var(--mono); background:#f6f8fb; border:1px solid var(--line); border-radius:4px; padding:5px 7px; margin-top:2px; font-size:.8rem; overflow-x:auto;}
   .note-inline{color:var(--muted); font-size:.78rem; margin-top:4px; font-weight:400;}
@@ -186,7 +186,7 @@
   /* ---- Title block (integrated into black page frame) --------------------- */
   table.title-block{width:100%; border-collapse:collapse; font-size:.72rem; margin:0;}
   table.title-block td{border:1px solid rgb(50,50,50); padding:3px 6px; vertical-align:middle;}
-  table.title-block .tb-logo{width:22%; border-right:2px solid rgb(50,50,50); text-align:center; padding:8px; vertical-align:middle;}
+  table.title-block .tb-logo{width:22%; border-right:1px solid rgb(50,50,50); text-align:center; padding:8px; vertical-align:middle;}
   .tb-logo-placeholder{color:#aaa; font-size:.7rem; border:1px dashed #bbb; padding:24px 8px; letter-spacing:.06em; text-align:center;}
   table.title-block .tb-fl{width:5%; font-size:.6rem; font-weight:700; color:#444; white-space:nowrap; vertical-align:top; padding:3px 4px;}
   table.title-block .tb-fv{vertical-align:top; padding:3px 6px; font-size:.78rem;}
@@ -195,7 +195,7 @@
   table.title-block .tb-label{font-size:.58rem; color:#555; text-transform:uppercase; letter-spacing:.04em; margin-right:3px; display:block;}
 
   /* ---- Cover page --------------------------------------------------------- */
-  .cover-page{border:2px solid rgb(50,50,50); padding:1.5cm 2cm; box-sizing:border-box;
+  .cover-page{border:1px solid rgb(50,50,50); padding:1.5cm 2cm; box-sizing:border-box;
               display:flex; flex-direction:column; min-height:9in;}
   .cover-company{font-size:1rem; font-weight:700; color:var(--brand);}
   .cover-section{font-size:.85rem; color:var(--muted); margin-top:2px;}
@@ -207,10 +207,10 @@
 
   /* ---- Print report ------------------------------------------------------- */
   .print-only{display:none;}
-  table.report-page{width:100%; border-collapse:collapse; border:2px solid rgb(50,50,50);}
+  table.report-page{width:100%; border-collapse:collapse;}
   table.report-page thead{display:table-header-group;}
-  table.report-page > thead > tr > th{padding:0; border-bottom:2px solid rgb(50,50,50);}
-  table.report-page > tbody > tr > td{padding:10px 12px;}
+  table.report-page > thead > tr > th{padding:0; border:1px solid rgb(50,50,50);}
+  table.report-page > tbody > tr > td{padding:10px 12px; border-left:1px solid rgb(50,50,50); border-right:1px solid rgb(50,50,50); border-bottom:1px solid rgb(50,50,50);}
   .report-section{margin-bottom:14px;}
   .report-section h2{font-size:.9rem; margin:14px 0 4px; color:rgb(50,50,50); border-bottom:1px solid rgb(50,50,50); padding-bottom:2px; font-weight:700; letter-spacing:.01em;}
   table.steps-table{border-collapse:collapse; width:100%;}
@@ -218,11 +218,13 @@
   table.steps-table thead tr{border-bottom:1px solid rgb(50,50,50);}
   table.steps-table .step-label{font-weight:600; font-size:.86rem; display:block;}
   table.steps-table .formula{font-size:.84rem; color:#333; font-style:italic;}
-  table.steps-table td.ref-col, table.steps-table th:last-child{width:9%; white-space:nowrap; color:#888; font-size:.7rem; text-align:right; padding-right:0;}
+  table.steps-table td.ref-col{width:4%; white-space:nowrap; color:#888; font-size:.7rem; text-align:right; padding-right:0;}
+  table.steps-table th{color:rgb(50,50,50); font-weight:700;}
+  table.steps-table th:last-child{width:4%; white-space:nowrap; font-size:.7rem; text-align:right; padding-right:0;}
   table.report-input-table{border-collapse:collapse; width:100%;}
   table.report-input-table td, table.report-input-table th{border:none; padding:2px 6px; vertical-align:top;}
   table.report-input-table thead tr{border-bottom:1px solid rgb(50,50,50);}
-  table.report-input-table td:nth-child(3), table.report-input-table th:nth-child(3){width:12%; white-space:nowrap;}
+  table.report-input-table td:nth-child(3), table.report-input-table th:nth-child(3){width:5%; white-space:nowrap;}
   @media print{
     header.topbar, .info-btn, .btn, footer.sources, #exportModal{display:none !important;}
     .intro, #projectInfoPanel, #diagramPanel, .grid{display:none !important;}
@@ -231,6 +233,11 @@
     main{max-width:100%; padding:0;}
     .cover-page{page-break-after:always; break-after:page;}
     table.report-page{page-break-before:avoid; break-before:avoid;}
+    /* Uniform header colours — override var(--brand) for all report tables */
+    table.steps-table th, table.report-input-table th{background:none !important; color:rgb(50,50,50) !important; font-weight:700 !important;}
+    table.steps-table .step-label{color:rgb(50,50,50) !important;}
+    table.steps-table td.ref-col{width:4% !important;}
+    table.report-input-table td:nth-child(3), table.report-input-table th:nth-child(3){width:5% !important;}
   }
 </style>
 <!-- Print paper size/orientation — updated by JS via updatePageStyle()
