@@ -195,6 +195,7 @@
   table.title-block .tb-label{font-size:.58rem; color:#555; text-transform:uppercase; letter-spacing:.04em; margin-right:3px; display:block;}
 
   /* ---- Cover page --------------------------------------------------------- */
+  .min-wind-warn{display:none; background:#fff8e6; border:1px solid #e6a817; border-left:4px solid #e6a817; border-radius:4px; padding:8px 12px; margin:8px 0; font-size:.82rem; color:#6b4200;}
   .cover-page{border:1px solid rgb(50,50,50); padding:1.5cm 2cm; box-sizing:border-box;
               display:flex; flex-direction:column; min-height:9in;}
   .cover-company{font-size:1rem; font-weight:700; color:var(--brand);}
@@ -555,6 +556,8 @@
           <div class="scard"><div class="v" id="cardA">&ndash;</div><div class="k">Zone dim. a</div></div>
         </div>
       </div>
+
+      <div id="minWindWarning" class="min-wind-warn"></div>
 
       <div class="panel">
         <h2>Velocity Pressure &mdash; Step by Step<button type="button" class="info-btn" data-info="stepsInfo" aria-label="Learn more">i</button></h2>

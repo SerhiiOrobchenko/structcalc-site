@@ -897,10 +897,81 @@ function compute(s) {
     };
   }
 
+  // ── Minimum Design Wind Load Check ──────────────────────────────────────
+  // ASCE/SEI 7-22 Sec. 27.1.5 (MWFRS) and Sec. 30.2.2 (C&C) require
+  // computed net pressures to be not less than the tabulated minimums,
+  // regardless of qh-based results.
+  const PSF_MIN_WALL = 16.0;  // psf — MWFRS wall zones, Sec. 27.1.5
+  const PSF_MIN_ROOF = 8.0;   // psf — MWFRS roof zones, Sec. 27.1.5
+  const PSF_MIN_CC   = 16.0;  // psf — all C&C zones, Sec. 30.2.2
+
+  // Sec. 27.1.5 zone classification for Ch. 28 Envelope Procedure zones
+  const WALL_ZONES = new Set(['4','5','6','4E','5E','6E']);
+
+  function zoneMin(z) { return WALL_ZONES.has(z) ? PSF_MIN_WALL : PSF_MIN_ROOF; }
+  function pAbs(p)    { return Math.max(Math.abs(p.min), Math.abs(p.max)); }
+
+  // Collect unique zones from LC1 + LC2 (LC3/LC4 are torsional fractions — skip)
+  const mwfrsAllZones = [];
+  const seenMZ = new Set();
+  [...mwfrsLC1, ...mwfrsLC2].forEach(z => {
+    if (!seenMZ.has(z.zone)) { seenMZ.add(z.zone); mwfrsAllZones.push(z); }
+  });
+
+  const mwfrsMinCheck = mwfrsAllZones.map(z => ({
+    zone: z.zone,
+    pCalc: pAbs(z.p),
+    pMin:  zoneMin(z.zone),
+    type:  WALL_ZONES.has(z.zone) ? 'wall' : 'roof',
+    governs: pAbs(z.p) < zoneMin(z.zone)
+  }));
+  const mwfrsMinGoverns = mwfrsMinCheck.some(c => c.governs);
+
+  const ccAllZones = [...ccWall, ...ccRoof];
+  const ccMinCheck = ccAllZones.map(z => ({
+    zone: z.zone,
+    pCalc: pAbs(z.p),
+    pMin:  PSF_MIN_CC,
+    governs: pAbs(z.p) < PSF_MIN_CC
+  }));
+  const ccMinGoverns = ccMinCheck.some(c => c.governs);
+
+  // Helper: convert psf to display unit for step result text
+  const pFmt = psf => fmt(pVal(psf), 2) + ' ' + pUnit();
+
+  function mwfrsMinResultText() {
+    if (!mwfrsMinGoverns) return 'All zones ≥ minimum — computed pressures govern throughout.';
+    const flagged = mwfrsMinCheck.filter(c => c.governs)
+      .map(c => 'Zone ' + c.zone + ': ' + pFmt(c.pCalc) + ' < min ' + pFmt(c.pMin)).join('; ');
+    return '⚠ Minimum governs: ' + flagged + '. Use minimum values for these zones.';
+  }
+
+  function ccMinResultText() {
+    if (!ccMinGoverns) return 'All zones ≥ 16 psf minimum — computed pressures govern throughout.';
+    const flagged = ccMinCheck.filter(c => c.governs)
+      .map(c => 'Zone ' + c.zone + ': ' + pFmt(c.pCalc) + ' < min ' + pFmt(PSF_MIN_CC)).join('; ');
+    return '⚠ Minimum governs: ' + flagged + '. Use minimum values for these zones.';
+  }
+
+  steps.push({
+    label: 'Minimum MWFRS Design Wind Loads',
+    clause: 'Sec. 27.1.5',
+    formula: 'Wall zones (4, 5, 6): |p| ≥ 16 psf (0.77 kN/m²); Roof zones (1, 2, 3): |p| ≥ 8 psf (0.38 kN/m²). Net pressures, any horizontal direction along each principal axis.',
+    result: mwfrsMinResultText()
+  });
+
+  steps.push({
+    label: 'Minimum C&amp;C Design Wind Pressures',
+    clause: 'Sec. 30.2.2',
+    formula: 'All C&amp;C zones: |p| ≥ 16 psf (0.77 kN/m²), acting normal to surface in either direction.',
+    result: ccMinResultText()
+  });
+
   return {
     kh, ke, kd: KD, qh, gcpi, a,
     steps, mwfrsLC1, mwfrsLC2, mwfrsLC3, mwfrsLC4, torsionApplies,
-    ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, openRoof
+    ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, openRoof,
+    mwfrsMinCheck, mwfrsMinGoverns, ccMinCheck, ccMinGoverns
   };
 }
 
@@ -1179,6 +1250,27 @@ function renderResults() {
   }
 
   renderOpenRoof(r);
+
+  // Show minimum wind load warning banner in UI
+  const minWarnEl = document.getElementById('minWindWarning');
+  if (minWarnEl) {
+    const anyMin = r.mwfrsMinGoverns || r.ccMinGoverns;
+    if (anyMin) {
+      const parts = [];
+      if (r.mwfrsMinGoverns) {
+        const zones = r.mwfrsMinCheck.filter(c => c.governs).map(c => 'Zone ' + c.zone).join(', ');
+        parts.push('MWFRS ' + zones + ': min ' + (r.mwfrsMinCheck.find(c=>c.governs && c.type==='wall') ? '16 psf' : '8 psf') + ' governs');
+      }
+      if (r.ccMinGoverns) {
+        const zones = r.ccMinCheck.filter(c => c.governs).map(c => 'Zone ' + c.zone).join(', ');
+        parts.push('C&C ' + zones + ': min 16 psf governs');
+      }
+      minWarnEl.innerHTML = '&#9888; <strong>Minimum wind loads govern</strong> for some zones — ' + parts.join('; ') + '. See report for details (Sec. 27.1.5 / 30.2.2).';
+      minWarnEl.style.display = '';
+    } else {
+      minWarnEl.style.display = 'none';
+    }
+  }
 
   renderDiagram(r);
   renderPrintCover();
@@ -1462,6 +1554,47 @@ function buildTitleBlockHTML() {
 // section is wrapped in a <table class="report-page"> whose <thead> holds
 // the repeating title block (sheet no. = section index + 1; sheet 1 is the
 // cover page built by renderPrintCover()).
+function reportMinCheckHTML(r) {
+  const pFmtR = psf => fmt(pVal(psf), 2) + ' ' + pUnit();
+  const F = 'rgb(50,50,50)';
+  const warn = '<span style="color:#b85c00; font-weight:700;">&#9888; GOVERNS</span>';
+  const ok   = '<span style="color:#2a7a2a;">&#10003; OK</span>';
+
+  // MWFRS table
+  let mwfrsRows = r.mwfrsMinCheck.map(c => {
+    const type = c.type === 'wall' ? 'Wall' : 'Roof';
+    const status = c.governs
+      ? '<td style="color:#b85c00; font-weight:700;">' + pFmtR(c.pMin) + ' ' + warn + '</td>'
+      : '<td>' + pFmtR(c.pCalc) + ' ' + ok + '</td>';
+    return '<tr><td>Zone ' + c.zone + '</td><td>' + type + '</td><td>' + pFmtR(c.pCalc) + '</td><td>' + pFmtR(c.pMin) + '</td>' + status + '</tr>';
+  }).join('');
+
+  const mwfrsNote = r.mwfrsMinGoverns
+    ? '<p style="color:#b85c00; margin:6px 0 0; font-size:.8rem;">&#9888; One or more MWFRS zones are governed by the Sec. 27.1.5 minimum. Use the minimum pressure for those zones in structural design.</p>'
+    : '<p style="color:#2a7a2a; margin:6px 0 0; font-size:.8rem;">&#10003; All MWFRS zones exceed the Sec. 27.1.5 minimum. Computed pressures govern.</p>';
+
+  // C&C table
+  let ccRows = r.ccMinCheck.map(c => {
+    const status = c.governs
+      ? '<td style="color:#b85c00; font-weight:700;">' + pFmtR(c.pMin) + ' ' + warn + '</td>'
+      : '<td>' + pFmtR(c.pCalc) + ' ' + ok + '</td>';
+    return '<tr><td>Zone ' + c.zone + '</td><td>' + pFmtR(c.pCalc) + '</td><td>' + pFmtR(c.pMin) + '</td>' + status + '</tr>';
+  }).join('');
+
+  const ccNote = r.ccMinGoverns
+    ? '<p style="color:#b85c00; margin:6px 0 0; font-size:.8rem;">&#9888; One or more C&amp;C zones are governed by the Sec. 30.2.2 minimum. Use the minimum pressure for those zones in component design.</p>'
+    : '<p style="color:#2a7a2a; margin:6px 0 0; font-size:.8rem;">&#10003; All C&amp;C zones exceed the Sec. 30.2.2 minimum. Computed pressures govern.</p>';
+
+  const thStyle = 'style="text-align:left;"';
+  return '<p style="font-size:.8rem; margin:0 0 8px;">Per Sec. 27.1.5, MWFRS net design pressures shall not be less than 16 psf (0.77 kN/m²) on wall zones and 8 psf (0.38 kN/m²) on roof zones. Per Sec. 30.2.2, C&amp;C net pressures shall not be less than 16 psf (0.77 kN/m²) acting in either direction normal to the surface.</p>' +
+    '<p style="font-weight:700; margin:8px 0 4px;">MWFRS — Sec. 27.1.5</p>' +
+    '<table class="report-input-table"><thead><tr><th ' + thStyle + '>Zone</th><th ' + thStyle + '>Type</th><th ' + thStyle + '>Calculated |p|</th><th ' + thStyle + '>Minimum |p|</th><th ' + thStyle + '>Design Pressure</th></tr></thead><tbody>' + mwfrsRows + '</tbody></table>' +
+    mwfrsNote +
+    '<p style="font-weight:700; margin:12px 0 4px;">C&amp;C — Sec. 30.2.2</p>' +
+    '<table class="report-input-table"><thead><tr><th ' + thStyle + '>Zone</th><th ' + thStyle + '>Calculated |p|</th><th ' + thStyle + '>Minimum |p|</th><th ' + thStyle + '>Design Pressure</th></tr></thead><tbody>' + ccRows + '</tbody></table>' +
+    ccNote;
+}
+
 function buildReportHTML(r) {
   const s = state;
   let secNum = 0;
@@ -1504,7 +1637,8 @@ function buildReportHTML(r) {
   }
 
   if (r.openRoof) {
-    html += section('Open Building &mdash; Free Roof Pressures', 'Sec. 27.3.2, Eq. 27.3-2: p = q<sub>h</sub>K<sub>d</sub>GC<sub>N</sub>', reportOpenRoofHTML(r));
+    html += section('Minimum Design Wind Load Check', 'Sec. 27.1.5 (MWFRS) / Sec. 30.2.2 (C&amp;C)', reportMinCheckHTML(r));
+  html += section('Open Building &mdash; Free Roof Pressures', 'Sec. 27.3.2, Eq. 27.3-2: p = q<sub>h</sub>K<sub>d</sub>GC<sub>N</sub>', reportOpenRoofHTML(r));
   }
 
   // No standalone "References" section: every section/row/step above already
