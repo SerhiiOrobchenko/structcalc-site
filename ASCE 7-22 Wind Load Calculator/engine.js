@@ -1195,23 +1195,21 @@ function renderResults() {
    nothing here is computed.
    ===================================================================== */
 function renderPrintCover() {
-  // Cover page is a clean title page — no title block header (that repeats on
-  // report pages via <thead>). Fields below populate the cover-page layout.
   const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  setTxt('coverCompany',      state.companyName  || '');
-  setTxt('coverSection',      state.sectionName  || '');
-  setTxt('printProjectName',  state.projectName  || '—');
-  setTxt('printProjectNumber',state.projectNumber || '—');
-  setTxt('printEngineer',     state.engineer     || '—');
-  setTxt('printProjectDate',  state.projectDate
+  setTxt('coverCompany',       state.companyName  || '');
+  setTxt('coverSection',       state.sectionName  || '');
+  setTxt('printProjectName',   state.projectName  || '—');
+  setTxt('printProjectNumber', state.projectNumber || '—');
+  setTxt('printEngineer',      state.engineer     || '—');
+  setTxt('printProjectDate',   state.projectDate
     ? new Date(state.projectDate + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
     : '—');
-  setTxt('printRiskCategory', state.riskCategory || '—');
+  setTxt('printRiskCategory',  state.riskCategory || '—');
   setTxt('printMode', state.mode === 'mwfrs'
     ? 'Main Wind Force Resisting System (MWFRS), Envelope Procedure (Ch. 28)'
     : 'Components & Cladding (Ch. 30)');
-  setTxt('coverChkdBy',  state.chkdBy  || '—');
-  setTxt('coverAppdBy',  state.appdBy  || '—');
+  setTxt('coverChkdBy', state.chkdBy || '—');
+  setTxt('coverAppdBy', state.appdBy || '—');
 }
 
 /* =====================================================================
@@ -1422,11 +1420,6 @@ function reportOpenRoofHTML(r) {
 // DOM content (only inside @page margin boxes, which Chrome doesn't
 // support), so an honest running page count cannot be produced here. Users
 // should verify actual printed page numbers in the PDF/print preview.
-// Compact 2-row title block that repeats at the top of every print page via
-// <thead>{display:table-header-group} in table.report-page (single table for
-// the entire report body). "Sheet no." removed — with a continuous single
-// table, per-physical-page numbering requires CSS Paged Media counters which
-// Chrome does not support for DOM content; Word export uses PageNumber.CURRENT.
 function buildTitleBlockHTML() {
   const s = state;
   const d = (iso) => iso
@@ -1448,15 +1441,15 @@ function buildTitleBlockHTML() {
   '</tbody></table>';
 }
 
-// Assembles the full printable report from r/state. All sections flow in ONE
-// <table class="report-page"> so content fills pages naturally without forced
-// per-section page breaks. The title block repeats at the top of every print
-// page via <thead>{display:table-header-group}. Section numbering is still
-// sequential; conditional sections are appended only when applicable.
+// Assembles the full printable report from r/state. Sections are numbered
+// sequentially and conditional sections (Parapet, Open Roof) are appended
+// only when applicable — mirrors what is actually shown on screen. Each
+// section is wrapped in a <table class="report-page"> whose <thead> holds
+// the repeating title block (sheet no. = section index + 1; sheet 1 is the
+// cover page built by renderPrintCover()).
 function buildReportHTML(r) {
   const s = state;
   let secNum = 0;
-  // section() now produces a plain div — no table wrapper, no page break.
   const section = (title, ref, body) => {
     secNum++;
     return '<div class="report-section"><h2>' + secNum + '. ' + title +
@@ -1506,10 +1499,6 @@ function buildReportHTML(r) {
   // stepsTableHTML), so a separate end-of-report reference list would only
   // duplicate citations the reader has already seen in context.
 
-  // Wrap all sections in a single report-page table. The <thead> title block
-  // repeats at the top of every physical print page automatically via
-  // thead{display:table-header-group} — no forced per-section page breaks, so
-  // content fills pages evenly and naturally.
   return '<table class="report-page"><thead><tr><th>' + buildTitleBlockHTML() +
     '</th></tr></thead><tbody><tr><td>' + html + '</td></tr></tbody></table>';
 }
@@ -2167,16 +2156,9 @@ function bindInfoModal() {
    PRINT / EXPORT REPORT
    ===================================================================== */
 function bindPrintButton() {
-  // Keep "generated" text current.
   const genEl = document.getElementById('printGenerated');
-  if (genEl) {
-    genEl.textContent = 'Report generated ' +
-      new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) +
-      ' — values reflect the inputs and computed results at the time of export.';
-  }
+  if (genEl) { genEl.textContent = 'Report generated ' + new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) + ' — values reflect the inputs and computed results shown below at the time of printing.'; }
 
-  // @page CSS size/orientation — updated when selects change in the modal.
-  // CSS Paged Media: Chrome honours this for Save-as-PDF; Firefox/Safari may not.
   function updatePageStyle() {
     const size   = (document.getElementById('paperSize')   || {}).value || 'letter';
     const orient = (document.getElementById('paperOrient') || {}).value || 'portrait';
@@ -2189,7 +2171,6 @@ function bindPrintButton() {
   if (orientSel) orientSel.addEventListener('change', updatePageStyle);
   updatePageStyle();
 
-  // ---- Export modal wiring ----
   const openBtn  = document.getElementById('printBtn');
   const modal    = document.getElementById('exportModal');
   const closeBtn = document.getElementById('exportModalClose');
@@ -2197,15 +2178,14 @@ function bindPrintButton() {
   const pdfOpts  = document.getElementById('exportPdfOpts');
   let currentFmt = 'pdf';
 
-  function openModal() { if (modal) modal.classList.add('open'); }
+  function openModal()  { if (modal) modal.classList.add('open'); }
   function closeModal() { if (modal) modal.classList.remove('open'); }
 
-  if (openBtn) openBtn.addEventListener('click', openModal);
+  if (openBtn)  openBtn.addEventListener('click', openModal);
   if (closeBtn) closeBtn.addEventListener('click', closeModal);
-  if (modal) modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+  if (modal)    modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-  // Format selector buttons
   document.querySelectorAll('#exportModal .fmt-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#exportModal .fmt-btn').forEach(b => b.classList.remove('active'));
@@ -2215,7 +2195,6 @@ function bindPrintButton() {
     });
   });
 
-  // Execute export
   if (doBtn) doBtn.addEventListener('click', () => {
     closeModal();
     if      (currentFmt === 'pdf')  { window.print(); }
@@ -3231,4 +3210,39 @@ document.addEventListener('DOMContentLoaded', init);
     document.getElementById('projectDate').value = state.projectDate;
     document.getElementById('riskCategory').value = state.riskCategory || 'II';
 
-    // Print title block fields (Phase 
+    // Print title block fields (Phase 3 / report header)
+    document.getElementById('companyName').value = state.companyName || '';
+    document.getElementById('sectionName').value = state.sectionName || '';
+    document.getElementById('jobRef').value = state.jobRef || '';
+    document.getElementById('chkdBy').value = state.chkdBy || '';
+    document.getElementById('chkdDate').value = state.chkdDate || '';
+    document.getElementById('appdBy').value = state.appdBy || '';
+    document.getElementById('appdDate').value = state.appdDate || '';
+
+    document.getElementById('unitSI').classList.toggle('active', state.unitSystem === 'SI');
+    document.getElementById('unitUS').classList.toggle('active', state.unitSystem === 'US');
+
+    applyModeVisibility();
+    applyRoofTypeVisibility();
+    applyEnclosureVisibility();
+    updateUnitLabels();
+    renderResults();
+  }
+
+  window.addEventListener('message', (event) => {
+    const msg = event.data;
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.type === 'loadState') {
+      applyState(msg.state);
+      if (msg.unitSystem) setUnitSystem(msg.unitSystem);
+    } else if (msg.type === 'requestState') {
+      postState();
+    }
+  });
+
+  const origRender = renderResults;
+  renderResults = function () {
+    origRender();
+    postState();
+  };
+})();
