@@ -261,13 +261,16 @@
      Chrome honours this for both browser print and "Save as PDF".
      Other browsers (Firefox, Safari) may partially or fully ignore it. -->
 <style id="printPageStyle">@page{size:letter portrait;margin:.75in .5in;}
-/* Zone result rows: table left, diagram right */
-.zone-row{display:flex;flex-wrap:nowrap;align-items:flex-start;gap:16px;margin-bottom:10px;}
-.zone-row .zone-tbl{flex:0 0 48%;max-width:48%;overflow-x:auto;}
-.zone-row .zone-tbl table{width:100%!important;table-layout:auto;}
-.zone-row .zone-diag{flex:0 0 48%;max-width:48%;}
+</style>
+<!-- Zone layout — separate so updatePageStyle() never overwrites it -->
+<style id="zoneLayoutStyle">
+.zone-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;margin-bottom:10px;}
+.zone-row .zone-tbl{min-width:0;overflow-x:auto;}
+.zone-row .zone-tbl table{width:100%;table-layout:auto;}
+.zone-row .zone-diag{min-width:0;}
+.zone-row .zone-diag svg{width:100%;display:block;max-height:420px;}
 .cc-section-header{background:var(--brand-light,#eaf3ff);font-weight:700;font-size:.8rem;padding:3px 6px;}
-@media(max-width:640px){.zone-row{flex-wrap:wrap;}.zone-row .zone-tbl,.zone-row .zone-diag{flex:0 0 100%;max-width:100%;}}
+@media(max-width:640px){.zone-row{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
