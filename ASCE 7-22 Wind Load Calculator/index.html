@@ -243,7 +243,7 @@
   table.report-input-table td:nth-child(3), table.report-input-table th:nth-child(3){width:5%; white-space:nowrap;}
   @media print{
     header.topbar, .info-btn, .btn, footer.sources, #exportModal{display:none !important;}
-    .intro, #projectInfoPanel, #diagramPanel, .grid{display:none !important;}
+    .intro, #projectInfoPanel, #calcSetupPanel, #diagramPanel, .grid{display:none !important;}
     .print-only{display:block;}
     body{background:#fff;}
     main{max-width:100%; padding:0;}
@@ -352,20 +352,6 @@
 
   <div class="panel" id="projectInfoPanel">
     <h2>Project Information <span class="ref">Report header</span></h2>
-    <div class="topbar-controls" id="structureCatControls" style="margin-bottom:14px;">
-      <strong style="font-size:.9rem; color:var(--brand);">Structure category:</strong>
-      <div class="seg seg-light" role="group" aria-label="Structure category">
-        <button type="button" id="catBuilding" class="active">Building</button>
-        <button type="button" id="catOther">Other Structure (Ch.29)</button>
-      </div>
-    </div>
-    <div class="topbar-controls" id="calcProcControls" style="margin-bottom:14px;">
-      <strong style="font-size:.9rem; color:var(--brand);">Calculation procedure:</strong>
-      <div class="seg seg-light" role="group" aria-label="Calculation procedure">
-        <button type="button" id="modeMWFRS" data-mode-btn="mwfrs" class="active">MWFRS</button>
-        <button type="button" id="modeCC" data-mode-btn="cc">Components &amp; Cladding</button>
-      </div>
-    </div>
     <div class="report-meta">
       <div class="field">
         <label for="projectName">Project name</label>
@@ -425,6 +411,23 @@
       <div class="field">
         <label for="appdDate">App'd date</label>
         <input type="date" id="appdDate">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="calcSetupPanel">
+    <div class="topbar-controls" id="structureCatControls" style="margin-bottom:14px;">
+      <strong style="font-size:.9rem; color:var(--brand);">Structure category:</strong>
+      <div class="seg seg-light" role="group" aria-label="Structure category">
+        <button type="button" id="catBuilding" class="active">Building</button>
+        <button type="button" id="catOther">Other Structure (Ch.29)</button>
+      </div>
+    </div>
+    <div class="topbar-controls" id="calcProcControls">
+      <strong style="font-size:.9rem; color:var(--brand);">Calculation procedure:</strong>
+      <div class="seg seg-light" role="group" aria-label="Calculation procedure">
+        <button type="button" id="modeMWFRS" data-mode-btn="mwfrs" class="active">MWFRS</button>
+        <button type="button" id="modeCC" data-mode-btn="cc">Components &amp; Cladding</button>
       </div>
     </div>
   </div>
@@ -983,6 +986,4 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <!-- docx — Word export (UMD build; exposes window.docx with all named exports) -->
 <script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
-<script src="engine.js"></script>
-</body>
-</html>
+<script s
