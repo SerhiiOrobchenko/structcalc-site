@@ -3137,8 +3137,22 @@ function bindInputs() {
   document.getElementById('unitUS').addEventListener('click', () => setUnitSystem('US'));
 
   // Calculation procedure mode toggle (MWFRS / C&C)
-  document.getElementById('modeMWFRS').addEventListener('click', () => setMode('mwfrs'));
-  document.getElementById('modeCC').addEventListener('click', () => setMode('cc'));
+  // A2: 3-button procedure selector (replaces old 2-button MWFRS / C&C)
+  const procEnvEl = document.getElementById('procEnvelope');
+  const procDirEl = document.getElementById('procDirectional');
+  const procCCEl  = document.getElementById('procCC');
+  if (procEnvEl) procEnvEl.addEventListener('click', () => {
+    state.mode = 'mwfrs'; state.mwfrsProcedure = 'envelope';
+    applyModeVisibility(); renderResults();
+  });
+  if (procDirEl) procDirEl.addEventListener('click', () => {
+    state.mode = 'mwfrs'; state.mwfrsProcedure = 'directional';
+    applyModeVisibility(); renderResults();
+  });
+  if (procCCEl)  procCCEl.addEventListener('click', () => {
+    state.mode = 'cc';
+    applyModeVisibility(); renderResults();
+  });
 
   // Roof type (progressive disclosure of theta input)
   document.getElementById('roofType').addEventListener('change', e => {
@@ -3344,10 +3358,28 @@ function setMode(mode) {
 function applyModeVisibility() {
   document.body.classList.toggle('mode-mwfrs', state.mode === 'mwfrs');
   document.body.classList.toggle('mode-cc', state.mode === 'cc');
+  // Legacy 2-button refs (may be absent after A2 redesign — null-guarded)
   const m = document.getElementById('modeMWFRS');
   const c = document.getElementById('modeCC');
   if (m) m.classList.toggle('active', state.mode === 'mwfrs');
   if (c) c.classList.toggle('active', state.mode === 'cc');
+  // A2: 3-button procedure selector
+  const isEnv = state.mode === 'mwfrs' && state.mwfrsProcedure !== 'directional';
+  const isDir = state.mode === 'mwfrs' && state.mwfrsProcedure === 'directional';
+  const isCC  = state.mode === 'cc';
+  const pE = document.getElementById('procEnvelope');
+  const pD = document.getElementById('procDirectional');
+  const pC = document.getElementById('procCC');
+  if (pE) pE.classList.toggle('active', isEnv);
+  if (pD) pD.classList.toggle('active', isDir);
+  if (pC) pC.classList.toggle('active', isCC);
+  // Update hint text below the 3 buttons
+  const hint = document.getElementById('procHint');
+  if (hint) {
+    if (isEnv) hint.textContent = 'Ch.28 Envelope — low-rise buildings only: h ≤ 60 ft and h ≤ least horizontal dimension (Sec. 28.3.1).';
+    else if (isDir) hint.textContent = 'Ch.27 Directional — all building heights and geometries; required when h > 60 ft or h > least horizontal dimension (Sec. 27.1.2).';
+    else hint.textContent = 'Ch.30 C&C — pressures on individual cladding, fasteners, purlins. Part 1 (h ≤ 60 ft) or Part 2 (h > 60 ft) selected automatically.';
+  }
   applyStructureCategoryVisibility();
 }
 

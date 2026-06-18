@@ -425,10 +425,15 @@
     </div>
     <div class="topbar-controls" id="calcProcControls">
       <strong style="font-size:.9rem; color:var(--brand);">Calculation procedure:</strong>
-      <div class="seg seg-light" role="group" aria-label="Calculation procedure">
-        <button type="button" id="modeMWFRS" data-mode-btn="mwfrs" class="active">MWFRS</button>
-        <button type="button" id="modeCC" data-mode-btn="cc">Components &amp; Cladding</button>
+      <div class="seg seg-light" role="group" aria-label="Calculation procedure" style="flex-wrap:wrap;">
+        <button type="button" id="procEnvelope" class="active"
+          title="Low-rise buildings: h ≤ 60 ft AND h ≤ least horizontal dimension (Sec. 28.3.1). Simplified pressure coefficients GCpf per Fig. 28.3-1/28.3-2.">MWFRS &mdash; Envelope (Ch.28)</button>
+        <button type="button" id="procDirectional"
+          title="All building heights and geometries (Sec. 27.1.2). Required when h &gt; 60 ft or h &gt; least horizontal dimension. External Cp per Fig. 27.3-1.">MWFRS &mdash; Directional (Ch.27)</button>
+        <button type="button" id="procCC"
+          title="Components &amp; Cladding: individual cladding panels, fasteners, purlins, roof deck. Uses GCp from Fig. 30.3-1/30.3-2 (Part 1, h ≤ 60 ft) or Fig. 30.4-1 (Part 2, h &gt; 60 ft).">C&amp;C (Ch.30)</button>
       </div>
+      <div id="procHint" style="font-size:.77rem; color:var(--muted); margin-top:5px; line-height:1.4;"></div>
     </div>
   </div>
 
@@ -802,8 +807,8 @@
   <div class="panel" data-mode="mwfrs">
     <h2>MWFRS Design Pressures <button type="button" class="info-btn" data-info="mwfrs" aria-label="Learn more">i</button></h2>
 
-    <!-- Procedure toggle: Envelope (Ch.28) vs Directional (Ch.27) -->
-    <div class="field" style="margin-bottom:14px;">
+    <!-- Procedure toggle: now controlled by top-level 3-button selector (A2) — hidden here -->
+    <div class="field" style="display:none; margin-bottom:14px;">
       <label style="font-size:.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.04em;">MWFRS Procedure</label>
       <div class="seg seg-light" id="mwfrsProcedureSeg" style="margin-top:4px;">
         <button type="button" data-val="envelope" class="active">Envelope (Ch.28) &mdash; h &le; 60 ft</button>
@@ -971,18 +976,4 @@
       <li>Automatic lookup of <strong>basic wind speed V</strong> from the ASCE Hazard Tool (currently entered manually, as with p<sub>g</sub> in the Snow module).</li>
     </ul>
 
-    <p>Site and calculations by StructCalc (working title) &mdash; built for Serhii. This is a working engineering tool: always verify the building meets the Sec. 28.3.1 / 30.3.1 applicability conditions for the Envelope Procedure, confirm V and Risk Category from the ASCE Hazard Tool, and check K<sub>zt</sub> per Fig. 26.8-1 before use in design.</p>
-  </div>
-</footer>
-
-<div class="modal-overlay" id="infoModal">
-  <div class="modal-box">
-    <button type="button" class="modal-close" id="infoModalClose" aria-label="Close">&times;</button>
-    <div id="modalContent"></div>
-  </div>
-</div>
-
-<script src="engine.js"></script>
-</body>
-</html>
-                                                                                                                                                                                                                                               
+    <p>Site and calculations by StructCalc (working title) &mdash; built for Serhii. This is a working engineerin
