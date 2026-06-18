@@ -77,7 +77,7 @@ const KD = 0.85;
 const GCPI = {
   enclosed: { pos: 0.18, neg: -0.18, label: 'Enclosed' },
   partiallyEnclosed: { pos: 0.55, neg: -0.55, label: 'Partially Enclosed' },
-  partiallyOpen: { pos: 0.18, neg: -0.18, label: 'Partially Open' },
+  partiallyOpen: { pos: 0.00, neg: 0.00, label: 'Partially Open' }, // ASCE 7-22 Table 26.13-1: GCpi = 0.00 (was 0.18 in ASCE 7-16)
   open: { pos: 0.0, neg: 0.0, label: 'Open' },
   // Open Building with monoslope/pitched/troughed free roof — Sec. 27.3.2,
   // Eq. 27.3-2: p = q<sub>h</sub> K<sub>d</sub> G C<sub>N</sub>. This procedure does not use (GC<sub>pi</sub>) at
@@ -988,7 +988,7 @@ function computeCh27(s) {
   const ke  = computeKe(s.groundElev);
 
   // Internal pressure coefficient (GCpi) — same table as Ch.28/30, Table 26.13-1
-  const gcpiMap = { enclosed: 0.18, partiallyEnclosed: 0.55, partiallyOpen: 0.18, openFreeRoof: 0.00 };
+  const gcpiMap = { enclosed: 0.18, partiallyEnclosed: 0.55, partiallyOpen: 0.00, openFreeRoof: 0.00 }; // partiallyOpen = 0.00 per ASCE 7-22 Table 26.13-1
   const gcpi = gcpiMap[s.enclosure] ?? 0.18;
 
   // Velocity pressure at mean roof height h — Eq. 26.10-1, Table 26.10-1 Note 1
@@ -2092,7 +2092,7 @@ function reportCh27HTML(r) {
   // Design load cases note
   html += '<div class="alert info" style="margin-top:12px;">'
         + '<strong>Design Load Cases (Fig. 27.3-8):</strong> Case 1 (full load, shown above) and '
-        + 'Case 2 (75% with torsional eccentricity e = 0.15B) shall both be checked per Sec. 27.3.5. '
+        + 'Case 2 (75% with torsional eccentricity e = 0.15B) shall both be checked per Sec. 27.3.6. '
         + 'Cases 3 and 4 (simultaneous orthogonal loads) apply where required. '
         + 'Torsional load cases are not computed in this calculator &mdash; verify separately.'
         + '</div>';
