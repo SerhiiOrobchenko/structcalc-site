@@ -3021,7 +3021,7 @@ function _iArrow(id,x1,y1,x2,y2){
     '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#'+id+')"/>';
 }
 function _iOpen(){
-  return '<svg viewBox="0 0 220 165" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:220px;display:block" aria-hidden="true">';
+  return '<svg viewBox="0 0 220 165" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block" aria-hidden="true">';
 }
 /* keep old helpers for backward compat */
 function _zOpen(h){return '<svg viewBox="0 0 220 '+h+'" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:220px;display:block" aria-hidden="true">';}
