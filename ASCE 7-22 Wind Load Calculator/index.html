@@ -68,6 +68,21 @@
   body.enclosure-open #roofTypeField{display:none;}
   body.enclosure-open #thetaField{display:flex;}
   body.enclosure-open #cardGCpiWrap{display:none;}
+
+  /* ---- Ch.29 Other Structures — visibility -------------------------------- */
+  /* When structureCategory = 'otherStructure', hide all building-specific panels */
+  body.cat-other #calcProcControls{display:none;}
+  body.cat-other [data-mode="mwfrs"],
+  body.cat-other [data-mode="cc"],
+  body.cat-other #diagramPanel,
+  body.cat-other #parapetSection,
+  body.cat-other #openRoofSection,
+  body.cat-other #minWindWarning{display:none !important;}
+  body.cat-other #ch29Inputs{display:block !important;}
+  body.cat-other #ch29Section{display:block !important;}
+  /* Sub-type field visibility within ch29Inputs */
+  #ch29TypeRows .ch29-row{display:none;}
+  #ch29TypeRows .ch29-row.active{display:block;}
   .mode-badge{
     display:inline-block; background:#fff; color:var(--brand); border-radius:4px;
     padding:2px 10px; font-size:.8rem; font-weight:700; margin-left:8px; vertical-align:middle;
@@ -337,6 +352,13 @@
 
   <div class="panel" id="projectInfoPanel">
     <h2>Project Information <span class="ref">Report header</span></h2>
+    <div class="topbar-controls" id="structureCatControls" style="margin-bottom:14px;">
+      <strong style="font-size:.9rem; color:var(--brand);">Structure category:</strong>
+      <div class="seg seg-light" role="group" aria-label="Structure category">
+        <button type="button" id="catBuilding" class="active">Building</button>
+        <button type="button" id="catOther">Other Structure (Ch.29)</button>
+      </div>
+    </div>
     <div class="topbar-controls" id="calcProcControls" style="margin-bottom:14px;">
       <strong style="font-size:.9rem; color:var(--brand);">Calculation procedure:</strong>
       <div class="seg seg-light" role="group" aria-label="Calculation procedure">
@@ -609,6 +631,171 @@
     </div>
   </div>
 
+  <!-- Ch.29 Other Structures — Inputs (shown when cat-other) -->
+  <div class="panel" id="ch29Inputs" style="display:none;">
+    <h2>Ch.29 Other Structures &mdash; Inputs <span class="ref">Sec. 29.3 / 29.4 / 29.4.1, ASCE 7-22</span></h2>
+
+    <div class="field" style="max-width:380px; margin-bottom:16px;">
+      <label for="ch29Type">Structure / element type</label>
+      <select id="ch29Type">
+        <option value="solidSign">Solid Freestanding Sign or Wall (Sec. 29.3)</option>
+        <option value="chimney">Chimney, Tank, or Similar Structure (Sec. 29.4)</option>
+        <option value="openSign">Open Sign or Single-Plane Open Frame (Sec. 29.4)</option>
+        <option value="trussedTower">Trussed Tower (Sec. 29.4)</option>
+        <option value="rooftopEquip">Rooftop Structure / Equipment (Sec. 29.4.1)</option>
+      </select>
+    </div>
+
+    <div id="ch29TypeRows">
+
+      <!-- Solid Sign / Wall (Eq. 29.3-1) -->
+      <div class="ch29-row" id="ch29-solidSign">
+        <p class="muted" style="margin:0 0 10px; font-size:.84rem;">F = q<sub>h</sub>&middot;K<sub>d</sub>&middot;G&middot;C<sub>f</sub>&middot;A<sub>s</sub> &nbsp;&mdash;&nbsp; Eq. 29.3-1; C<sub>f</sub> from Fig. 29.3-1</p>
+        <div class="row3">
+          <div class="field">
+            <label for="ch29B">Width B (<span class="ch29-len-lbl">ft</span>)</label>
+            <input type="number" id="ch29B" step="any" min="0" value="40">
+          </div>
+          <div class="field">
+            <label for="ch29H_sign">Sign height h (<span class="ch29-len-lbl">ft</span>)</label>
+            <input type="number" id="ch29H_sign" step="any" min="0" value="20">
+          </div>
+          <div class="field">
+            <label for="ch29S">Clearance s (<span class="ch29-len-lbl">ft</span>)</label>
+            <input type="number" id="ch29S" step="any" min="0" value="5">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="ch29As">Gross area A<sub>s</sub> (<span class="ch29-area-lbl">ft&sup2;</span>)</label>
+            <input type="number" id="ch29As" step="any" min="0" value="800">
+          </div>
+        </div>
+      </div>
+
+      <!-- Chimney / Tank (Eq. 29.4-1) -->
+      <div class="ch29-row" id="ch29-chimney">
+        <p class="muted" style="margin:0 0 10px; font-size:.84rem;">F = q<sub>z</sub>&middot;K<sub>d</sub>&middot;G&middot;C<sub>f</sub>&middot;A<sub>f</sub> &nbsp;&mdash;&nbsp; Eq. 29.4-1; C<sub>f</sub> from Fig. 29.4-1</p>
+        <div class="row3">
+          <div class="field">
+            <label for="ch29CrossSection">Cross-section</label>
+            <select id="ch29CrossSection">
+              <option value="round_smooth">Round, mod. smooth (D&prime;/D=0.02)</option>
+              <option value="round_rough">Round, very rough (D&prime;/D=0.08)</option>
+              <option value="round_low_qz">Round, D&middot;&radic;q<sub>z</sub> &le; 2.5</option>
+              <option value="square_normal">Square, wind normal to face</option>
+              <option value="square_diagonal">Square, wind along diagonal</option>
+              <option value="hex_oct">Hexagonal / octagonal</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="ch29H_chim">Height h (<span class="ch29-len-lbl">ft</span>)</label>
+            <input type="number" id="ch29H_chim" step="any" min="0" value="40">
+          </div>
+          <div class="field">
+            <label for="ch29D">Diameter / min dim D (<span class="ch29-len-lbl">ft</span>)</label>
+            <input type="number" id="ch29D" step="any" min="0.1" value="4">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="ch29Af_chim">Projected area A<sub>f</sub> (<span class="ch29-area-lbl">ft&sup2;</span>)</label>
+            <input type="number" id="ch29Af_chim" step="any" min="0" value="160">
+          </div>
+        </div>
+      </div>
+
+      <!-- Open Sign / Frame (Eq. 29.4-1) -->
+      <div class="ch29-row" id="ch29-openSign">
+        <p class="muted" style="margin:0 0 10px; font-size:.84rem;">F = q<sub>z</sub>&middot;K<sub>d</sub>&middot;G&middot;C<sub>f</sub>&middot;A<sub>f</sub> &nbsp;&mdash;&nbsp; Eq. 29.4-1; C<sub>f</sub> from Fig. 29.4-2</p>
+        <div class="row3">
+          <div class="field">
+            <label for="ch29Eps_open">&epsilon; (solidity ratio)</label>
+            <input type="number" id="ch29Eps_open" step="0.01" min="0" max="1" value="0.3">
+          </div>
+          <div class="field">
+            <label for="ch29MemberType">Member type</label>
+            <select id="ch29MemberType">
+              <option value="flat">Flat-sided members</option>
+              <option value="round_smooth">Rounded (D&middot;&radic;q<sub>z</sub> &le; 0.5)</option>
+              <option value="round_rough">Rounded (D&middot;&radic;q<sub>z</sub> &gt; 5)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="ch29H_open">Structure height (<span class="ch29-len-lbl">ft</span>)</label>
+            <input type="number" id="ch29H_open" step="any" min="0" value="20">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="ch29Af_open">A<sub>f</sub> — all exposed members (<span class="ch29-area-lbl">ft&sup2;</span>)</label>
+            <input type="number" id="ch29Af_open" step="any" min="0" value="80">
+          </div>
+        </div>
+      </div>
+
+      <!-- Trussed Tower (Eq. 29.4-1) -->
+      <div class="ch29-row" id="ch29-trussedTower">
+        <p class="muted" style="margin:0 0 10px; font-size:.84rem;">F = q<sub>z</sub>&middot;K<sub>d</sub>&middot;G&middot;C<sub>f</sub>&middot;A<sub>f</sub> &nbsp;&mdash;&nbsp; Eq. 29.4-1; C<sub>f</sub> from Fig. 29.4-3</p>
+        <div class="row3">
+          <div class="field">
+            <label for="ch29TowerShape">Tower plan shape</label>
+            <select id="ch29TowerShape">
+              <option value="square">Square</option>
+              <option value="triangle">Triangular</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="ch29Eps_tower">&epsilon; (solidity ratio)</label>
+            <input type="number" id="ch29Eps_tower" step="0.01" min="0.1" max="0.9" value="0.3">
+          </div>
+          <div class="field">
+            <label for="ch29H_tower">Structure height (<span class="ch29-len-lbl">ft</span>)</label>
+            <input type="number" id="ch29H_tower" step="any" min="0" value="60">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="ch29Af_tower">A<sub>f</sub> — solid proj. area (<span class="ch29-area-lbl">ft&sup2;</span>)</label>
+            <input type="number" id="ch29Af_tower" step="any" min="0" value="120">
+          </div>
+        </div>
+      </div>
+
+      <!-- Rooftop Equipment (Eqs. 29.4-2/3) -->
+      <div class="ch29-row" id="ch29-rooftopEquip">
+        <p class="muted" style="margin:0 0 10px; font-size:.84rem;">F<sub>h</sub> = q<sub>h</sub>&middot;K<sub>d</sub>&middot;(GC<sub>r</sub>)&middot;A<sub>f</sub>&nbsp;|&nbsp;F<sub>v</sub> = q<sub>h</sub>&middot;K<sub>d</sub>&middot;(GC<sub>r</sub>)&middot;A<sub>r</sub> &nbsp;&mdash;&nbsp; Eqs. 29.4-2/3</p>
+        <div class="row3">
+          <div class="field">
+            <label for="ch29H_roof">Support bldg. height h (<span class="ch29-len-lbl">ft</span>)</label>
+            <input type="number" id="ch29H_roof" step="any" min="0" value="20">
+          </div>
+          <div class="field">
+            <label for="ch29Af_roof">A<sub>f</sub> — horiz. proj. area (<span class="ch29-area-lbl">ft&sup2;</span>)</label>
+            <input type="number" id="ch29Af_roof" step="any" min="0" value="50">
+          </div>
+          <div class="field">
+            <label for="ch29Ar">A<sub>r</sub> — roof proj. area (<span class="ch29-area-lbl">ft&sup2;</span>)</label>
+            <input type="number" id="ch29Ar" step="any" min="0" value="80">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="ch29Bh">B &times; h of building (<span class="ch29-area-lbl">ft&sup2;</span>)</label>
+            <input type="number" id="ch29Bh" step="any" min="1" value="1200">
+          </div>
+          <div class="field">
+            <label for="ch29BL">B &times; L of building (<span class="ch29-area-lbl">ft&sup2;</span>)</label>
+            <input type="number" id="ch29BL" step="any" min="1" value="3600">
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /ch29TypeRows -->
+  </div>
+  <!-- /Ch.29 Inputs -->
+
+
   <div class="panel" data-mode="mwfrs">
     <h2>MWFRS Design Pressures <button type="button" class="info-btn" data-info="mwfrs" aria-label="Learn more">i</button></h2>
 
@@ -734,6 +921,10 @@
   </div>
 
 </main>
+
+  <!-- Ch.29 Other Structures — Results (populated dynamically by renderResults()) -->
+  <div class="panel" id="ch29Section" style="display:none;"></div>
+
 
 <footer class="sources">
   <div class="inner">

@@ -441,7 +441,24 @@ const state = {
   // Ch.27 Directional Procedure inputs (Sec. 27.3)
   mwfrsProcedure: 'envelope', // 'envelope' (Ch.28, low-rise) | 'directional' (Ch.27, all heights)
   ccProcedure: 'part1',     // 'part1' (Ch.30 Part 1, h ≤ 60 ft) | 'part2' (Ch.30 Part 2, h > 60 ft)
-  buildingL: 60      // building dimension parallel to wind direction, ft (for L/B leeward Cp, Ch.27)
+  buildingL: 60,    // building dimension parallel to wind direction, ft (for L/B leeward Cp, Ch.27)
+
+  // Ch.29 Other Structures (Directional Procedure, Sec. 29.1–29.4.1)
+  structureCategory: 'building', // 'building' | 'otherStructure'
+  ch29Type: 'solidSign',     // 'solidSign'|'chimney'|'openSign'|'trussedTower'|'rooftopEquip'
+  ch29B:    40,   // sign/wall horizontal dimension B, ft
+  ch29S:    5,    // sign/wall clearance (ground to bottom of sign), ft
+  ch29H:    20,   // structure height h, ft
+  ch29D:    5,    // diameter or least horizontal dimension D, ft (chimney/tank)
+  ch29Af:   100,  // projected area normal to wind Af, ft²
+  ch29As:   200,  // gross area As, ft² (solid sign = B × h for Case A/B)
+  ch29CrossSection: 'round_smooth', // chimney/tank cross-section
+  ch29Eps:  0.30, // solidity ratio ε (open sign / trussed tower)
+  ch29MemberType: 'flat', // open-sign member type: 'flat'|'round_smooth'|'round_rough'
+  ch29TowerShape: 'square', // trussed tower plan shape: 'square'|'triangle'
+  ch29Ar:   80,   // rooftop equip: projected area on horizontal plane Ar, ft²
+  ch29Bh:   600,  // rooftop equip: B × h of supporting building, ft²
+  ch29BL:   3600  // rooftop equip: B × L of building roof, ft²
 };
 
 /* =====================================================================
@@ -1449,13 +1466,15 @@ function compute(s) {
   const ch27   = (s.enclosure !== 'openFreeRoof') ? computeCh27(s) : null;
   // Ch.30 Part 2 C&C (used when ccProcedure = 'part2', h > 60 ft)
   const cc30p2 = (s.enclosure !== 'openFreeRoof') ? computeCC30Part2(s) : null;
+  // Ch.29 Other Structures
+  const ch29 = (s.structureCategory === 'otherStructure') ? computeCh29(s) : null;
 
   return {
     kh, ke, kd: KD, qh, gcpi, a,
     steps, mwfrsLC1, mwfrsLC2, mwfrsLC3, mwfrsLC4, torsionApplies,
     ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, openRoof,
     mwfrsMinCheck, mwfrsMinGoverns, ccMinCheck, ccMinGoverns,
-    ch27, cc30p2
+    ch27, cc30p2, ch29
   };
 }
 
@@ -1792,6 +1811,14 @@ function renderResults() {
     } else {
       minWarnEl.style.display = 'none';
     }
+  }
+
+  // Ch.29 Other Structures results section
+  const ch29Sec = document.getElementById('ch29Section');
+  if (ch29Sec) {
+    const isOther = state.structureCategory === 'otherStructure';
+    ch29Sec.style.display = isOther ? '' : 'none';
+    if (isOther && r.ch29) ch29Sec.innerHTML = reportCh29HTML(r);
   }
 
   renderDiagram(r);
@@ -2202,6 +2229,362 @@ function reportCC30P2HTML(r) {
   // Minimum load warning
   if (c.wallMinGoverns) {
     html += '<div class="alert warn" style="margin-top:10px;">Sec. 30.2.2 minimum: wall C&amp;C &ge; 16 psf governs for one or more zones.</div>';
+  }
+
+  return html;
+}
+
+
+/* =====================================================================
+   CH.29 — OTHER STRUCTURES (Directional Procedure)
+   Sec. 29.3:   F  = qh·Kd·G·Cf·As        Eq. 29.3-1  (solid signs/walls)
+   Sec. 29.4:   F  = qz·Kd·G·Cf·Af        Eq. 29.4-1  (chimneys/tanks/open frames)
+   Sec. 29.4.1: Fh = qh·Kd·(GCr)·Af       Eq. 29.4-2  (rooftop structures, horizontal)
+                Fv = qh·Kd·(GCr)·Ar        Eq. 29.4-3  (rooftop structures, vertical)
+   Sec. 29.7:   min F ≥ 16 psf × Af
+   ===================================================================== */
+
+// Wind directionality factors Kd for Ch.29 — Table 26.6-1, ASCE 7-22
+const KD_SIGN      = 0.85;  // Solid freestanding walls / solid signs
+const KD_CHIMNEY   = 0.95;  // Chimneys, tanks (round/hex); 0.90 used for square below
+const KD_OPEN_SIGN = 0.85;  // Open signs, single-plane open frames
+const KD_TOWER     = 0.85;  // Trussed towers (square or triangular)
+const KD_ROOFTOP   = 0.85;  // Rooftop structures/equipment
+
+// Gust-effect factor G = 0.85 for rigid structures — Sec. 26.11.1
+const G_RIGID_CH29 = 0.85;
+
+// Minimum design wind force (Sec. 29.7): F ≥ 16 psf × Af
+const PSF_MIN_CH29 = 16; // psf
+
+// ------------------------------------------------------------------
+// Fig. 29.3-1: Cf, Cases A and B — solid freestanding walls / signs.
+// Source: Fig. 29.3-1, ASCE 7-22 (read from 300 DPI render, p. 301).
+// Rows: clearance ratio s/h (ascending). Cols: aspect ratio B/s.
+// s = clearance from ground to bottom of sign; B = width; h = sign height.
+// Linear interpolation is permitted (Fig. 29.3-1 Note 4).
+// ------------------------------------------------------------------
+const CF_SIGN_SH_VALS = [0.16, 0.2, 0.5, 0.9];
+const CF_SIGN_BS_VALS = [0.05, 0.1, 0.2, 0.5, 1, 2, 3, 4, 5, 10, 20, 30, 45];
+const CF_SIGN_TABLE = [
+  // s/h ≤ 0.16 (wall on ground or very low clearance):
+  [1.95, 1.90, 1.85, 1.85, 1.80, 1.75, 1.75, 1.70, 1.65, 1.55, 1.55, 1.55, 1.55],
+  // s/h = 0.2:
+  [1.95, 1.90, 1.85, 1.80, 1.70, 1.65, 1.65, 1.60, 1.55, 1.55, 1.55, 1.55, 1.55],
+  // s/h = 0.5:
+  [1.85, 1.85, 1.85, 1.75, 1.65, 1.55, 1.50, 1.50, 1.45, 1.45, 1.40, 1.40, 1.30],
+  // s/h = 0.9:
+  [1.85, 1.75, 1.70, 1.60, 1.55, 1.50, 1.45, 1.45, 1.40, 1.40, 1.40, 1.40, 1.30],
+];
+
+function cfSolidSign(Bs, sh) {
+  // Bilinear interpolation in Fig. 29.3-1 (Cases A and B).
+  const shC = Math.max(CF_SIGN_SH_VALS[0], Math.min(CF_SIGN_SH_VALS[CF_SIGN_SH_VALS.length - 1], sh));
+  const bsC = Math.max(CF_SIGN_BS_VALS[0], Math.min(CF_SIGN_BS_VALS[CF_SIGN_BS_VALS.length - 1], Bs));
+
+  let shLo = 0, shHi = 0;
+  for (let i = 0; i < CF_SIGN_SH_VALS.length - 1; i++) {
+    if (shC >= CF_SIGN_SH_VALS[i] && shC <= CF_SIGN_SH_VALS[i + 1]) { shLo = i; shHi = i + 1; break; }
+    shHi = i + 1; shLo = i;
+  }
+  let bsLo = 0, bsHi = 0;
+  for (let i = 0; i < CF_SIGN_BS_VALS.length - 1; i++) {
+    if (bsC >= CF_SIGN_BS_VALS[i] && bsC <= CF_SIGN_BS_VALS[i + 1]) { bsLo = i; bsHi = i + 1; break; }
+    bsHi = i + 1; bsLo = i;
+  }
+
+  const dSh = CF_SIGN_SH_VALS[shHi] - CF_SIGN_SH_VALS[shLo];
+  const dBs = CF_SIGN_BS_VALS[bsHi] - CF_SIGN_BS_VALS[bsLo];
+  const tSh = dSh > 0 ? (shC - CF_SIGN_SH_VALS[shLo]) / dSh : 0;
+  const tBs = dBs > 0 ? (bsC - CF_SIGN_BS_VALS[bsLo]) / dBs : 0;
+
+  return CF_SIGN_TABLE[shLo][bsLo] * (1 - tSh) * (1 - tBs) +
+         CF_SIGN_TABLE[shLo][bsHi] * (1 - tSh) * tBs +
+         CF_SIGN_TABLE[shHi][bsLo] * tSh * (1 - tBs) +
+         CF_SIGN_TABLE[shHi][bsHi] * tSh * tBs;
+}
+
+// ------------------------------------------------------------------
+// Fig. 29.4-1: Cf — chimneys, tanks, and similar structures.
+// Source: Fig. 29.4-1, ASCE 7-22 (read from 300 DPI render, p. 303).
+// Rows: cross-section type. Cols: h/D = [1, 7, 25].
+// Linear interpolation permitted (Fig. 29.4-1 Note 2).
+// ------------------------------------------------------------------
+const CF_CHIMNEY_VALS = {
+  // [Cf at h/D=1, h/D=7, h/D=25]
+  square_normal:   [1.3, 1.4, 2.0],  // Square, wind normal to face
+  square_diagonal: [1.0, 1.1, 1.5],  // Square, wind along diagonal
+  hex_oct:         [1.0, 1.2, 1.4],  // Hexagonal or octagonal
+  round_smooth:    [0.5, 0.6, 0.7],  // Round, D·√qz > 2.5, mod. smooth (D'/D=0.02)
+  round_rough:     [0.7, 0.8, 0.9],  // Round, D·√qz > 2.5, very rough (D'/D=0.08)
+  round_low_qz:    [0.8, 1.0, 1.2],  // Round, D·√qz ≤ 2.5
+};
+const CF_CHIMNEY_HD = [1, 7, 25];
+
+function cfChimney(crossSection, hD) {
+  const vals = CF_CHIMNEY_VALS[crossSection] || CF_CHIMNEY_VALS.round_smooth;
+  const hdC = Math.max(1, Math.min(25, hD));
+  let lo = 0, hi = 1;
+  for (let i = 0; i < CF_CHIMNEY_HD.length - 1; i++) {
+    if (hdC >= CF_CHIMNEY_HD[i] && hdC <= CF_CHIMNEY_HD[i + 1]) { lo = i; hi = i + 1; break; }
+    lo = i; hi = i + 1;
+  }
+  const t = (CF_CHIMNEY_HD[hi] - CF_CHIMNEY_HD[lo]) > 0
+    ? (hdC - CF_CHIMNEY_HD[lo]) / (CF_CHIMNEY_HD[hi] - CF_CHIMNEY_HD[lo]) : 0;
+  return vals[lo] * (1 - t) + vals[hi] * t;
+}
+
+// ------------------------------------------------------------------
+// Fig. 29.4-2: Cf — open signs and single-plane open frames.
+// Source: Fig. 29.4-2, ASCE 7-22 (read from 300 DPI render, p. 303).
+// ε = solidity ratio; memberType: 'flat' | 'round_smooth' | 'round_rough'
+// ------------------------------------------------------------------
+function cfOpenSign(eps, memberType) {
+  if (eps < 0.1) {
+    return (memberType === 'flat') ? 2.0 : 0.8;
+  } else if (eps <= 0.29) {
+    if (memberType === 'flat')         return 1.8;
+    if (memberType === 'round_smooth') return 1.3;
+    return 0.9; // round_rough
+  } else if (eps <= 0.70) {
+    if (memberType === 'flat')         return 1.6;
+    if (memberType === 'round_smooth') return 1.5;
+    return 1.1; // round_rough
+  }
+  // ε > 0.70 is outside table; use conservative value and flag
+  return (memberType === 'flat') ? 1.6 : 1.1;
+}
+
+// ------------------------------------------------------------------
+// Fig. 29.4-3: Cf — trussed towers (formulas per figure).
+// Source: Fig. 29.4-3, ASCE 7-22 (read from 300 DPI render, p. 304).
+// ε = solidity ratio of one tower face.
+// Square:    Cf = 4.0ε² − 5.9ε + 4.0
+// Triangle:  Cf = 3.4ε² − 4.7ε + 3.4
+// ------------------------------------------------------------------
+function cfTrussedTower(eps, shape) {
+  const e = Math.max(0.1, Math.min(0.9, eps));
+  return (shape === 'triangle')
+    ? 3.4 * e * e - 4.7 * e + 3.4
+    : 4.0 * e * e - 5.9 * e + 4.0;
+}
+
+// ------------------------------------------------------------------
+// computeCh29(s): main Ch.29 computation
+// ------------------------------------------------------------------
+function computeCh29(s) {
+  const G   = G_RIGID_CH29; // Sec. 26.11.1
+  const ke  = computeKe(s.groundElev);
+  const kztObj = computeKzt(s, s.ch29H);
+  const KZT = kztObj.kzt;
+  const kh  = computeKh(s.ch29H, s.exposure);
+  // qh at top of structure: Eq. 26.10-1, q = 0.00256·Kz·Kzt·Ke·V²
+  const qh  = 0.00256 * kh * KZT * ke * s.V * s.V;
+
+  const type = s.ch29Type;
+
+  if (type === 'solidSign') {
+    // Eq. 29.3-1: F = qh·Kd·G·Cf·As
+    const B = s.ch29B, h = s.ch29H, sc = Math.max(0, s.ch29S), As = s.ch29As;
+    const sh = (h > 0) ? Math.max(0, sc / h) : 0;
+    const Bs = (sc > 0.01) ? B / sc : 45; // very small clearance → large B/s (wall case)
+    const KD = KD_SIGN;
+    const Cf = cfSolidSign(Bs, sh);
+    const F  = qh * KD * G * Cf * As;
+    const Fm = PSF_MIN_CH29 * As;
+    return { type, KD, G, ke, kh, qh, Cf, As, B, h, sc, sh, Bs,
+             F, F_min: Fm, F_design: Math.max(F, Fm), minGoverns: Fm > F,
+             eqRef: 'Eq. 29.3-1', cfRef: 'Fig. 29.3-1' };
+
+  } else if (type === 'chimney') {
+    // Eq. 29.4-1: F = qz·Kd·G·Cf·Af  (qz at top of structure — conservative)
+    const xsec = s.ch29CrossSection;
+    const KD   = (xsec === 'square_normal' || xsec === 'square_diagonal') ? 0.90 : KD_CHIMNEY;
+    const h = s.ch29H, D = s.ch29D, Af = s.ch29Af;
+    const hD = (D > 0) ? h / D : 1;
+    const Cf = cfChimney(xsec, hD);
+    const F  = qh * KD * G * Cf * Af;
+    const Fm = PSF_MIN_CH29 * Af;
+    return { type, KD, G, ke, kh, qh, Cf, Af, h, D, hD,
+             F, F_min: Fm, F_design: Math.max(F, Fm), minGoverns: Fm > F,
+             eqRef: 'Eq. 29.4-1', cfRef: 'Fig. 29.4-1',
+             note: 'q<sub>z</sub> evaluated at top of structure (conservative). For tall slender structures, height-profile integration per Sec. 29.4 may be required.' };
+
+  } else if (type === 'openSign') {
+    // Eq. 29.4-1: F = qz·Kd·G·Cf·Af
+    const KD = KD_OPEN_SIGN, eps = s.ch29Eps, mt = s.ch29MemberType, Af = s.ch29Af;
+    const Cf = cfOpenSign(eps, mt);
+    const F  = qh * KD * G * Cf * Af;
+    const Fm = PSF_MIN_CH29 * Af;
+    return { type, KD, G, ke, kh, qh, Cf, Af, eps, memberType: mt,
+             F, F_min: Fm, F_design: Math.max(F, Fm), minGoverns: Fm > F,
+             eqRef: 'Eq. 29.4-1', cfRef: 'Fig. 29.4-2' };
+
+  } else if (type === 'trussedTower') {
+    // Eq. 29.4-1: F = qz·Kd·G·Cf·Af
+    const KD = KD_TOWER, eps = s.ch29Eps, shape = s.ch29TowerShape, Af = s.ch29Af;
+    const Cf = cfTrussedTower(eps, shape);
+    const F  = qh * KD * G * Cf * Af;
+    const Fm = PSF_MIN_CH29 * Af;
+    return { type, KD, G, ke, kh, qh, Cf, Af, eps, shape,
+             F, F_min: Fm, F_design: Math.max(F, Fm), minGoverns: Fm > F,
+             eqRef: 'Eq. 29.4-1', cfRef: 'Fig. 29.4-3' };
+
+  } else if (type === 'rooftopEquip') {
+    // Eqs. 29.4-2/3: Fh = qh·Kd·(GCr)·Af,  Fv = qh·Kd·(GCr)·Ar
+    // (GCr) per Sec. 29.4.1: 1.9 if Af ≤ 0.1·B·h; 1.5 if Ar ≤ 0.1·B·L
+    const KD = KD_ROOFTOP;
+    const Af = s.ch29Af, Ar = s.ch29Ar, Bh = s.ch29Bh, BL = s.ch29BL;
+    const GCrH = (Af <= 0.1 * Bh) ? 1.9 : Math.max(1.0, 1.9 * (0.1 * Bh / Af));
+    const GCrV = (Ar <= 0.1 * BL) ? 1.5 : Math.max(1.0, 1.5 * (0.1 * BL / Ar));
+    const Fh = qh * KD * GCrH * Af;
+    const Fv = qh * KD * GCrV * Ar;
+    return { type, KD, ke, kh, qh, Af, Ar, Bh, BL, GCrH, GCrV, Fh, Fv,
+             eqRef: 'Eqs. 29.4-2/3', cfRef: 'Sec. 29.4.1' };
+  }
+
+  return null;
+}
+
+// ------------------------------------------------------------------
+// reportCh29HTML(r): render Ch.29 results
+// ------------------------------------------------------------------
+function reportCh29HTML(r) {
+  const c = r && r.ch29;
+  if (!c) return '<p class="muted">Ch.29 data unavailable.</p>';
+  const u   = state.unitSystem === 'SI';
+  const pU  = pUnit();
+  const lenU = u ? 'm' : 'ft';
+  const aU  = u ? 'm²' : 'ft²';
+  // Force unit: 1 psf·ft² = 1 lbf; convert to kip (US) or kN (SI)
+  const fU  = u ? 'kN' : 'kip';
+  const fVal = v => u ? (v * 0.004448222) : (v / 1000); // lbf → kN or kip
+  const f2  = v => fmt(fVal(v), 2);
+  const p2  = v => fmt(pVal(v), 2);
+
+  const TYPE_LABELS = {
+    solidSign:    'Solid Freestanding Sign / Wall &mdash; Sec. 29.3',
+    chimney:      'Chimney / Tank &mdash; Sec. 29.4',
+    openSign:     'Open Sign / Single-Plane Open Frame &mdash; Sec. 29.4',
+    trussedTower: 'Trussed Tower &mdash; Sec. 29.4',
+    rooftopEquip: 'Rooftop Structure / Equipment &mdash; Sec. 29.4.1'
+  };
+
+  let html = '<h3>Ch.29 Other Structures &mdash; Design Wind Force' +
+    ' <span class="ref">' + c.eqRef + ', ASCE 7-22</span></h3>';
+  html += '<p class="muted" style="margin:0 0 8px;">' + (TYPE_LABELS[c.type] || c.type) + '</p>';
+
+  // Common velocity-pressure summary
+  html += '<table class="report-input-table"><tbody>' +
+    '<tr><td>K<sub>h</sub> (at structure top)</td><td>' + fmt(c.kh, 3) + '</td></tr>' +
+    '<tr><td>q<sub>h</sub></td><td>' + p2(c.qh) + ' ' + pU + '</td></tr>' +
+    '<tr><td>K<sub>d</sub></td><td>' + fmt(c.KD, 2) + ' &mdash; Table 26.6-1</td></tr>';
+  if (c.type !== 'rooftopEquip') {
+    html += '<tr><td>G</td><td>' + fmt(c.G, 2) + ' &mdash; Sec. 26.11.1 (rigid)</td></tr>' +
+            '<tr><td>C<sub>f</sub></td><td>' + fmt(c.Cf, 2) + ' &mdash; ' + c.cfRef + '</td></tr>';
+  }
+  html += '</tbody></table>';
+
+  // Type-specific detail and results
+  if (c.type === 'solidSign') {
+    html += '<h3>Solid Sign / Freestanding Wall <span class="ref">Eq. 29.3-1</span></h3>' +
+      '<p class="muted" style="margin:0 0 8px;">F = q<sub>h</sub>&middot;K<sub>d</sub>&middot;G&middot;C<sub>f</sub>&middot;A<sub>s</sub></p>' +
+      '<table class="report-input-table"><tbody>' +
+      '<tr><td>B (width)</td><td>' + fmt(lengthOut(c.B), 1) + ' ' + lenU + '</td></tr>' +
+      '<tr><td>h (sign height)</td><td>' + fmt(lengthOut(c.h), 1) + ' ' + lenU + '</td></tr>' +
+      '<tr><td>s (clearance)</td><td>' + fmt(lengthOut(c.sc), 1) + ' ' + lenU + '</td></tr>' +
+      '<tr><td>s/h</td><td>' + fmt(c.sh, 3) + '</td></tr>' +
+      '<tr><td>B/s</td><td>' + (c.sc < 0.02 ? '— (wall on ground, B/s → ∞, capped at 45)' : fmt(c.Bs, 2)) + '</td></tr>' +
+      '<tr><td>A<sub>s</sub> (gross area)</td><td>' + fmt(areaOut(c.As), 1) + ' ' + aU + '</td></tr>' +
+      '</tbody></table>' +
+      '<table class="report-table"><thead><tr><th>Check</th><th>Force</th><th>Clause</th></tr></thead><tbody>' +
+      '<tr><td>F (Eq. 29.3-1)</td><td class="val-pos">' + f2(c.F) + ' ' + fU + '</td><td>Eq. 29.3-1</td></tr>' +
+      '<tr><td>F<sub>min</sub> = 16&thinsp;psf &times; A<sub>s</sub></td><td>' + f2(c.F_min) + ' ' + fU + '</td><td>Sec. 29.7</td></tr>' +
+      '<tr><td><strong>F<sub>design</sub></strong></td><td class="' + (c.minGoverns ? 'val-neg' : 'val-pos') + '"><strong>' +
+        f2(c.F_design) + ' ' + fU + '</strong></td><td>' +
+        (c.minGoverns ? 'Sec. 29.7 min. governs' : 'Eq. 29.3-1 governs') + '</td></tr>' +
+      '</tbody></table>';
+    if (c.minGoverns) html += '<div class="alert warn">Sec. 29.7 minimum design wind force (16 psf &times; A<sub>s</sub>) governs.</div>';
+
+  } else if (c.type === 'chimney') {
+    html += '<h3>Chimney / Tank <span class="ref">Eq. 29.4-1</span></h3>' +
+      '<p class="muted" style="margin:0 0 8px;">F = q<sub>z</sub>&middot;K<sub>d</sub>&middot;G&middot;C<sub>f</sub>&middot;A<sub>f</sub> &nbsp;(q<sub>z</sub> evaluated at top of structure)</p>';
+    if (c.note) html += '<div class="alert info">' + c.note + '</div>';
+    html +=
+      '<table class="report-input-table"><tbody>' +
+      '<tr><td>h (structure height)</td><td>' + fmt(lengthOut(c.h), 1) + ' ' + lenU + '</td></tr>' +
+      '<tr><td>D (diameter / min dim)</td><td>' + fmt(lengthOut(c.D), 1) + ' ' + lenU + '</td></tr>' +
+      '<tr><td>h/D</td><td>' + fmt(c.hD, 2) + '</td></tr>' +
+      '<tr><td>A<sub>f</sub> (proj. area)</td><td>' + fmt(areaOut(c.Af), 1) + ' ' + aU + '</td></tr>' +
+      '</tbody></table>' +
+      '<table class="report-table"><thead><tr><th>Check</th><th>Force</th><th>Clause</th></tr></thead><tbody>' +
+      '<tr><td>F (Eq. 29.4-1)</td><td class="val-pos">' + f2(c.F) + ' ' + fU + '</td><td>Eq. 29.4-1</td></tr>' +
+      '<tr><td>F<sub>min</sub> = 16&thinsp;psf &times; A<sub>f</sub></td><td>' + f2(c.F_min) + ' ' + fU + '</td><td>Sec. 29.7</td></tr>' +
+      '<tr><td><strong>F<sub>design</sub></strong></td><td class="' + (c.minGoverns ? 'val-neg' : 'val-pos') + '"><strong>' +
+        f2(c.F_design) + ' ' + fU + '</strong></td><td>' +
+        (c.minGoverns ? 'Sec. 29.7 min. governs' : 'Eq. 29.4-1 governs') + '</td></tr>' +
+      '</tbody></table>';
+    if (c.minGoverns) html += '<div class="alert warn">Sec. 29.7 minimum design wind force (16 psf &times; A<sub>f</sub>) governs.</div>';
+
+  } else if (c.type === 'openSign') {
+    html += '<h3>Open Sign / Single-Plane Frame <span class="ref">Eq. 29.4-1</span></h3>' +
+      '<p class="muted" style="margin:0 0 8px;">F = q<sub>z</sub>&middot;K<sub>d</sub>&middot;G&middot;C<sub>f</sub>&middot;A<sub>f</sub></p>' +
+      '<table class="report-input-table"><tbody>' +
+      '<tr><td>&epsilon; (solidity ratio)</td><td>' + fmt(c.eps, 3) + '</td></tr>' +
+      '<tr><td>Member type</td><td>' + ({flat:'Flat-sided',round_smooth:'Rounded (low q<sub>z</sub>)',round_rough:'Rounded (high q<sub>z</sub>)'}[c.memberType]||c.memberType) + '</td></tr>' +
+      '<tr><td>A<sub>f</sub> (all exposed members)</td><td>' + fmt(areaOut(c.Af), 1) + ' ' + aU + '</td></tr>' +
+      '</tbody></table>' +
+      '<table class="report-table"><thead><tr><th>Check</th><th>Force</th><th>Clause</th></tr></thead><tbody>' +
+      '<tr><td>F (Eq. 29.4-1)</td><td class="val-pos">' + f2(c.F) + ' ' + fU + '</td><td>Eq. 29.4-1</td></tr>' +
+      '<tr><td>F<sub>min</sub> = 16&thinsp;psf &times; A<sub>f</sub></td><td>' + f2(c.F_min) + ' ' + fU + '</td><td>Sec. 29.7</td></tr>' +
+      '<tr><td><strong>F<sub>design</sub></strong></td><td class="' + (c.minGoverns ? 'val-neg' : 'val-pos') + '"><strong>' +
+        f2(c.F_design) + ' ' + fU + '</strong></td><td>' +
+        (c.minGoverns ? 'Sec. 29.7 min. governs' : 'Eq. 29.4-1 governs') + '</td></tr>' +
+      '</tbody></table>';
+    if (c.minGoverns) html += '<div class="alert warn">Sec. 29.7 minimum design wind force (16 psf &times; A<sub>f</sub>) governs.</div>';
+
+  } else if (c.type === 'trussedTower') {
+    const cfFormula = (c.shape === 'triangle')
+      ? '3.4&epsilon;&sup2; &minus; 4.7&epsilon; + 3.4'
+      : '4.0&epsilon;&sup2; &minus; 5.9&epsilon; + 4.0';
+    html += '<h3>Trussed Tower <span class="ref">Eq. 29.4-1</span></h3>' +
+      '<p class="muted" style="margin:0 0 8px;">F = q<sub>z</sub>&middot;K<sub>d</sub>&middot;G&middot;C<sub>f</sub>&middot;A<sub>f</sub></p>' +
+      '<table class="report-input-table"><tbody>' +
+      '<tr><td>Tower plan shape</td><td>' + (c.shape === 'triangle' ? 'Triangular' : 'Square') + '</td></tr>' +
+      '<tr><td>&epsilon; (solidity ratio)</td><td>' + fmt(c.eps, 3) + '</td></tr>' +
+      '<tr><td>C<sub>f</sub> formula (Fig. 29.4-3)</td><td>' + cfFormula + '</td></tr>' +
+      '<tr><td>A<sub>f</sub> (solid proj. area)</td><td>' + fmt(areaOut(c.Af), 1) + ' ' + aU + '</td></tr>' +
+      '</tbody></table>' +
+      '<table class="report-table"><thead><tr><th>Check</th><th>Force</th><th>Clause</th></tr></thead><tbody>' +
+      '<tr><td>F (Eq. 29.4-1)</td><td class="val-pos">' + f2(c.F) + ' ' + fU + '</td><td>Eq. 29.4-1</td></tr>' +
+      '<tr><td>F<sub>min</sub> = 16&thinsp;psf &times; A<sub>f</sub></td><td>' + f2(c.F_min) + ' ' + fU + '</td><td>Sec. 29.7</td></tr>' +
+      '<tr><td><strong>F<sub>design</sub></strong></td><td class="' + (c.minGoverns ? 'val-neg' : 'val-pos') + '"><strong>' +
+        f2(c.F_design) + ' ' + fU + '</strong></td><td>' +
+        (c.minGoverns ? 'Sec. 29.7 min. governs' : 'Eq. 29.4-1 governs') + '</td></tr>' +
+      '</tbody></table>';
+    if (c.minGoverns) html += '<div class="alert warn">Sec. 29.7 minimum design wind force (16 psf &times; A<sub>f</sub>) governs.</div>';
+
+  } else if (c.type === 'rooftopEquip') {
+    html += '<h3>Rooftop Structure / Equipment <span class="ref">Sec. 29.4.1, Eqs. 29.4-2/3</span></h3>' +
+      '<table class="report-input-table"><tbody>' +
+      '<tr><td>A<sub>f</sub> (horiz. proj. area)</td><td>' + fmt(areaOut(c.Af), 1) + ' ' + aU + '</td></tr>' +
+      '<tr><td>A<sub>r</sub> (roof proj. area)</td><td>' + fmt(areaOut(c.Ar), 1) + ' ' + aU + '</td></tr>' +
+      '<tr><td>B &times; h (building)</td><td>' + fmt(areaOut(c.Bh), 0) + ' ' + aU + '</td></tr>' +
+      '<tr><td>B &times; L (building roof)</td><td>' + fmt(areaOut(c.BL), 0) + ' ' + aU + '</td></tr>' +
+      '<tr><td>(GC<sub>r</sub>) horizontal</td><td>' + fmt(c.GCrH, 2) +
+        ' (A<sub>f</sub> ' + (c.Af <= 0.1 * c.Bh ? '&le;' : '&gt;') + ' 0.1Bh)</td></tr>' +
+      '<tr><td>(GC<sub>r</sub>) vertical</td><td>' + fmt(c.GCrV, 2) +
+        ' (A<sub>r</sub> ' + (c.Ar <= 0.1 * c.BL ? '&le;' : '&gt;') + ' 0.1BL)</td></tr>' +
+      '</tbody></table>' +
+      '<table class="report-table"><thead><tr>' +
+      '<th>Force component</th><th>Formula</th><th>Value</th></tr></thead><tbody>' +
+      '<tr><td>F<sub>h</sub> (horizontal)</td>' +
+        '<td>q<sub>h</sub>&middot;K<sub>d</sub>&middot;(GC<sub>r</sub>)&middot;A<sub>f</sub></td>' +
+        '<td class="val-pos">' + f2(c.Fh) + ' ' + fU + '</td></tr>' +
+      '<tr><td>F<sub>v</sub> (vertical uplift)</td>' +
+        '<td>q<sub>h</sub>&middot;K<sub>d</sub>&middot;(GC<sub>r</sub>)&middot;A<sub>r</sub></td>' +
+        '<td class="val-neg">' + f2(c.Fv) + ' ' + fU + '</td></tr>' +
+      '</tbody></table>';
   }
 
   return html;
@@ -2863,6 +3246,89 @@ function bindInputs() {
     state.appdDate = e.target.value;
     renderResults();
   });
+
+  // --- Ch.29 Other Structures bindings ---
+  const catBuildingBtn = document.getElementById('catBuilding');
+  const catOtherBtn    = document.getElementById('catOther');
+  if (catBuildingBtn) catBuildingBtn.addEventListener('click', () => {
+    state.structureCategory = 'building';
+    applyStructureCategoryVisibility();
+    renderResults();
+  });
+  if (catOtherBtn) catOtherBtn.addEventListener('click', () => {
+    state.structureCategory = 'otherStructure';
+    applyStructureCategoryVisibility();
+    renderResults();
+  });
+
+  const ch29TypeEl = document.getElementById('ch29Type');
+  if (ch29TypeEl) ch29TypeEl.addEventListener('change', e => {
+    state.ch29Type = e.target.value;
+    // sync shared ch29H from whichever visible height field was last set
+    applyStructureCategoryVisibility();
+    renderResults();
+  });
+
+  // Helper to bind a numeric field → state property
+  function bindCh29Len(id, stateProp) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      state[stateProp] = toUSLength(isNaN(v) ? 0 : v, state.unitSystem);
+      renderResults();
+    });
+  }
+  function bindCh29Area(id, stateProp) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      state[stateProp] = toUSArea(isNaN(v) ? 0 : v, state.unitSystem);
+      renderResults();
+    });
+  }
+  function bindCh29Num(id, stateProp) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      state[stateProp] = isNaN(v) ? 0 : v;
+      renderResults();
+    });
+  }
+  function bindCh29Sel(id, stateProp) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', e => { state[stateProp] = e.target.value; renderResults(); });
+  }
+
+  // Solid sign
+  bindCh29Len('ch29B',      'ch29B');
+  bindCh29Len('ch29H_sign', 'ch29H');
+  bindCh29Len('ch29S',      'ch29S');
+  bindCh29Area('ch29As',    'ch29As');
+  // Chimney
+  bindCh29Sel('ch29CrossSection', 'ch29CrossSection');
+  bindCh29Len('ch29H_chim', 'ch29H');
+  bindCh29Len('ch29D',      'ch29D');
+  bindCh29Area('ch29Af_chim','ch29Af');
+  // Open sign
+  bindCh29Num('ch29Eps_open', 'ch29Eps');
+  bindCh29Sel('ch29MemberType','ch29MemberType');
+  bindCh29Len('ch29H_open', 'ch29H');
+  bindCh29Area('ch29Af_open','ch29Af');
+  // Trussed tower
+  bindCh29Sel('ch29TowerShape','ch29TowerShape');
+  bindCh29Num('ch29Eps_tower','ch29Eps');
+  bindCh29Len('ch29H_tower','ch29H');
+  bindCh29Area('ch29Af_tower','ch29Af');
+  // Rooftop equip
+  bindCh29Len('ch29H_roof', 'ch29H');
+  bindCh29Area('ch29Af_roof','ch29Af');
+  bindCh29Area('ch29Ar',    'ch29Ar');
+  bindCh29Area('ch29Bh',    'ch29Bh');
+  bindCh29Area('ch29BL',    'ch29BL');
 }
 
 /* =====================================================================
@@ -2882,6 +3348,7 @@ function applyModeVisibility() {
   const c = document.getElementById('modeCC');
   if (m) m.classList.toggle('active', state.mode === 'mwfrs');
   if (c) c.classList.toggle('active', state.mode === 'cc');
+  applyStructureCategoryVisibility();
 }
 
 function applyRoofTypeVisibility() {
@@ -2900,6 +3367,20 @@ function applyEnclosureVisibility() {
   document.body.classList.toggle('enclosure-open', isOpen);
   const inputs = document.getElementById('openRoofInputs');
   if (inputs) inputs.style.display = isOpen ? '' : 'none';
+}
+
+function applyStructureCategoryVisibility() {
+  const isOther = state.structureCategory === 'otherStructure';
+  document.body.classList.toggle('cat-other', isOther);
+  const bBtn = document.getElementById('catBuilding');
+  const oBtn = document.getElementById('catOther');
+  if (bBtn) bBtn.classList.toggle('active', !isOther);
+  if (oBtn) oBtn.classList.toggle('active', isOther);
+  // Show correct sub-type row within ch29Inputs
+  const rows = document.querySelectorAll('#ch29TypeRows .ch29-row');
+  rows.forEach(row => row.classList.remove('active'));
+  const activeRow = document.getElementById('ch29-' + state.ch29Type);
+  if (activeRow) activeRow.classList.add('active');
 }
 
 function updateUnitLabels() {
@@ -4262,7 +4743,6 @@ document.addEventListener('DOMContentLoaded', init);
 
     // Print title block fields (Phase 3 / report header)
     document.getElementById('companyName').value = state.companyName || '';
-    document.getElementById('sectionName').value = state.sectionName || '';
     document.getElementById('jobRef').value = state.jobRef || '';
     document.getElementById('chkdBy').value = state.chkdBy || '';
     document.getElementById('chkdDate').value = state.chkdDate || '';
