@@ -658,16 +658,47 @@
   </div>
 
   <div class="panel" data-mode="cc">
-    <h2>Components &amp; Cladding Design Pressures <span class="ref">Eq. 30.3-1, Fig. 30.3-1/30.3-2A-2G</span><button type="button" class="info-btn" data-info="cc" aria-label="Learn more">i</button></h2>
-    <h3>Walls &mdash; Zones 4 &amp; 5 <span class="ref">Fig. 30.3-1</span></h3>
-    <div id="ccWallTable"></div>
-    <h3 id="ccRoofHeading">Roof &mdash; Zones 1&prime;, 1, 2, 3 <span class="ref">Fig. 30.3-2A, &theta; &le; 7&deg;</span></h3>
-    <div class="alert warn" id="ccRoofNote" style="display:none;"></div>
-    <div id="ccRoofTable"></div>
-    <div id="ccOverhangSection" style="display:none;">
-      <h3>Roof Overhangs &mdash; Net (Top + Bottom) <span class="ref">Sec. 30.7</span><button type="button" class="info-btn" data-info="overhang" aria-label="Learn more">i</button></h3>
-      <p class="muted" style="margin:0 0 10px;">Net (GC<sub>p</sub>) = roof-surface (GC<sub>p</sub>) (top of overhang) &minus; wall-zone (GC<sub>p</sub>) (bottom/soffit), evaluated at the Roof C&amp;C effective wind area above. No (GC<sub>pi</sub>) term applies (see "i" for details).</p>
-      <div id="ccOverhangTable"></div>
+    <h2>Components &amp; Cladding Design Pressures <button type="button" class="info-btn" data-info="cc" aria-label="Learn more">i</button></h2>
+
+    <!-- C&C Procedure toggle -->
+    <div class="field" style="margin-bottom:14px;">
+      <label style="font-size:.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.04em;">C&amp;C Procedure</label>
+      <div class="seg seg-light" id="ccProcedureSeg" style="margin-top:4px;">
+        <button type="button" data-val="part1" class="active">Part 1 (Ch.30, h &le; 60 ft)</button>
+        <button type="button" data-val="part2">Part 2 (Ch.30, h &gt; 60 ft)</button>
+      </div>
+    </div>
+
+    <!-- Part 1 too-tall warning -->
+    <div class="alert warn" id="cc30Part1Warning" style="display:none; margin-bottom:12px;">
+      &#9888;&#65039; Mean roof height h &gt; 60 ft &mdash; Ch.30 Part 1 (Fig. 30.3-1) is restricted to h &le; 60 ft
+      (Sec. 30.3.1). Exception: Part 1 may be used when 60 ft &lt; h &le; 90 ft and h &le; least horizontal dimension.
+      Otherwise switch to Part 2 above.
+    </div>
+
+    <!-- Part 1 results (default) -->
+    <div id="cc30Part1Results">
+      <div class="muted" style="font-size:.8rem; margin-bottom:8px;">
+        <span class="ref">Eq. 30.3-1, Figs. 30.3-1/30.3-2A&ndash;2G</span>
+      </div>
+      <h3>Walls &mdash; Zones 4 &amp; 5 <span class="ref">Fig. 30.3-1</span></h3>
+      <div id="ccWallTable"></div>
+      <h3 id="ccRoofHeading">Roof &mdash; Zones 1&prime;, 1, 2, 3 <span class="ref">Fig. 30.3-2A, &theta; &le; 7&deg;</span></h3>
+      <div class="alert warn" id="ccRoofNote" style="display:none;"></div>
+      <div id="ccRoofTable"></div>
+      <div id="ccOverhangSection" style="display:none;">
+        <h3>Roof Overhangs &mdash; Net (Top + Bottom) <span class="ref">Sec. 30.7</span><button type="button" class="info-btn" data-info="overhang" aria-label="Learn more">i</button></h3>
+        <p class="muted" style="margin:0 0 10px;">Net (GC<sub>p</sub>) = roof-surface (GC<sub>p</sub>) (top of overhang) &minus; wall-zone (GC<sub>p</sub>) (bottom/soffit), evaluated at the Roof C&amp;C effective wind area above. No (GC<sub>pi</sub>) term applies (see "i" for details).</p>
+        <div id="ccOverhangTable"></div>
+      </div>
+    </div>
+
+    <!-- Part 2 results (hidden until toggled) -->
+    <div id="cc30Part2Results" style="display:none;">
+      <div class="muted" style="font-size:.8rem; margin-bottom:8px;">
+        <span class="ref">Eq. 30.4-1, Fig. 30.4-1, Sec. 30.4</span>
+      </div>
+      <!-- Populated dynamically by renderResults() → reportCC30P2HTML() -->
     </div>
   </div>
 

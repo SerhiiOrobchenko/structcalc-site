@@ -129,6 +129,32 @@ const GCP_WALL = {
   '5': { neg: { lo: -1.4, hi: -0.8 }, pos: { lo: 1.0, hi: 0.7 } }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Ch.30 Part 2 (Sec. 30.4) — C&C for buildings with h > 60 ft
+// Eq. 30.4-1: p = q·Kd·(GCp) − qi·Kd·(GCpi)
+//   Note 4 (Fig. 30.4-1): use qz with positive (GCp), qh with negative (GCp); qi = qh throughout.
+// Min. effective wind area = 20 sf. Exception: Part 1 allowed for 60 < h ≤ 90 ft if h ≤ least dim.
+//
+// GCp source: ASCE 7-16 Fig. 30.6-1 → renumbered ASCE 7-22 Fig. 30.4-1.
+// ⚠️ Fig. 30.4-1 revised in Errata 1 (2024-09-20) — verify against current ASCE 7-22.
+// Wall   Zone 4: GCp+ +1.0→+0.8, GCp− −1.0→−0.8  (A = 20→500 sf)
+// Wall   Zone 5: GCp+ +1.0→+0.8, GCp− −1.3→−0.8
+// Roof   Zone 1: GCp+ +0.3 (const), GCp− −1.0→−0.8
+// Roof   Zone 2: GCp+ +0.3 (const), GCp− −1.8→−1.1
+// Roof   Zone 3: GCp+ +0.3 (const), GCp− −2.8→−1.1
+// ─────────────────────────────────────────────────────────────────────────────
+const GCP_WALL_P2 = {
+  Alo: 20, Ahi: 500,
+  '4': { neg: { lo: -1.0, hi: -0.8 }, pos: { lo: 1.0, hi: 0.8 } },
+  '5': { neg: { lo: -1.3, hi: -0.8 }, pos: { lo: 1.0, hi: 0.8 } }
+};
+const GCP_ROOF_P2_FLAT = {
+  Alo: 20, Ahi: 500,
+  '1': { neg: { lo: -1.0, hi: -0.8 }, pos: { lo: 0.3, hi: 0.3 } },
+  '2': { neg: { lo: -1.8, hi: -1.1 }, pos: { lo: 0.3, hi: 0.3 } },
+  '3': { neg: { lo: -2.8, hi: -1.1 }, pos: { lo: 0.3, hi: 0.3 } }
+};
+
 // Figure 30.3-2A, Roof (theta <= 7 deg) — GCp vs effective wind area A (sf), log-linear A=10..500
 const GCP_ROOF_LE7 = {
   Alo: 10, Ahi: 500,
@@ -388,6 +414,7 @@ const state = {
 
   // Ch.27 Directional Procedure inputs (Sec. 27.3)
   mwfrsProcedure: 'envelope', // 'envelope' (Ch.28, low-rise) | 'directional' (Ch.27, all heights)
+  ccProcedure: 'part1',     // 'part1' (Ch.30 Part 1, h ≤ 60 ft) | 'part2' (Ch.30 Part 2, h > 60 ft)
   buildingL: 60      // building dimension parallel to wind direction, ft (for L/B leeward Cp, Ch.27)
 };
 
@@ -728,6 +755,82 @@ function computeKzt(s, z) {
      - Table 26.10-1 Note 1 (K_z formula — no Ch.28 footnote exception applies here)
      - Sec. 27.1.5 (minimum design wind loads: walls ≥ 16 psf, roof ≥ 8 psf)
    ===================================================================== */
+
+// ── Ch.30 Part 2 GCp helpers (Fig. 30.4-1) ─────────────────────────────────
+function gcpWallP2(zone, A) {
+  const tbl = GCP_WALL_P2, row = tbl[zone];
+  if (!row) return { pos: 0, neg: 0, A };
+  const Ac = Math.min(Math.max(A, tbl.Alo), tbl.Ahi);
+  return { pos: logLerpA(Ac, tbl.Alo, tbl.Ahi, row.pos.lo, row.pos.hi),
+           neg: logLerpA(Ac, tbl.Alo, tbl.Ahi, row.neg.lo, row.neg.hi), A: Ac };
+}
+function gcpRoofP2(zone, A) {
+  const tbl = GCP_ROOF_P2_FLAT, row = tbl[zone];
+  if (!row) return { pos: 0, neg: 0, A };
+  const Ac = Math.min(Math.max(A, tbl.Alo), tbl.Ahi);
+  return { pos: logLerpA(Ac, tbl.Alo, tbl.Ahi, row.pos.lo, row.pos.hi),
+           neg: logLerpA(Ac, tbl.Alo, tbl.Ahi, row.neg.lo, row.neg.hi), A: Ac };
+}
+
+// ── Ch.30 Part 2 main computation (Sec. 30.4) ───────────────────────────────
+// Eq. 30.4-1: p = q·Kd·(GCp) − qi·Kd·(GCpi)
+// Note 4 (Fig. 30.4-1): positive GCp → q = qz; negative GCp → q = qh; qi = qh.
+//   p_max = qz·Kd·(+GCp) − qh·Kd·(−GCpi)   [governs inward push]
+//   p_min = qh·Kd·(−GCp) − qh·Kd·(+GCpi)   [governs suction]
+// GCp source: see GCP_WALL_P2 / GCP_ROOF_P2_FLAT constant blocks above.
+function computeCC30Part2(s) {
+  const KD      = 0.85;
+  const ke      = computeKe(s.groundElev);
+  const gcpiVal = GCPI[s.enclosure]?.pos ?? 0.18;
+  const kh      = khFromFormula(s.h, s.exposure);
+  const kzth    = computeKzt(s, s.h).kzt;
+  const qh      = 0.00256 * kh * kzth * ke * s.V * s.V;
+  const Aw      = Math.max(s.areaWall, 20);  // min. 20 sf
+  const Ar      = Math.max(s.areaRoof, 20);
+  const gc4     = gcpWallP2('4', Aw);
+  const gc5     = gcpWallP2('5', Aw);
+
+  // p_min (suction) — uses qh, constant over height
+  const z4_pmin = qh * KD * gc4.neg - qh * KD * gcpiVal;
+  const z5_pmin = qh * KD * gc5.neg - qh * KD * gcpiVal;
+
+  // Windward wall height profile (p_max varies with qz)
+  const wwProfile = ch27HeightProfile(s.h).map(z => {
+    const kz  = khFromFormula(z, s.exposure);
+    const kzt = computeKzt(s, z).kzt;
+    const qz  = 0.00256 * kz * kzt * ke * s.V * s.V;
+    return {
+      z, kz, qz,
+      z4_pmax: qz * KD * gc4.pos + qh * KD * gcpiVal,
+      z4_pmin,
+      z5_pmax: qz * KD * gc5.pos + qh * KD * gcpiVal,
+      z5_pmin
+    };
+  });
+
+  // Flat/low-slope roof (θ ≤ 10°) — all qh
+  const roofApplicable = s.theta <= 10;
+  const roofZones = roofApplicable
+    ? ['1', '2', '3'].map(zn => {
+        const gc = gcpRoofP2(zn, Ar);
+        return {
+          zone: zn, gcp: gc,
+          pMax: qh * KD * gc.pos + qh * KD * gcpiVal,
+          pMin: qh * KD * gc.neg - qh * KD * gcpiVal
+        };
+      })
+    : null;
+
+  const PSF_MIN_WALL = 16.0;
+  const topRow = wwProfile[wwProfile.length - 1];
+  const wallMinGoverns = Math.abs(topRow.z4_pmin) < PSF_MIN_WALL ||
+                         Math.abs(topRow.z5_pmin) < PSF_MIN_WALL;
+
+  return {
+    procedure: 'ch30part2', KD, ke, qh, gcpiVal, kh, Aw, Ar,
+    gc4, gc5, wwProfile, roofApplicable, roofZones, wallMinGoverns, PSF_MIN_WALL
+  };
+}
 
 // Table 26.10-1 Note 1 formula for K_z at height z.
 // Ch.27 does NOT use the footnote (*) exception (K_h = 0.70 for Exp B, h < 30 ft) —
@@ -1231,15 +1334,17 @@ function compute(s) {
     result: ccMinResultText()
   });
 
-  // Ch.27 Directional Procedure (computed whenever state is available; used when mwfrsProcedure = 'directional')
-  const ch27 = (s.enclosure !== 'openFreeRoof') ? computeCh27(s) : null;
+  // Ch.27 Directional Procedure (used when mwfrsProcedure = 'directional')
+  const ch27   = (s.enclosure !== 'openFreeRoof') ? computeCh27(s) : null;
+  // Ch.30 Part 2 C&C (used when ccProcedure = 'part2', h > 60 ft)
+  const cc30p2 = (s.enclosure !== 'openFreeRoof') ? computeCC30Part2(s) : null;
 
   return {
     kh, ke, kd: KD, qh, gcpi, a,
     steps, mwfrsLC1, mwfrsLC2, mwfrsLC3, mwfrsLC4, torsionApplies,
     ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, openRoof,
     mwfrsMinCheck, mwfrsMinGoverns, ccMinCheck, ccMinGoverns,
-    ch27
+    ch27, cc30p2
   };
 }
 
@@ -1494,7 +1599,24 @@ function renderResults() {
   zoneTable('mwfrsLC3Table', r.mwfrsLC3, false);
   zoneTable('mwfrsLC4Table', r.mwfrsLC4, false);
 
-  // C&C tables
+  // C&C procedure toggle: Part 1 (h ≤ 60 ft) vs Part 2 (h > 60 ft)
+  const ccP1Div    = document.getElementById('cc30Part1Results');
+  const ccP2Div    = document.getElementById('cc30Part2Results');
+  const cc30P1Warn = document.getElementById('cc30Part1Warning');
+  const ccProcSeg  = document.getElementById('ccProcedureSeg');
+  const isPart2    = state.ccProcedure === 'part2';
+  if (ccP1Div)   ccP1Div.style.display   = isPart2 ? 'none' : '';
+  if (ccP2Div)   ccP2Div.style.display   = isPart2 ? '' : 'none';
+  if (cc30P1Warn) {
+    const tooTall = state.h > 60;
+    cc30P1Warn.style.display = (!isPart2 && tooTall) ? '' : 'none';
+  }
+  if (isPart2 && r.cc30p2) {
+    const el = document.getElementById('cc30Part2Results');
+    if (el) el.innerHTML = reportCC30P2HTML(r);
+  }
+
+  // C&C tables (Part 1)
   zoneTable('ccWallTable', r.ccWall, true);
   const roofHeading = document.getElementById('ccRoofHeading');
   if (roofHeading) {
@@ -1815,6 +1937,83 @@ function reportMWFRSHTML(r) {
 
 // C&C Design Pressures section (Ch. 30) — identical tables/headings/
 // citations to the on-screen data-mode="cc" + overhang panels.
+// Ch.30 Part 2 C&C HTML report section
+function reportCC30P2HTML(r) {
+  const c = r.cc30p2;
+  if (!c) return '<p class="muted">Ch.30 Part 2 data unavailable.</p>';
+  const s     = state;
+  const u     = s.unitSystem === 'SI';
+  const pU    = pUnit();
+  const lenU  = u ? 'm' : 'ft';
+  const aU    = u ? 'm²' : 'ft²';
+  const fmt2  = v => fmt(pVal(v), 2);
+
+  let html = '';
+
+  // Velocity pressure summary
+  html += '<table class="report-input-table"><tbody>' +
+    '<tr><td>K<sub>h</sub> (mean roof height)</td><td>' + fmt(c.kh, 3) + '</td></tr>' +
+    '<tr><td>q<sub>h</sub></td><td>' + fmt2(c.qh) + ' ' + pU + '</td></tr>' +
+    '<tr><td>Eff. wind area, walls</td><td>' + fmt(c.Aw, 0) + ' ' + aU + '</td></tr>' +
+    '<tr><td>Eff. wind area, roof</td><td>' + fmt(c.Ar, 0) + ' ' + aU + '</td></tr>' +
+    '<tr><td>(GC<sub>pi</sub>)</td><td>&pm;' + fmt(c.gcpiVal, 2) + '</td></tr>' +
+    '</tbody></table>';
+
+  // ⚠️ Errata / source caveat
+  html += '<div class="alert info" style="margin:8px 0 12px;">' +
+    '&#9432; GC<sub>p</sub> values from ASCE 7-16 Fig. 30.6-1 (renamed to ASCE 7-22 Fig. 30.4-1). ' +
+    'Fig. 30.4-1 was revised in Errata 1 (2024-09-20) &mdash; verify against current ASCE 7-22 before final design.' +
+    '</div>';
+
+  // Windward wall height profile table
+  html += '<h3>Wall C&amp;C &mdash; Windward Height Profile <span class="ref">Fig. 30.4-1, Note 4: +GC<sub>p</sub> uses q<sub>z</sub></span></h3>';
+  html += '<p class="muted" style="margin:0 0 8px;">p<sub>max</sub> = q<sub>z</sub>·K<sub>d</sub>·(+GC<sub>p</sub>) &minus; q<sub>h</sub>·K<sub>d</sub>·(&minus;GC<sub>pi</sub>) &nbsp;|&nbsp; ' +
+          'p<sub>min</sub> = q<sub>h</sub>·K<sub>d</sub>·(GC<sub>p</sub><sup>&minus;</sup>) &minus; q<sub>h</sub>·K<sub>d</sub>·(+GC<sub>pi</sub>)</p>';
+  html += '<table class="report-table"><thead><tr>' +
+    '<th>z (' + lenU + ')</th><th>K<sub>z</sub></th><th>q<sub>z</sub> (' + pU + ')</th>' +
+    '<th>Zone 4 p<sub>max</sub></th><th>Zone 4 p<sub>min</sub></th>' +
+    '<th>Zone 5 p<sub>max</sub></th><th>Zone 5 p<sub>min</sub></th>' +
+    '</tr></thead><tbody>';
+  for (const row of c.wwProfile) {
+    html += '<tr>' +
+      '<td>' + fmt(lengthOut(row.z), 1) + '</td>' +
+      '<td>' + fmt(row.kz, 3) + '</td>' +
+      '<td>' + fmt2(row.qz) + '</td>' +
+      '<td class="val-pos">' + fmt2(row.z4_pmax) + '</td>' +
+      '<td class="val-neg">' + fmt2(row.z4_pmin) + '</td>' +
+      '<td class="val-pos">' + fmt2(row.z5_pmax) + '</td>' +
+      '<td class="val-neg">' + fmt2(row.z5_pmin) + '</td>' +
+      '</tr>';
+  }
+  html += '</tbody></table>';
+
+  // Roof
+  if (c.roofApplicable && c.roofZones) {
+    html += '<h3>Roof C&amp;C &mdash; Zones 1, 2, 3 (flat/low-slope &theta; &le; 10&deg;) <span class="ref">Fig. 30.4-1</span></h3>';
+    html += '<table class="report-table"><thead><tr>' +
+      '<th>Zone</th><th>(GC<sub>p</sub>)<sup>+</sup></th><th>(GC<sub>p</sub>)<sup>&minus;</sup></th>' +
+      '<th>p<sub>max</sub> (' + pU + ')</th><th>p<sub>min</sub> (' + pU + ')</th>' +
+      '</tr></thead><tbody>';
+    for (const z of c.roofZones) {
+      html += '<tr><td>' + z.zone + '</td>' +
+        '<td class="val-pos">+' + fmt(z.gcp.pos, 2) + '</td>' +
+        '<td class="val-neg">' + fmt(z.gcp.neg, 2) + '</td>' +
+        '<td class="val-pos">' + fmt2(z.pMax) + '</td>' +
+        '<td class="val-neg">' + fmt2(z.pMin) + '</td></tr>';
+    }
+    html += '</tbody></table>';
+  } else if (!c.roofApplicable) {
+    html += '<div class="alert warn" style="margin-top:10px;">Sloped roof (&theta; &gt; 10&deg;): Ch.30 Part 2 sloped-roof C&amp;C (Fig. 30.4-1) is not yet implemented. Use the Standard directly for roof C&amp;C when &theta; &gt; 10&deg;.</div>';
+  }
+
+  // Minimum load warning
+  if (c.wallMinGoverns) {
+    html += '<div class="alert warn" style="margin-top:10px;">Sec. 30.2.2 minimum: wall C&amp;C &ge; 16 psf governs for one or more zones.</div>';
+  }
+
+  return html;
+}
+
 function reportCCHTML(r) {
   const s = state;
   let html = '<h3>Walls &mdash; Zones 4 &amp; 5 <span class="ref">Fig. 30.3-1</span></h3>' + zoneTableHTML(r.ccWall, true);
@@ -2040,7 +2239,13 @@ function buildReportHTML(r) {
         'Eq. 28.3-1, Figs. 28.3-1/28.3-2', reportMWFRSHTML(r));
     }
   } else {
-    html += section('Components &amp; Cladding Design Pressures', 'Eq. 30.3-1, Figs. 30.3-1/30.3-2A&ndash;2G', reportCCHTML(r));
+    if (s.ccProcedure === 'part2') {
+      html += section('C&amp;C Design Pressures &mdash; Ch.30 Part 2 (h &gt; 60 ft)',
+        'Eq. 30.4-1, Fig. 30.4-1, Sec. 30.4', reportCC30P2HTML(r));
+    } else {
+      html += section('C&amp;C Design Pressures &mdash; Ch.30 Part 1 (Low-Rise, h &le; 60 ft)',
+        'Eq. 30.3-1, Figs. 30.3-1/30.3-2A&ndash;2G', reportCCHTML(r));
+    }
   }
 
   if (s.hasParapet && r.parapet) {
@@ -2313,6 +2518,17 @@ function bindInputs() {
     });
   }
   // Ch.27 / Ch.28 procedure toggle
+  const ccProcSeg2 = document.getElementById('ccProcedureSeg');
+  if (ccProcSeg2) {
+    ccProcSeg2.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        ccProcSeg2.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.ccProcedure = btn.dataset.val;
+        renderResults();
+      });
+    });
+  }
   const mwfrsProcSeg = document.getElementById('mwfrsProcedureSeg');
   if (mwfrsProcSeg) {
     mwfrsProcSeg.querySelectorAll('button').forEach(btn => {
@@ -3718,6 +3934,11 @@ function init() {
   document.getElementById('minDim').value = state.minDim;
   const buildingLInit = document.getElementById('buildingL');
   if (buildingLInit) buildingLInit.value = state.buildingL;
+  const ccProcSegInit = document.getElementById('ccProcedureSeg');
+  if (ccProcSegInit) {
+    ccProcSegInit.querySelectorAll('button').forEach(b =>
+      b.classList.toggle('active', b.dataset.val === state.ccProcedure));
+  }
   const mwfrsProcSegInit = document.getElementById('mwfrsProcedureSeg');
   if (mwfrsProcSegInit) {
     mwfrsProcSegInit.querySelectorAll('button').forEach(b =>
