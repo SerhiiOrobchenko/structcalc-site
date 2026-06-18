@@ -727,10 +727,9 @@ function renderContent(forceReload) {
 
   if (!sameLoaded || forceReload) {
     elFrame.dataset.loadedKey = loadKey;
-    // Force a real reload (even if src string is unchanged) so the module
-    // re-initializes with fresh defaults before we push the saved state.
-    elFrame.src = 'about:blank';
-    setTimeout(() => { elFrame.src = targetSrc; }, 0);
+    // Add a timestamp so the browser always fetches a fresh copy even when
+    // the src string hasn't changed (avoids CDN cache serving stale HTML).
+    elFrame.src = targetSrc + '?_r=' + Date.now();
   } else {
     pushStateToFrame();
   }
@@ -764,9 +763,9 @@ function pushStateToFrame() {
 }
 
 elFrame.addEventListener('load', () => {
-  if (elFrame.src === 'about:blank' || !elFrame.src) return;
-  // give the module's own DOMContentLoaded/init a tick to finish, then push saved state (if any)
-  setTimeout(pushStateToFrame, 50);
+  if (!elFrame.src || elFrame.src === 'about:blank') return;
+  // Give the module's DOMContentLoaded/init a tick to finish, then push saved state.
+  setTimeout(pushStateToFrame, 150);
 });
 
 /* ---- Receive state updates from the active module's iframe ----------------------------- */
