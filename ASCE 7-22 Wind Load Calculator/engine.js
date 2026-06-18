@@ -1087,6 +1087,30 @@ function computeCh27(s) {
       ? (Math.abs(roofNTR.ww.p1_lc1) < PSF_MIN_ROOF || Math.abs(roofNTR.lw.lc1) < PSF_MIN_ROOF)
       : false;
 
+  // Sec. 27.3.5 Roof Overhangs: soffit Cp=+0.8 (no GCpi), top from windward edge zone.
+  // p_net (upward+) = p_soffit - p_top
+  var ch27Overhang = null;
+  if (s.hasOverhang) {
+    var pSoffit27 = qh * G * KD * 0.8;
+    var cpTop27, pTop27_lc1, pTop27_lc2;
+    if (roofNTR) {
+      cpTop27 = roofNTR.ww.cp1;
+      pTop27_lc1 = roofNTR.ww.p1_lc1;
+      pTop27_lc2 = roofNTR.ww.p1_lc2;
+    } else {
+      var ez27 = roofZonesPTR[0];
+      cpTop27 = ez27.cp1;
+      pTop27_lc1 = ez27.p1_lc1;
+      pTop27_lc2 = ez27.p1_lc2;
+    }
+    ch27Overhang = {
+      cpTop: cpTop27, cpSoffit: 0.8, pSoffit: pSoffit27,
+      pTop_lc1: pTop27_lc1, pTop_lc2: pTop27_lc2,
+      pNet_lc1: pSoffit27 - pTop27_lc1,
+      pNet_lc2: pSoffit27 - pTop27_lc2
+    };
+  }
+
   return {
     procedure: 'directional', G, KD, ke, qh, gcpi,
     kh, B, L, LB, hL,
@@ -1095,7 +1119,8 @@ function computeCh27(s) {
     pLW_lc1, pLW_lc2, pSW_lc1, pSW_lc2,
     roofApplicable, roofZones, roofNTR, roofZonesPTR,
     wallMinGoverns, roofMinGoverns,
-    PSF_MIN_WALL, PSF_MIN_ROOF
+    PSF_MIN_WALL, PSF_MIN_ROOF,
+    ch27Overhang: ch27Overhang
   };
 }
 
@@ -2087,6 +2112,26 @@ function reportCh27HTML(r) {
           + '&#9888;&#65039; Minimum wind load (Sec. 27.1.5) governs: '
           + minWarns.join('; ')
           + '. Use 16 psf (walls) / 8 psf (roof) in these locations.</div>';
+  }
+
+  // Sec. 27.3.5 Roof Overhangs
+  var oh27 = c.ch27Overhang;
+  if (s.hasOverhang && oh27) {
+    var fOH = function(v){ return (pVal(v)>=0?'+':'')+fmt(pVal(v),1)+' '+pUnit(); };
+    html += '<h3>Roof Overhang &mdash; Net MWFRS Pressure <span class="ref">Sec. 27.3.5</span></h3>'
+          + '<p class="muted" style="margin-bottom:6px;">Soffit C<sub>p</sub>=+0.8 (Sec. 27.3.5, no (GC<sub>pi</sub>)). '
+          + 'Top: C<sub>p</sub>='+fmt(oh27.cpTop,2)+' (windward edge, Fig. 27.3-1). '
+          + 'p<sub>net</sub>=p<sub>soffit</sub>&minus;p<sub>top</sub> (upward positive).</p>'
+          + '<table class="report-input-table"><thead><tr>'
+          + '<th>Surface</th><th>C<sub>p</sub></th>'
+          + '<th>LC1 ('+pUnit()+')</th><th>LC2 ('+pUnit()+')</th></tr></thead><tbody>'
+          + '<tr><td>Soffit (upward)</td><td>+0.80</td>'
+          + '<td colspan="2">'+fOH(oh27.pSoffit)+'</td></tr>'
+          + '<tr><td>Top surface</td><td>'+fmt(oh27.cpTop,2)+'</td>'
+          + '<td>'+fOH(oh27.pTop_lc1)+'</td><td>'+fOH(oh27.pTop_lc2)+'</td></tr>'
+          + '<tr style="font-weight:700;background:#f0f4f8"><td>p<sub>net</sub> uplift</td><td>&mdash;</td>'
+          + '<td>'+fOH(oh27.pNet_lc1)+'</td><td>'+fOH(oh27.pNet_lc2)+'</td></tr>'
+          + '</tbody></table>';
   }
 
   // Design load cases note
