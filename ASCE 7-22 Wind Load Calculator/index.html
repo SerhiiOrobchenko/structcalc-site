@@ -67,6 +67,7 @@
   body.enclosure-open #roofShapeField,
   body.enclosure-open #roofTypeField{display:none;}
   body.enclosure-open #thetaField{display:flex;}
+  body.enclosure-open #ch305Inputs{display:block !important;}
   body.enclosure-open #cardGCpiWrap{display:none;}
 
   /* ---- Ch.29 Other Structures — visibility -------------------------------- */
@@ -999,6 +1000,28 @@
     <p class="muted" style="margin:0 0 10px;">Applies to monoslope, pitched, and troughed free roofs for all h/L, &theta; &le; 45&deg;. Zones are measured horizontally from the windward roof edge. Load Cases A and B per Fig. 27.3-7.</p>
     <div id="openRoofFig277Table"></div>
   </div>
+
+  <!-- Sec. 30.5 Open Building C&C inputs (visible when enclosure = Open Free Roof) -->
+  <div class="panel" id="ch305Inputs" style="display:none;">
+    <h2>C&amp;C Inputs &mdash; Open Building <span class="ref">Sec. 30.5</span></h2>
+    <div class="field-grid">
+      <div class="field-row" id="ch305LminField">
+        <label for="ch305Lmin">Least plan dimension, L<sub>min</sub> <span class="unit-label">(ft)</span>
+          <span class="hint">Smallest of the two building plan dimensions. Used to compute zone width a = min(0.1L<sub>min</sub>, 0.4h) ≥ max(0.04L<sub>min</sub>, 3 ft). Fig. 30.5-1 Notation.</span>
+        </label>
+        <input type="number" id="ch305Lmin" step="any" min="1" value="40">
+      </div>
+      <div class="field-row" id="ch305AField">
+        <label for="ch305A">Effective wind area, A <span class="unit-label">(ft²)</span>
+          <span class="hint">Tributary area of the component or cladding element. Determines row in the C<sub>N</sub> table (≤a², >a²≤4a², or >4a²). Fig. 30.5-1.</span>
+        </label>
+        <input type="number" id="ch305A" step="any" min="0.1" value="100">
+      </div>
+    </div>
+  </div>
+
+  <!-- Sec. 30.5 C&C results (populated dynamically) -->
+  <div class="panel" id="openRoofCCSection" style="display:none;"></div>
 
 </main>
 

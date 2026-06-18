@@ -422,6 +422,10 @@ const state = {
   openWindFlow: 'clear',      // 'clear' | 'obstructed' — Figs. 27.3-4/5/6/7 Note 2
   openL: 40,                  // horizontal roof dimension in the along-wind direction, L, ft (Fig. 27.3-4 Notation)
 
+  // Open Building C&C (Sec. 30.5) — Figs. 30.5-1/2/3
+  ch305Lmin: 40,  // least horizontal plan dimension (for zone width a), ft (Fig. 30.5-1 Notation)
+  ch305A:    100, // effective wind area A for C&C, ft² (Fig. 30.5-1)
+
   // Report header fields (Phase 4) — informational only, do not affect calculations
   projectName: '',
   projectNumber: '',
@@ -810,6 +814,168 @@ function computeKzt(s, z) {
      - Table 26.10-1 Note 1 (K_z formula — no Ch.28 footnote exception applies here)
      - Sec. 27.1.5 (minimum design wind loads: walls ≥ 16 psf, roof ≥ 8 psf)
    ===================================================================== */
+
+// ── Sec. 30.5 Open Building C&C (Figs. 30.5-1/2/3) ─────────────────────────
+// CN305_DATA[shape][flow][thetaIdx][areaIdx] = [z3+,z3−,z2+,z2−,z1+,z1−]
+// shape: 'monoslope'|'pitched'|'troughed'; flow: 'clear'|'obstr'
+// thetaIdx: 0..4 → [0,7.5,15,30,45] deg  areaIdx: 0=≤a², 1=>a²≤4a², 2=>4a²
+// Source: Fig. 30.5-1 (monoslope), 30.5-2 (pitched), 30.5-3 (troughed), ASCE 7-22
+const CN305_ANGLES = [0, 7.5, 15, 30, 45];
+const CN305_DATA = {
+  monoslope: {
+    clear: [
+      [[2.4,-3.3,1.8,-1.7,1.2,-1.1],[1.8,-1.7,1.8,-1.7,1.2,-1.1],[1.2,-1.1,1.2,-1.1,1.2,-1.1]],
+      [[3.2,-4.2,2.4,-2.1,1.6,-1.4],[2.4,-2.1,2.4,-2.1,1.6,-1.4],[1.6,-1.4,1.6,-1.4,1.6,-1.4]],
+      [[3.6,-3.8,2.7,-2.9,1.8,-1.9],[2.7,-2.9,2.7,-2.9,1.8,-1.9],[1.8,-1.9,1.8,-1.9,1.8,-1.9]],
+      [[5.2,-5.0,3.9,-3.8,2.6,-2.5],[3.9,-3.8,3.9,-3.8,2.6,-2.5],[2.6,-2.5,2.6,-2.5,2.6,-2.5]],
+      [[5.2,-4.6,3.9,-3.5,2.6,-2.3],[3.9,-3.5,3.9,-3.5,2.6,-2.3],[2.6,-2.3,2.6,-2.3,2.6,-2.3]]
+    ],
+    obstr: [
+      [[1.0,-3.6,0.8,-1.8,0.5,-1.2],[0.8,-1.8,0.8,-1.8,0.5,-1.2],[0.5,-1.2,0.5,-1.2,0.5,-1.2]],
+      [[1.6,-5.1,1.2,-2.6,0.8,-1.7],[1.2,-2.6,1.2,-2.6,0.8,-1.7],[0.8,-1.7,0.8,-1.7,0.8,-1.7]],
+      [[2.4,-4.2,1.8,-3.2,1.2,-2.1],[1.8,-3.2,1.8,-3.2,1.2,-2.1],[1.2,-2.1,1.2,-2.1,1.2,-2.1]],
+      [[3.2,-4.6,2.4,-3.5,1.6,-2.3],[2.4,-3.5,2.4,-3.5,1.6,-2.3],[1.6,-2.3,1.6,-2.3,1.6,-2.3]],
+      [[4.2,-3.8,3.2,-2.9,2.1,-1.9],[3.2,-2.9,3.2,-2.9,2.1,-1.9],[2.1,-1.9,2.1,-1.9,2.1,-1.9]]
+    ]
+  },
+  pitched: {
+    clear: [
+      [[2.4,-3.3,1.8,-1.7,1.2,-1.1],[1.8,-1.7,1.8,-1.7,1.2,-1.1],[1.2,-1.1,1.2,-1.1,1.2,-1.1]],
+      [[2.2,-3.6,1.7,-1.8,1.1,-1.2],[1.7,-1.8,1.7,-1.8,1.1,-1.2],[1.1,-1.2,1.1,-1.2,1.1,-1.2]],
+      [[2.2,-2.2,1.7,-1.7,1.1,-1.1],[1.7,-1.7,1.7,-1.7,1.1,-1.1],[1.1,-1.1,1.1,-1.1,1.1,-1.1]],
+      [[2.6,-1.8,2.0,-1.4,1.3,-0.9],[2.0,-1.4,2.0,-1.4,1.3,-0.9],[1.3,-0.9,1.3,-0.9,1.3,-0.9]],
+      [[2.2,-1.6,1.7,-1.2,1.1,-0.8],[1.7,-1.2,1.7,-1.2,1.1,-0.8],[1.1,-0.8,1.1,-0.8,1.1,-0.8]]
+    ],
+    obstr: [
+      [[1.0,-3.6,0.8,-1.8,0.5,-1.2],[0.8,-1.8,0.8,-1.8,0.5,-1.2],[0.5,-1.2,0.5,-1.2,0.5,-1.2]],
+      [[1.0,-5.1,0.8,-2.6,0.5,-1.7],[0.8,-2.6,0.8,-2.6,0.5,-1.7],[0.5,-1.7,0.5,-1.7,0.5,-1.7]],
+      [[1.0,-3.2,0.8,-2.4,0.5,-1.6],[0.8,-2.4,0.8,-2.4,0.5,-1.6],[0.5,-1.6,0.5,-1.6,0.5,-1.6]],
+      [[1.0,-2.4,0.8,-1.8,0.5,-1.2],[0.8,-1.8,0.8,-1.8,0.5,-1.2],[0.5,-1.2,0.5,-1.2,0.5,-1.2]],
+      [[1.0,-2.4,0.8,-1.8,0.5,-1.2],[0.8,-1.8,0.8,-1.8,0.5,-1.2],[0.5,-1.2,0.5,-1.2,0.5,-1.2]]
+    ]
+  },
+  troughed: {
+    clear: [
+      [[2.4,-3.3,1.8,-1.7,1.2,-1.1],[1.8,-1.7,1.8,-1.7,1.2,-1.1],[1.2,-1.1,1.2,-1.1,1.2,-1.1]],
+      [[2.4,-3.3,1.8,-1.7,1.2,-1.1],[1.8,-1.7,1.8,-1.7,1.2,-1.1],[1.2,-1.1,1.2,-1.1,1.2,-1.1]],
+      [[2.2,-2.2,1.7,-1.7,1.1,-1.1],[1.7,-1.7,1.7,-1.7,1.1,-1.1],[1.1,-1.1,1.1,-1.1,1.1,-1.1]],
+      [[1.8,-2.6,1.4,-2.0,0.9,-1.3],[1.4,-2.0,1.4,-2.0,0.9,-1.3],[0.9,-1.3,0.9,-1.3,0.9,-1.3]],
+      [[1.6,-2.2,1.2,-1.7,0.8,-1.1],[1.2,-1.7,1.2,-1.7,0.8,-1.1],[0.8,-1.1,0.8,-1.1,0.8,-1.1]]
+    ],
+    obstr: [
+      [[1.0,-3.6,0.8,-1.8,0.5,-1.2],[0.8,-1.8,0.8,-1.8,0.5,-1.2],[0.5,-1.2,0.5,-1.2,0.5,-1.2]],
+      [[1.0,-4.8,0.8,-2.4,0.5,-1.6],[0.8,-2.4,0.8,-2.4,0.5,-1.6],[0.5,-1.6,0.5,-1.6,0.5,-1.6]],
+      [[1.0,-2.4,0.8,-1.8,0.5,-1.2],[0.8,-1.8,0.8,-1.8,0.5,-1.2],[0.5,-1.2,0.5,-1.2,0.5,-1.2]],
+      [[1.0,-2.8,0.8,-2.1,0.5,-1.4],[0.8,-2.1,0.8,-2.1,0.5,-1.4],[0.5,-1.4,0.5,-1.4,0.5,-1.4]],
+      [[1.0,-2.4,0.8,-1.8,0.5,-1.2],[0.8,-1.8,0.8,-1.8,0.5,-1.2],[0.5,-1.2,0.5,-1.2,0.5,-1.2]]
+    ]
+  }
+};
+
+// computeCC30Sec305(s) — open building C&C per Sec. 30.5, Eq. 30.5-1: p = qh·Kd·G·CN
+// Applicable: open buildings, all heights, monoslope/pitched/troughed free roofs, θ ≤ 45°, 0.25 ≤ h/L ≤ 1.0
+// Source: ASCE 7-22 Sec. 30.5.2, Figs. 30.5-1/2/3
+function computeCC30Sec305(s) {
+  const shape   = s.openRoofShape;        // 'monoslope'|'pitched'|'troughed'
+  const obstr   = s.openWindFlow === 'obstructed';
+  const theta   = s.theta;
+  const h       = s.h;
+  const Lmin    = s.ch305Lmin;           // least horizontal plan dimension (ft)
+  const A       = s.ch305A;             // effective wind area (ft²)
+  const KD      = 0.85;                  // Table 26.6-1
+  const G       = G_RIGID;              // 0.85, Sec. 26.11.1
+
+  // Zone width a (Fig. 30.5-1 Notation)
+  const a = Math.max(Math.min(0.1 * Lmin, 0.4 * h), Math.max(0.04 * Lmin, 3));
+  const a2 = a * a, a24 = 4 * a2;
+  const areaLabel = (A <= a2) ? '≤a²' : (A <= a24) ? '>a², ≤4a²' : '>4a²';
+  const areaIdx   = (A <= a2) ? 0 : (A <= a24) ? 1 : 2;
+
+  // qh at mean roof height h
+  const kztObj = computeKzt(s, h);
+  const kh     = computeKh(h, s.exposure);
+  const ke     = computeKe(s.groundElev);
+  const qh     = 0.00256 * kh * kztObj.kzt * ke * s.V * s.V;
+
+  // CN lookup with linear theta interpolation (Fig. 30.5-1 Note 3)
+  const flow = obstr ? 'obstr' : 'clear';
+  const tbl  = CN305_DATA[shape][flow];
+  const thetaC = Math.min(45, Math.max(0, theta));
+  let i0 = CN305_ANGLES.length - 2;
+  for (var k = 0; k < CN305_ANGLES.length - 1; k++) {
+    if (thetaC <= CN305_ANGLES[k + 1]) { i0 = k; break; }
+  }
+  const t0 = CN305_ANGLES[i0], t1 = CN305_ANGLES[i0 + 1];
+  const frac = (t1 === t0) ? 0 : (thetaC - t0) / (t1 - t0);
+  const r0 = tbl[i0][areaIdx], r1 = tbl[i0 + 1][areaIdx];
+  const cn = r0.map(function(v, j) { return v + frac * (r1[j] - v); });
+  // cn = [z3+, z3-, z2+, z2-, z1+, z1-]
+
+  const coeff = qh * KD * G;
+  const zones = {
+    Z3: { label: 'Zone 3 (Corner)',  CNp: cn[0], CNn: cn[1], pp: coeff * cn[0], pn: coeff * cn[1] },
+    Z2: { label: 'Zone 2 (Edge)',    CNp: cn[2], CNn: cn[3], pp: coeff * cn[2], pn: coeff * cn[3] },
+    Z1: { label: 'Zone 1 (Interior)',CNp: cn[4], CNn: cn[5], pp: coeff * cn[4], pn: coeff * cn[5] }
+  };
+
+  const hL = (s.openL > 0) ? h / s.openL : 0;
+  const warnings = [];
+  if (theta > 45)              warnings.push('θ > 45°: outside Fig. 30.5 range');
+  if (hL < 0.25 || hL > 1.0)  warnings.push('h/L = ' + hL.toFixed(3) + ' outside 0.25–1.0 (Fig. 30.5-1 applicability)');
+
+  return {
+    shape, obstr, theta, h, hL, Lmin, A, a, areaIdx, areaLabel,
+    KD, G, kh, ke, kztObj, qh, coeff, zones, warnings,
+    eqRef: 'Eq. 30.5-1', figRef: 'Figs. 30.5-1/2/3'
+  };
+}
+
+// reportCC30Sec305HTML(r) — HTML report block for open building C&C (Sec. 30.5)
+function reportCC30Sec305HTML(r) {
+  const c = r.cc30s305;
+  if (!c) return '<p class="muted">Sec. 30.5 C&amp;C data unavailable.</p>';
+  const u = (state.units === 'metric');
+  const pU = u ? 'Pa' : 'psf';
+  const lenU = u ? 'm' : 'ft';
+  const aU = u ? 'm²' : 'ft²';
+  const pF = u ? function(v){ return fmtP(v * 47.88); } : function(v){ return fmtP(v); };
+  const shapeLabel = c.shape === 'monoslope' ? 'Monoslope' : c.shape === 'pitched' ? 'Pitched' : 'Troughed';
+
+  var html = '';
+  if (c.warnings.length) {
+    html += '<div class="alert warn"><strong>Warnings:</strong> ' + c.warnings.join(' &bull; ') + '</div>';
+  }
+  html += '<table class="report-tbl"><thead><tr><th>Parameter</th><th>Value</th><th>Reference</th></tr></thead><tbody>';
+  html += '<tr><td>Roof type</td><td>' + shapeLabel + ' free roof</td><td>Fig. 30.5-' + (c.shape==='monoslope'?'1':c.shape==='pitched'?'2':'3') + '</td></tr>';
+  html += '<tr><td>Wind flow</td><td>' + (c.obstr ? 'Obstructed (&gt;50% blockage)' : 'Clear (&le;50% blockage)') + '</td><td>Fig. 30.5-1 Note 2</td></tr>';
+  html += '<tr><td>Roof angle, &theta;</td><td>' + fmt(c.theta,1) + '&deg;</td><td>—</td></tr>';
+  html += '<tr><td>Mean roof height, h</td><td>' + fmt(c.h,2) + ' ' + lenU + '</td><td>—</td></tr>';
+  html += '<tr><td>h / L</td><td>' + fmt(c.hL,3) + '</td><td>0.25 &le; h/L &le; 1.0 required</td></tr>';
+  html += '<tr><td>Least plan dimension, L<sub>min</sub></td><td>' + fmt(c.Lmin,2) + ' ' + lenU + '</td><td>Fig. 30.5-1 Notation</td></tr>';
+  html += '<tr><td>Zone width, a</td><td>' + fmt(c.a,2) + ' ' + lenU + '</td><td>min(0.1L<sub>min</sub>, 0.4h) &ge; max(0.04L<sub>min</sub>, 3 ft)</td></tr>';
+  html += '<tr><td>Effective wind area, A</td><td>' + fmt(c.A,1) + ' ' + aU + '</td><td>—</td></tr>';
+  html += '<tr><td>Area size</td><td>' + c.areaLabel + '</td><td>Fig. 30.5-1 table rows</td></tr>';
+  html += '<tr><td>K<sub>d</sub></td><td>' + fmt(c.KD,2) + '</td><td>Table 26.6-1</td></tr>';
+  html += '<tr><td>G (rigid)</td><td>' + fmt(c.G,2) + '</td><td>Sec. 26.11.1</td></tr>';
+  html += '<tr><td>K<sub>z</sub> at h</td><td>' + fmt(c.kh,3) + '</td><td>Table 26.10-1</td></tr>';
+  html += '<tr><td>K<sub>zt</sub> at h</td><td>' + fmt(c.kztObj.kzt,3) + '</td><td>Sec. 26.8</td></tr>';
+  html += '<tr><td>K<sub>e</sub></td><td>' + fmt(c.ke,4) + '</td><td>Table 26.9-1</td></tr>';
+  html += '<tr><td>q<sub>h</sub></td><td>' + (u ? fmtP(c.qh*47.88) : fmtP(c.qh)) + ' ' + pU + '</td><td>Eq. 26.10-1</td></tr>';
+  html += '<tr><td>q<sub>h</sub>&middot;K<sub>d</sub>&middot;G</td><td>' + (u ? fmtP(c.coeff*47.88) : fmtP(c.coeff)) + ' ' + pU + '</td><td>Eq. 30.5-1 coefficient</td></tr>';
+  html += '</tbody></table>';
+
+  html += '<h4 style="margin:12px 0 6px">Net Design Pressures &mdash; p = q<sub>h</sub>&middot;K<sub>d</sub>&middot;G&middot;C<sub>N</sub> <span class="ref">Eq. 30.5-1</span></h4>';
+  html += '<p class="muted" style="margin:0 0 8px">+ toward top surface, &minus; away from top surface. Apply both + and &minus; cases.</p>';
+  html += '<table class="report-tbl"><thead><tr><th>Zone</th><th>C<sub>N</sub> (+)</th><th>C<sub>N</sub> (&minus;)</th><th>p (+) ' + pU + '</th><th>p (&minus;) ' + pU + '</th></tr></thead><tbody>';
+  ['Z3','Z2','Z1'].forEach(function(zk) {
+    const z = c.zones[zk];
+    html += '<tr><td>' + z.label + '</td><td>' + fmt(z.CNp,2) + '</td><td>' + fmt(z.CNn,2) + '</td>';
+    html += '<td>' + pF(z.pp) + '</td><td>' + pF(z.pn) + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  html += '<p class="muted" style="margin:8px 0 0;font-size:0.82em">C<sub>N</sub> values from ' + c.figRef + ', ASCE 7-22. All load cases for each roof angle shall be investigated (Sec. 30.5.2). Verify h/L applicability directly.</p>';
+  return html;
+}
 
 // ── Ch.30 Part 2 GCp helpers (Fig. 30.4-1) ─────────────────────────────────
 function gcpWallP2(zone, A) {
@@ -1505,13 +1671,15 @@ function compute(s) {
   const cc30p2 = (s.enclosure !== 'openFreeRoof') ? computeCC30Part2(s) : null;
   // Ch.29 Other Structures
   const ch29 = (s.structureCategory === 'otherStructure') ? computeCh29(s) : null;
+  // Sec. 30.5 Open Building C&C
+  const cc30s305 = (s.enclosure === 'openFreeRoof') ? computeCC30Sec305(s) : null;
 
   return {
     kh, ke, kd: KD, qh, gcpi, a,
     steps, mwfrsLC1, mwfrsLC2, mwfrsLC3, mwfrsLC4, torsionApplies,
     ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, openRoof,
     mwfrsMinCheck, mwfrsMinGoverns, ccMinCheck, ccMinGoverns,
-    ch27, cc30p2, ch29
+    ch27, cc30p2, ch29, cc30s305
   };
 }
 
@@ -1655,6 +1823,16 @@ function openRoofZoneTable(containerId, fig277) {
   const c = document.getElementById(containerId);
   if (!c) return;
   c.innerHTML = openRoofZoneTableHTML(fig277);
+}
+
+// Open Building C&C (Sec. 30.5) — results panel. Shown only when enclosure === 'openFreeRoof'.
+function renderOpenRoofCC(r) {
+  const section = document.getElementById('openRoofCCSection');
+  if (!section) return;
+  section.style.display = (state.enclosure === 'openFreeRoof') ? '' : 'none';
+  if (state.enclosure !== 'openFreeRoof' || !r.cc30s305) return;
+  section.innerHTML = '<h2>Open Building C&amp;C &mdash; Sec. 30.5 <span class="ref">Eq. 30.5-1: p = q<sub>h</sub>K<sub>d</sub>GC<sub>N</sub></span></h2>' +
+    reportCC30Sec305HTML(r);
 }
 
 // Open Buildings with Free Roofs (Sec. 27.3.2) — results panel. Shown only when
@@ -1815,6 +1993,7 @@ function renderResults() {
   }
 
   renderOpenRoof(r);
+  renderOpenRoofCC(r);
   renderZoneDiagrams(r);
 
   // Show minimum wind load warning banner in UI
@@ -4013,6 +4192,19 @@ function bindInputs() {
   bindSolar('ch29SolarD1',    'ch29SolarD1',    parseFloat);
   bindSolar('ch29SolarD2',    'ch29SolarD2',    parseFloat);
   bindSolar('ch29SolarZone',  'ch29SolarZone',  parseInt);
+
+  // Sec. 30.5 Open Building C&C bindings
+  var bind305 = function(id, key, parser) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.value = state[key];
+    el.addEventListener('change', function(e) {
+      state[key] = (parser || parseFloat)(e.target.value);
+      requestUpdate();
+    });
+  };
+  bind305('ch305Lmin', 'ch305Lmin', parseFloat);
+  bind305('ch305A',    'ch305A',    parseFloat);
 }
 
 /* =====================================================================
