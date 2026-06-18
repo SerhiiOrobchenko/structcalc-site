@@ -1203,8 +1203,8 @@ function computeCh27(s) {
     const kz  = computeKzDirect(z, s.exposure);
     const kztz = computeKzt(s, z).kzt;
     const qz   = 0.00256 * kz * kztz * ke * s.V * s.V;
-    const pLC1 = qz * G * CP_WW - qh * gcpi;   // +GCpi
-    const pLC2 = qz * G * CP_WW + qh * gcpi;   // -GCpi → larger positive pressure
+    const pLC1 = KD * (qz * G * CP_WW - qh * gcpi);   // Eq. 27.3-1 + GCpi; Kd per Eq. 26.10-1
+    const pLC2 = KD * (qz * G * CP_WW + qh * gcpi);   // Eq. 27.3-1 − GCpi
     return { z, kz, qz, pLC1, pLC2 };
   });
 
@@ -1213,10 +1213,10 @@ function computeCh27(s) {
   // Governing leeward/side: LC1 (+GCpi) — positive internal adds to outward suction
   //   p_lw (LC1) = qh·G·Cp_lw − qh·(+GCpi) = qh·(G·Cp_lw − GCpi)  [most negative]
   //   p_lw (LC2) = qh·G·Cp_lw + qh·(GCpi)                          [less negative]
-  const pLW_lc1 = qh * G * CP_LW - qh * gcpi; // governing suction, leeward
-  const pLW_lc2 = qh * G * CP_LW + qh * gcpi;
-  const pSW_lc1 = qh * G * CP_SW - qh * gcpi; // governing suction, side walls
-  const pSW_lc2 = qh * G * CP_SW + qh * gcpi;
+  const pLW_lc1 = KD * (qh * G * CP_LW - qh * gcpi); // Eq. 27.3-1, leeward
+  const pLW_lc2 = KD * (qh * G * CP_LW + qh * gcpi);
+  const pSW_lc1 = KD * (qh * G * CP_SW - qh * gcpi); // Eq. 27.3-1, side walls
+  const pSW_lc2 = KD * (qh * G * CP_SW + qh * gcpi);
 
   // ── Roof pressures ──────────────────────────────────────────────────────────────────────────────
   // All roof Cp values use q = qh, qi = qh (Sec. 27.3.1, Eq. 27.3-1).
@@ -1225,7 +1225,7 @@ function computeCh27(s) {
   //   LC1 (+GCpi): p = qh·G·Cp − qh·GCpi  (max suction when Cp is negative)
   //   LC2 (−GCpi): p = qh·G·Cp + qh·GCpi  (max pressure when Cp is positive)
 
-  const p = (cp, lc) => qh * G * cp + (lc === 2 ? 1 : -1) * qh * gcpi;
+  const p = (cp, lc) => KD * (qh * G * cp + (lc === 2 ? 1 : -1) * qh * gcpi); // Eq. 27.3-1
 
   // ── Flat / Wind Parallel to Ridge (θ ≤ 10°: Normal to Ridge; all θ: Parallel to Ridge) ──────
   // Zone-based approach: Cp from Fig. 27.3-1 (lower-left table), horizontal distance zones.
