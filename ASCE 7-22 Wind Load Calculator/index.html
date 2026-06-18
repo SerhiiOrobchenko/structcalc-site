@@ -662,6 +662,7 @@
         <option value="openSign">Open Sign or Single-Plane Open Frame (Sec. 29.4)</option>
         <option value="trussedTower">Trussed Tower (Sec. 29.4)</option>
         <option value="rooftopEquip">Rooftop Structure / Equipment (Sec. 29.4.1)</option>
+        <option value="solarPanel">Rooftop Solar Panels (Sec. 29.4.3)</option>
       </select>
     </div>
 
@@ -806,6 +807,67 @@
           <div class="field">
             <label for="ch29BL">B &times; L of building (<span class="ch29-area-lbl">ft&sup2;</span>)</label>
             <input type="number" id="ch29BL" step="any" min="1" value="3600">
+          </div>
+        </div>
+      </div>
+
+      <!-- Rooftop Solar Panels (Sec. 29.4.3) -->
+      <div class="ch29-row" id="ch29-solarPanel">
+        <p class="muted" style="margin:0 0 10px; font-size:.84rem;">p = q<sub>h</sub>&middot;K<sub>d</sub>&middot;(GC<sub>rn</sub>) &nbsp;&mdash;&nbsp; Eq. 29.4-5 &nbsp;|&nbsp; (GC<sub>rn</sub>) = &gamma;<sub>p</sub>&middot;&gamma;<sub>c</sub>&middot;&gamma;<sub>E</sub>&middot;(GC<sub>rn</sub>)<sub>nom</sub> &nbsp;&mdash;&nbsp; Eq. 29.4-6</p>
+        <div class="row3">
+          <div class="field">
+            <label for="ch29SolarOmega">Panel tilt &omega; (&deg;) &mdash; 0&ndash;35</label>
+            <input type="number" id="ch29SolarOmega" step="1" min="0" max="35" value="10">
+          </div>
+          <div class="field">
+            <label for="ch29SolarLp">Chord L<sub>p</sub> (<span class="ch29-len-lbl">ft</span>) &le; 6.7</label>
+            <input type="number" id="ch29SolarLp" step="any" min="0.1" max="6.7" value="6.0">
+          </div>
+          <div class="field">
+            <label for="ch29SolarA">Eff. wind area A (<span class="ch29-area-lbl">ft&sup2;</span>)</label>
+            <input type="number" id="ch29SolarA" step="any" min="1" value="50">
+          </div>
+        </div>
+        <div class="row3">
+          <div class="field">
+            <label for="ch29SolarH1">h<sub>1</sub> lower edge (<span class="ch29-len-lbl">ft</span>) &le; 2</label>
+            <input type="number" id="ch29SolarH1" step="any" min="0" max="2" value="0.5">
+          </div>
+          <div class="field">
+            <label for="ch29SolarH2">h<sub>2</sub> upper edge (<span class="ch29-len-lbl">ft</span>) &le; 4</label>
+            <input type="number" id="ch29SolarH2" step="any" min="0" max="4" value="2.0">
+          </div>
+          <div class="field">
+            <label for="ch29SolarHpt">Parapet h<sub>pt</sub> (<span class="ch29-len-lbl">ft</span>)</label>
+            <input type="number" id="ch29SolarHpt" step="any" min="0" value="0">
+          </div>
+        </div>
+        <div class="row3">
+          <div class="field">
+            <label for="ch29SolarWL">Bldg. longer side W<sub>L</sub> (<span class="ch29-len-lbl">ft</span>)</label>
+            <input type="number" id="ch29SolarWL" step="any" min="10" value="120">
+          </div>
+          <div class="field">
+            <label for="ch29SolarWs">Bldg. shorter side W<sub>s</sub> (<span class="ch29-len-lbl">ft</span>)</label>
+            <input type="number" id="ch29SolarWs" step="any" min="10" value="60">
+          </div>
+          <div class="field">
+            <label for="ch29SolarZone">Roof zone (zone width = 2h from edge)</label>
+            <select id="ch29SolarZone">
+              <option value="1">Zone 1 — Interior (&gt;2h from all edges)</option>
+              <option value="2">Zone 2 — Edge (within 2h of one edge)</option>
+              <option value="3">Zone 3 — Corner (within 2h of two edges)</option>
+            </select>
+          </div>
+        </div>
+        <div class="row3">
+          <div class="field">
+            <label for="ch29SolarD1">d<sub>1</sub> to adj. array or bldg. edge (<span class="ch29-len-lbl">ft</span>)</label>
+            <input type="number" id="ch29SolarD1" step="any" min="0" value="20">
+          </div>
+          <div class="field">
+            <label for="ch29SolarD2">d<sub>2</sub> to next panel row (<span class="ch29-len-lbl">ft</span>)</label>
+            <input type="number" id="ch29SolarD2" step="any" min="0" value="3">
           </div>
         </div>
       </div>

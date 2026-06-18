@@ -458,7 +458,19 @@ const state = {
   ch29TowerShape: 'square', // trussed tower plan shape: 'square'|'triangle'
   ch29Ar:   80,   // rooftop equip: projected area on horizontal plane Ar, ft²
   ch29Bh:   600,  // rooftop equip: B × h of supporting building, ft²
-  ch29BL:   3600  // rooftop equip: B × L of building roof, ft²
+  ch29BL:   3600, // rooftop equip: B × L of building roof, ft²
+  // Sec. 29.4.3 Rooftop Solar Panels
+  ch29SolarOmega: 10,   // panel tilt ω (°), 0–35
+  ch29SolarLp:    6.0,  // panel chord length Lp (ft)
+  ch29SolarA:     50,   // effective wind area A (ft²) of structural element
+  ch29SolarH1:    0.5,  // lower panel-edge height above roof h₁ (ft)
+  ch29SolarH2:    2.0,  // upper panel-edge height above roof h₂ (ft)
+  ch29SolarHpt:   0,    // mean parapet height above roof hpt (ft); 0 = none
+  ch29SolarD1:    20,   // d₁ to adjacent array or building edge (ft)
+  ch29SolarD2:    3,    // d₂ to next row of panels (ft)
+  ch29SolarZone:  1,    // roof zone: 1=interior, 2=edge, 3=corner
+  ch29SolarWL:    120,  // building longer side WL (ft)
+  ch29SolarWs:    60    // building shorter side Ws (ft)
 };
 
 /* =====================================================================
@@ -2403,6 +2415,47 @@ function cfTrussedTower(eps, shape) {
 }
 
 // ------------------------------------------------------------------
+// gcrnNom(An, zone, omega) — Fig. 29.4-7, ASCE 7-22 Sec. 29.4.3
+// Source: values read from dashed-box annotations and curve label positions in
+//         Figure 29.4-7. Low-tilt An=10 start values estimated from label positions.
+//         High-tilt An<1000 extrapolated using same log-linear slope as 1000→5000.
+//         All intermediate values use log-linear interpolation. ±(GCrn) applies.
+// ------------------------------------------------------------------
+function gcrnNom(An, zone, omega) {
+  var zi  = Math.min(2, Math.max(0, zone - 1)); // 0-based index
+  // Low tilt (0–5°): anchor A = An=10 (label positions); anchor B/floor = An=500 (box annotation)
+  var lowA  = [1.50, 1.85, 2.20]; // An=10: [Z1, Z2, Z3] — estimated from Fig. 29.4-7 label positions
+  var lowBv = [0.35, 0.45, 0.50]; // An=500: floors — from Fig. 29.4-7 box annotation (left chart)
+  var lowA_An = 10, lowB_An = 500;
+  // High tilt (15–35°): two boxes from Fig. 29.4-7 right chart
+  var hiB  = [0.56, 0.65, 0.80]; // An=1000 — from Fig. 29.4-7 box annotation
+  var hiC  = [0.30, 0.40, 0.50]; // An=5000 — from Fig. 29.4-7 box annotation (minimum floors)
+  var hiB_An = 1000, hiC_An = 5000;
+
+  function logLerp(An1, v1, An2, v2, x) {
+    var t = (Math.log10(x) - Math.log10(An1)) / (Math.log10(An2) - Math.log10(An1));
+    return v1 + t * (v2 - v1);
+  }
+  function gcLow(x) {
+    if (x <= lowA_An) return lowA[zi];
+    if (x >= lowB_An) return lowBv[zi];
+    return Math.max(lowBv[zi], logLerp(lowA_An, lowA[zi], lowB_An, lowBv[zi], x));
+  }
+  function gcHigh(x) {
+    if (x >= hiC_An) return hiC[zi];
+    if (x >= hiB_An) return logLerp(hiB_An, hiB[zi], hiC_An, hiC[zi], x);
+    // Extrapolate backward using same slope (conservative — verify against Fig. 29.4-7)
+    var slope = (hiC[zi] - hiB[zi]) / (Math.log10(hiC_An) - Math.log10(hiB_An));
+    return hiB[zi] + slope * (Math.log10(x) - Math.log10(hiB_An));
+  }
+  // Linear interpolation 5°–15° per Note 2, Fig. 29.4-7
+  if (omega <= 5)  return gcLow(An);
+  if (omega >= 15) return gcHigh(An);
+  var t = (omega - 5) / 10;
+  return gcLow(An) * (1 - t) + gcHigh(An) * t;
+}
+
+// ------------------------------------------------------------------
 // computeCh29(s): main Ch.29 computation
 // ------------------------------------------------------------------
 function computeCh29(s) {
@@ -2474,6 +2527,57 @@ function computeCh29(s) {
     const Fv = qh * KD * GCrV * Ar;
     return { type, KD, ke, kh, qh, Af, Ar, Bh, BL, GCrH, GCrV, Fh, Fv,
              eqRef: 'Eqs. 29.4-2/3', cfRef: 'Sec. 29.4.1' };
+
+  } else if (type === 'solarPanel') {
+    // Sec. 29.4.3 Rooftop Solar Panels — flat/gable/hip roof θ ≤ 7°
+    // Eq. 29.4-5: p = qh·Kd·(GCrn)  [acts ± on top surface]
+    // Eq. 29.4-6: (GCrn) = γp·γc·γE·(GCrn)nom
+    const KD   = 0.85; // Table 26.6-1, solar panels/rooftop equipment
+    const h    = s.ch29H; // mean roof height (ft)
+    const omega = s.ch29SolarOmega;
+    const Lp   = s.ch29SolarLp;
+    const A    = s.ch29SolarA;
+    const h1   = s.ch29SolarH1, h2 = s.ch29SolarH2;
+    const hpt  = s.ch29SolarHpt;
+    const d1   = s.ch29SolarD1, d2 = s.ch29SolarD2;
+    const zone = s.ch29SolarZone;
+    const WL   = s.ch29SolarWL, Ws = s.ch29SolarWs;
+
+    // Applicability checks
+    var warnings = [];
+    if (Lp > 6.7)   warnings.push('Lp > 6.7 ft: outside Fig. 29.4-7 range');
+    if (omega > 35) warnings.push('ω > 35°: outside Fig. 29.4-7 range');
+    if (h1 > 2.0)   warnings.push('h₁ > 2 ft: outside Fig. 29.4-7 range');
+    if (h2 > 4.0)   warnings.push('h₂ > 4 ft: outside Fig. 29.4-7 range');
+
+    // Normalized building length: Lb = min(0.4√(h·WL), h, Ws) per Fig. 29.4-7 Note 3
+    const Lb = Math.min(0.4 * Math.sqrt(h * WL), h, Ws);
+    // Normalized wind area: An = 1000·A / max(Lb, 15)² per Fig. 29.4-7 Note 3
+    const An = 1000 * A / Math.pow(Math.max(Lb, 15), 2);
+
+    // (GCrn)nom from Figure 29.4-7 (log-linear interpolation, see gcrnNom())
+    const GCrnNom = gcrnNom(An, zone, omega);
+
+    // Adjustment factors (Eq. 29.4-6)
+    const gammaP = Math.min(1.2, 0.9 + (h > 0 ? hpt / h : 0));
+    const gammaC = Math.max(0.8, 0.6 + 0.06 * Lp);
+    // γE: exposed = d1 > 0.5h AND (d1_adj > max(4h2,4ft) OR d2 > max(4h2,4ft))
+    const exposed = (d1 > 0.5 * h) && (d1 > Math.max(4 * h2, 4) || d2 > Math.max(4 * h2, 4));
+    const gammaE  = (exposed && true) ? 1.5 : 1.0; // 1.5 for exposed panels within 1.5Lp of row end
+    const GCrn   = gammaP * gammaC * gammaE * GCrnNom;
+    const p      = qh * KD * GCrn;
+
+    // Minimum setback check
+    const minSetback = Math.max(2 * (h2 - hpt), 4);
+    const setbackOK  = d1 >= minSetback;
+    if (!setbackOK) warnings.push('d₁ < max(2(h₂−hpt), 4 ft): minimum edge setback not met');
+
+    return { type, KD, ke, kh, qh,
+             h, omega, Lp, A, h1, h2, hpt, d1, d2, zone, WL, Ws,
+             Lb, An, GCrnNom, gammaP, gammaC, gammaE, GCrn, p,
+             exposed, setbackOK, minSetback,
+             warnings,
+             eqRef: 'Eq. 29.4-5', cfRef: 'Fig. 29.4-7' };
   }
 
   return null;
@@ -2500,7 +2604,8 @@ function reportCh29HTML(r) {
     chimney:      'Chimney / Tank &mdash; Sec. 29.4',
     openSign:     'Open Sign / Single-Plane Open Frame &mdash; Sec. 29.4',
     trussedTower: 'Trussed Tower &mdash; Sec. 29.4',
-    rooftopEquip: 'Rooftop Structure / Equipment &mdash; Sec. 29.4.1'
+    rooftopEquip: 'Rooftop Structure / Equipment &mdash; Sec. 29.4.1',
+    solarPanel:   'Rooftop Solar Panels &mdash; Sec. 29.4.3'
   };
 
   let html = '<h3>Ch.29 Other Structures &mdash; Design Wind Force' +
@@ -2618,6 +2723,53 @@ function reportCh29HTML(r) {
         '<td>q<sub>h</sub>&middot;K<sub>d</sub>&middot;(GC<sub>r</sub>)&middot;A<sub>r</sub></td>' +
         '<td class="val-neg">' + f2(c.Fv) + ' ' + fU + '</td></tr>' +
       '</tbody></table>';
+
+  } else if (c.type === 'solarPanel') {
+    var pf2 = function(v) { return fmt(pVal(v),2)+' '+pU; };
+    var ZONE_NAMES = ['', 'Zone 1 — Interior', 'Zone 2 — Edge', 'Zone 3 — Corner'];
+    html += '<h3>Rooftop Solar Panels <span class="ref">Sec. 29.4.3, Eq. 29.4-5</span></h3>';
+    if (c.warnings && c.warnings.length) {
+      html += '<div class="alert warn"><strong>Applicability:</strong> ' +
+        c.warnings.map(function(w){return '<br>&bull; '+w;}).join('') + '</div>';
+    }
+    html += '<div class="alert info" style="font-size:0.82em;margin-bottom:8px;">'
+          + '<strong>Note:</strong> (GC<sub>rn</sub>)<sub>nom</sub> values are log-linearly '
+          + 'interpolated from annotated box values in Fig. 29.4-7 (left chart An≈500: '
+          + '0.35/0.45/0.50; right chart An=1000: 0.56/0.65/0.80, An=5000: 0.30/0.40/0.50 '
+          + 'for Zones 1/2/3). Verify against Figure 29.4-7 directly.</div>';
+    html += '<table class="report-input-table"><tbody>'
+          + '<tr><td>Roof zone</td><td>' + (ZONE_NAMES[c.zone]||'Zone '+c.zone) + '</td></tr>'
+          + '<tr><td>Panel tilt &omega;</td><td>' + fmt(c.omega,1) + '&deg;</td></tr>'
+          + '<tr><td>Panel chord L<sub>p</sub></td><td>' + fmt(lengthOut(c.Lp),2) + ' ' + lU + '</td></tr>'
+          + '<tr><td>Effective wind area A</td><td>' + fmt(areaOut(c.A),1) + ' ' + aU + '</td></tr>'
+          + '<tr><td>h<sub>1</sub> (lower edge)</td><td>' + fmt(lengthOut(c.h1),2) + ' ' + lU + '</td></tr>'
+          + '<tr><td>h<sub>2</sub> (upper edge)</td><td>' + fmt(lengthOut(c.h2),2) + ' ' + lU + '</td></tr>'
+          + '<tr><td>Parapet h<sub>pt</sub></td><td>' + fmt(lengthOut(c.hpt),2) + ' ' + lU + '</td></tr>'
+          + '<tr><td>L<sub>b</sub> = min(0.4&radic;(hW<sub>L</sub>), h, W<sub>s</sub>)</td>'
+          + '<td>' + fmt(lengthOut(c.Lb),2) + ' ' + lU + '</td></tr>'
+          + '<tr><td>A<sub>n</sub> = 1000&thinsp;A / max(L<sub>b</sub>,15)&sup2;</td>'
+          + '<td>' + fmt(c.An,1) + ' (non-dim.)</td></tr>'
+          + '</tbody></table>'
+          + '<table class="report-input-table"><tbody>'
+          + '<tr><td>(GC<sub>rn</sub>)<sub>nom</sub> &mdash; Fig. 29.4-7</td><td>' + fmt(c.GCrnNom,3) + '</td></tr>'
+          + '<tr><td>&gamma;<sub>p</sub> = min(1.2, 0.9+h<sub>pt</sub>/h)</td><td>' + fmt(c.gammaP,3) + '</td></tr>'
+          + '<tr><td>&gamma;<sub>c</sub> = max(0.8, 0.6+0.06L<sub>p</sub>)</td><td>' + fmt(c.gammaC,3) + '</td></tr>'
+          + '<tr><td>&gamma;<sub>E</sub> (array edge)</td><td>' + fmt(c.gammaE,1)
+          + (c.exposed ? ' (exposed panel)' : ' (sheltered)') + '</td></tr>'
+          + '<tr><td>(GC<sub>rn</sub>) = &gamma;<sub>p</sub>&middot;&gamma;<sub>c</sub>&middot;&gamma;<sub>E</sub>&middot;(GC<sub>rn</sub>)<sub>nom</sub></td>'
+          + '<td><strong>' + fmt(c.GCrn,3) + '</strong></td></tr>'
+          + '</tbody></table>'
+          + '<table class="report-table"><thead><tr>'
+          + '<th>Load direction</th><th>p = q<sub>h</sub>&middot;K<sub>d</sub>&middot;(GC<sub>rn</sub>)</th></tr></thead><tbody>'
+          + '<tr><td>Uplift (away from top surface, &minus;)</td>'
+          + '<td class="val-neg">&minus;' + pf2(c.p) + '</td></tr>'
+          + '<tr><td>Downward (toward top surface, +)</td>'
+          + '<td class="val-pos">+' + pf2(c.p) + '</td></tr>'
+          + '</tbody></table>';
+    if (!c.setbackOK) {
+      html += '<div class="alert warn">Minimum edge setback d<sub>1</sub> ≥ max(2(h<sub>2</sub>−h<sub>pt</sub>), 4 ft) = '
+            + fmt(lengthOut(c.minSetback),1) + ' ' + lU + ' not met.</div>';
+    }
   }
 
   return html;
@@ -3839,6 +3991,28 @@ function bindInputs() {
   bindCh29Area('ch29Ar',    'ch29Ar');
   bindCh29Area('ch29Bh',    'ch29Bh');
   bindCh29Area('ch29BL',    'ch29BL');
+
+  // Sec. 29.4.3 Solar Panel bindings
+  var bindSolar = function(id, key, parser) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.value = state[key];
+    el.addEventListener('change', function(e) {
+      state[key] = (parser || parseFloat)(e.target.value);
+      requestUpdate();
+    });
+  };
+  bindSolar('ch29SolarOmega', 'ch29SolarOmega', parseFloat);
+  bindSolar('ch29SolarLp',    'ch29SolarLp',    parseFloat);
+  bindSolar('ch29SolarA',     'ch29SolarA',     parseFloat);
+  bindSolar('ch29SolarH1',    'ch29SolarH1',    parseFloat);
+  bindSolar('ch29SolarH2',    'ch29SolarH2',    parseFloat);
+  bindSolar('ch29SolarHpt',   'ch29SolarHpt',   parseFloat);
+  bindSolar('ch29SolarWL',    'ch29SolarWL',    parseFloat);
+  bindSolar('ch29SolarWs',    'ch29SolarWs',    parseFloat);
+  bindSolar('ch29SolarD1',    'ch29SolarD1',    parseFloat);
+  bindSolar('ch29SolarD2',    'ch29SolarD2',    parseFloat);
+  bindSolar('ch29SolarZone',  'ch29SolarZone',  parseInt);
 }
 
 /* =====================================================================
