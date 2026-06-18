@@ -262,10 +262,12 @@
      Other browsers (Firefox, Safari) may partially or fully ignore it. -->
 <style id="printPageStyle">@page{size:letter portrait;margin:.75in .5in;}
 /* Zone result rows: table left, diagram right */
-.zone-row{display:flex;align-items:flex-start;gap:14px;margin-bottom:6px;}
-.zone-row .zone-tbl{flex:1 1 auto;min-width:180px;overflow-x:auto;}
-.zone-row .zone-diag{flex:0 0 auto;width:180px;}
-@media(max-width:600px){.zone-row{flex-direction:column;}.zone-row .zone-diag{width:100%;}}
+.zone-row{display:flex;align-items:flex-start;gap:12px;margin-bottom:6px;}
+.zone-row .zone-tbl{flex:0 1 auto;min-width:0;overflow-x:auto;}
+.zone-row .zone-tbl table{width:auto;min-width:0;table-layout:auto;}
+.zone-row .zone-diag{flex:0 0 auto;width:205px;}
+.cc-section-header{background:var(--brand-light,#eaf3ff);font-weight:700;font-size:.8rem;padding:3px 6px;}
+@media(max-width:640px){.zone-row{flex-direction:column;}.zone-row .zone-diag{width:100%;}}
 </style>
 </head>
 <body>
@@ -881,11 +883,11 @@
       <div class="muted" style="font-size:.8rem; margin-bottom:8px;">
         <span class="ref">Eq. 30.3-1, Figs. 30.3-1/30.3-2A&ndash;2G</span>
       </div>
-      <h3>Walls &mdash; Zones 4 &amp; 5 <span class="ref">Fig. 30.3-1</span></h3>
-      <div class="zone-row"><div id="ccWallTable" class="zone-tbl"></div><div id="ccWallDiag" class="zone-diag"></div></div>
-      <h3 id="ccRoofHeading">Roof &mdash; Zones 1&prime;, 1, 2, 3 <span class="ref">Fig. 30.3-2A, &theta; &le; 7&deg;</span></h3>
+      <div class="zone-row">
+        <div id="ccCombinedTable" class="zone-tbl"></div>
+        <div id="ccCombinedDiag" class="zone-diag"></div>
+      </div>
       <div class="alert warn" id="ccRoofNote" style="display:none;"></div>
-      <div class="zone-row"><div id="ccRoofTable" class="zone-tbl"></div><div id="ccRoofDiag" class="zone-diag"></div></div>
       <div id="ccOverhangSection" style="display:none;">
         <h3>Roof Overhangs &mdash; Net (Top + Bottom) <span class="ref">Sec. 30.7</span><button type="button" class="info-btn" data-info="overhang" aria-label="Learn more">i</button></h3>
         <p class="muted" style="margin:0 0 10px;">Net (GC<sub>p</sub>) = roof-surface (GC<sub>p</sub>) (top of overhang) &minus; wall-zone (GC<sub>p</sub>) (bottom/soffit), evaluated at the Roof C&amp;C effective wind area above. No (GC<sub>pi</sub>) term applies (see "i" for details).</p>
