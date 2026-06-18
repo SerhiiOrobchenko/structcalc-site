@@ -3288,6 +3288,45 @@ function svgCCCombined(r) {
 }
 
 
+// ── Combined C&C table: walls (zones 4/5) + roof (zones 1'/1/2/3 or 1/2/3) ──
+function renderCCCombined(r) {
+  var el = document.getElementById('ccCombinedTable');
+  if (!el) return;
+  var pU = pUnit();
+  var isFlat = state.theta <= 7;
+  var roofRef = isFlat ? 'Fig. 30.3-2A, \u03b8 \u2264 7\u00b0' :
+    (state.roofShape === 'hip' ? 'Figs. 30.3-2D\u2013G, \u03b8 > 7\u00b0' : 'Figs. 30.3-2B/2C, \u03b8 > 7\u00b0');
+  var html = '<table>';
+  html += '<thead><tr><th>Zone</th><th>(GC<sub>p</sub>) range</th>';
+  html += '<th>p<sub>min</sub> suction, ' + pU + '</th><th>p<sub>max</sub> positive, ' + pU + '</th></tr></thead>';
+  html += '<tbody>';
+  html += '<tr><td colspan="4" class="cc-section-header">Walls \u2014 Zones 4 &amp; 5  <span class="ref">Fig. 30.3-1</span></td></tr>';
+  (r.ccWall||[]).forEach(function(row) {
+    var gcStr = fmt(row.gcp.neg,2) + ' to ' + fmt(row.gcp.pos,2);
+    html += '<tr><td>'+(ZONE_LABELS[row.zone]||row.zone)+'</td><td>'+gcStr+'</td>'+
+      '<td>'+fmt(pVal(row.p.min),2)+'</td><td>'+fmt(pVal(row.p.max),2)+'</td></tr>';
+  });
+  html += '<tr><td colspan="4" class="cc-section-header">Roof \u2014 Zones ' +
+    (isFlat ? '1&prime;, 1, 2, 3' : '1, 2, 3') +
+    '  <span class="ref">' + roofRef + '</span></td></tr>';
+  (r.ccRoof||[]).forEach(function(row) {
+    var gcStr = fmt(row.gcp.neg,2) + ' to ' + fmt(row.gcp.pos,2);
+    html += '<tr><td>'+(ZONE_LABELS[row.zone]||row.zone)+'</td><td>'+gcStr+'</td>'+
+      '<td>'+fmt(pVal(row.p.min),2)+'</td><td>'+fmt(pVal(row.p.max),2)+'</td></tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+  var roofNote = document.getElementById('ccRoofNote');
+  if (roofNote) {
+    if (state.theta > 7 && r.roofCapped) {
+      roofNote.style.display = '';
+      roofNote.textContent = (state.roofShape === 'hip')
+        ? 'Roof angle \u03b8 > 45\u00b0: Figures 30.3-2D\u2013G (hip) do not extend past \u03b8 = 45\u00b0. The \u03b8 = 45\u00b0 coefficients are used as a capping value per engineering judgment.'
+        : 'Roof angle \u03b8 > 45\u00b0: Figure 30.3-2B/2C is capped at \u03b8 = 45\u00b0 per engineering judgment.';
+    } else { roofNote.style.display = 'none'; }
+  }
+}
+
 function renderZoneDiagrams(r) {
   const set = (id, html) => { const el=document.getElementById(id); if(el) el.innerHTML=html; };
   if (state.mode === 'mwfrs' && state.mwfrsProcedure !== 'directional') {
