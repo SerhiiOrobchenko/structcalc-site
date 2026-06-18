@@ -426,6 +426,12 @@ const state = {
   ch305Lmin: 40,  // least horizontal plan dimension (for zone width a), ft (Fig. 30.5-1 Notation)
   ch305A:    100, // effective wind area A for C&C, ft² (Fig. 30.5-1)
 
+  // Ch.32 Tornado Loads — Secs. 32.1–32.17 (Risk Category III/IV only)
+  ch32Enabled:  false,  // toggle: compute tornado loads alongside wind
+  ch32VT:       100,    // tornado speed V_T, mph — from ASCE 7 Hazard Tool (Figs. 32.5-1/2)
+  ch32Ae:       10000,  // effective plan area A_e, ft² (Sec. 32.5.4) — for map selection reference
+  ch32Essential: false, // true = Essential Facility (affects K_dT for C&C, Table 32.6-1)
+
   // Report header fields (Phase 4) — informational only, do not affect calculations
   projectName: '',
   projectNumber: '',
@@ -1679,8 +1685,255 @@ function compute(s) {
     steps, mwfrsLC1, mwfrsLC2, mwfrsLC3, mwfrsLC4, torsionApplies,
     ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, openRoof,
     mwfrsMinCheck, mwfrsMinGoverns, ccMinCheck, ccMinGoverns,
-    ch27, cc30p2, ch29, cc30s305
+    ch27, cc30p2, ch29, cc30s305,
+    ch32: (s.ch32Enabled ? computeCh32(s) : null), s: s
   };
+}
+
+
+/* =====================================================================
+   CH.32 TORNADO LOADS — ASCE 7-22 Secs. 32.1–32.17
+   Applicability: Risk Category III/IV + V_T ≥ 60 mph thresholds.
+   Data sources:
+     Table 32.6-1  KdT                   (PDF p.451)
+     Table 32.10-1 KhTor formula         (PDF p.451)
+     Table 32.13-1 (GCpiT) values        (PDF p.451)
+     Table 32.14-1 KvT values            (PDF p.452, rendered image)
+     Eq. 32.10-1   qhT                   (PDF p.418)
+     Eq. 32.15-1   MWFRS enclosed pT     (PDF p.452)
+     Eq. 32.15-2   MWFRS open pT         (PDF p.453)
+     Eq. 32.17-1   C&C enclosed pT       (PDF p.455)
+     Eq. 32.17-3   C&C open pT           (PDF p.455)
+   ===================================================================== */
+function computeCh32(s) {
+  const rc = s.riskCategory || 'II';
+  if (rc !== 'III' && rc !== 'IV') {
+    return { applicable: false, reason: 'Risk Category ' + rc + ' — Ch.32 tornado loads not required (Sec. 32.1.1: only Risk Category III and IV).' };
+  }
+  const VT = Number(s.ch32VT) || 0;
+  if (VT < 60) {
+    return { applicable: false, reason: 'Vᵀ = ' + VT.toFixed(0) + ' mph < 60 mph — tornado loads not required (Sec. 32.5.2).' };
+  }
+  const V   = Number(s.V) || 115;
+  const exp = s.exposure || 'C';
+  const thresh = (exp === 'B') ? 0.5 : (exp === 'D') ? 0.67 : 0.60;
+  if (VT < thresh * V) {
+    return { applicable: false, reason: 'Vᵀ = ' + VT.toFixed(0) + ' mph < ' + thresh + '×V = ' + (thresh*V).toFixed(0) + ' mph (Exposure ' + exp + ' threshold, Sec. 32.5.2) — tornado loads not required.' };
+  }
+
+  const h  = Number(s.h) || 20;
+  const ke = computeKe(s.groundElev || 0);
+
+  // KhTor — Table 32.10-1 Note 1 (PDF p.451)
+  let KhTor;
+  if (h <= 200)      KhTor = 1.0;
+  else if (h <= 328) KhTor = Math.pow((2820 - h) / 2620, 2);
+  else               KhTor = 0.90;
+
+  // qhT — Eq. 32.10-1 (PDF p.418)
+  const qhT = 0.00256 * KhTor * ke * VT * VT;
+
+  // GT — Sec. 32.11.1 (PDF p.418)
+  const GT = 0.85;
+
+  // KdT — Table 32.6-1 (PDF p.451)
+  const KdT_mwfrs     = 0.80;
+  const KdT_cc_essen  = 1.00;
+  const KdT_cc_zone1p = 0.90;
+  const KdT_cc_other  = 0.75;
+  const KdT_cc = s.ch32Essential ? KdT_cc_essen : KdT_cc_other;
+
+  // KvT — Table 32.14-1 (PDF p.452)
+  const KvT_mwfrs_roof_up   = 1.10;
+  const KvT_mwfrs_roof_down = 1.00;
+  const KvT_mwfrs_wall      = 1.00;
+  const theta = Number(s.theta) || 0;
+  const KvT_cc_roof_up_fn = function(zone) {
+    if (theta <= 7) {
+      return (zone === '1' || zone === '1E' || zone === '1p') ? 1.20 :
+             (zone === '2' || zone === '2E') ? 1.05 : 1.05;
+    }
+    return (zone === '1' || zone === '1E' || zone === '1p') ? 1.20 :
+           (zone === '2' || zone === '2E') ? 1.20 : 1.30;
+  };
+  const KvT_cc_down = 1.00;
+  const KvT_cc_wall = 1.00;
+
+  // GCpiT — Table 32.13-1 (PDF p.451)
+  const enc = s.enclosure || 'enclosed';
+  let GCpiT_pos, GCpiT_neg;
+  if (enc === 'open' || enc === 'openFreeRoof') {
+    GCpiT_pos = 0; GCpiT_neg = 0;
+  } else if (enc === 'partiallyEnclosed') {
+    GCpiT_pos = 0.55; GCpiT_neg = -0.55;
+  } else if (enc === 'partiallyOpen') {
+    GCpiT_pos = 0.18; GCpiT_neg = -0.18;
+  } else {
+    GCpiT_pos = 0.55; GCpiT_neg = -0.18;  // enclosed (default)
+  }
+
+  // MWFRS — Eq. 32.15-1: pT = qhT·GT·KdT·KvT·Cp − qhT·(GCpiT)
+  const L  = Math.max(Number(s.buildingL) || Number(s.minDim) || 60, 1);
+  const B  = Math.max(Number(s.minDim) || 60, 1);
+  const LB = L / B;
+  const hL = h / L;
+
+  const Cp_ww = 0.8;
+  const Cp_lw = cpLeewardWall(LB);
+  const Cp_sw = -0.7;
+
+  function mwfrsPT(Cp, KvT) {
+    var base = qhT * GT * KdT_mwfrs * KvT * Cp;
+    var lc1 = base - qhT * GCpiT_pos;
+    var lc2 = base - qhT * GCpiT_neg;
+    return { lc1: lc1, lc2: lc2, gov: (Math.abs(lc1) >= Math.abs(lc2) ? lc1 : lc2), Cp: Cp, KvT: KvT };
+  }
+
+  const pT_ww = mwfrsPT(Cp_ww, KvT_mwfrs_wall);
+  const pT_lw = mwfrsPT(Cp_lw, KvT_mwfrs_wall);
+  const pT_sw = mwfrsPT(Cp_sw, KvT_mwfrs_wall);
+
+  const roofZones_mwfrs = roofZonesCp(hL).map(function(z) {
+    return {
+      label:      z.label,
+      cp1:        z.cp1,
+      cp2:        z.cp2,
+      pT_up_lc1: qhT * GT * KdT_mwfrs * KvT_mwfrs_roof_up   * z.cp1 - qhT * GCpiT_pos,
+      pT_up_lc2: qhT * GT * KdT_mwfrs * KvT_mwfrs_roof_up   * z.cp1 - qhT * GCpiT_neg,
+      pT_dn_lc1: qhT * GT * KdT_mwfrs * KvT_mwfrs_roof_down * z.cp2 - qhT * GCpiT_pos,
+      pT_dn_lc2: qhT * GT * KdT_mwfrs * KvT_mwfrs_roof_down * z.cp2 - qhT * GCpiT_neg,
+    };
+  });
+
+  // C&C — Eq. 32.17-1: pT = qhT·[KdT·KvT·(GCp) − (GCpiT)]
+  function ccPT_zone(zone, isRoof, isNeg) {
+    var A   = isRoof ? (Number(s.areaRoof) || 50) : (Number(s.areaWall) || 20);
+    var gc  = isRoof ? gcpRoof(zone, A) : gcpWall(zone, A);
+    var gcv = isNeg ? gc.neg : gc.pos;
+    var KvT = isRoof ? (isNeg ? KvT_cc_roof_up_fn(zone) : KvT_cc_down) : KvT_cc_wall;
+    var pT_lc1 = qhT * (KdT_cc * KvT * gcv - GCpiT_pos);
+    var pT_lc2 = qhT * (KdT_cc * KvT * gcv - GCpiT_neg);
+    return { gcv: gcv, KvT: KvT, pT_lc1: pT_lc1, pT_lc2: pT_lc2, gov: (Math.abs(pT_lc1) >= Math.abs(pT_lc2) ? pT_lc1 : pT_lc2) };
+  }
+
+  const cc_roof = ['1','2','3'].map(function(z) {
+    return { zone: z, neg: ccPT_zone(z, true, true), pos: ccPT_zone(z, true, false) };
+  });
+  const cc_wall = ['4','5'].map(function(z) {
+    return { zone: z, neg: ccPT_zone(z, false, true), pos: ccPT_zone(z, false, false) };
+  });
+
+  const tornOpenFactor = qhT * GT * KdT_mwfrs;
+
+  const warnings = [];
+  if (rc === 'III') warnings.push('Risk Category III: tornado speeds from Figs. 32.5-1A–H (MRI ≈ 1,700 yr).');
+  if (rc === 'IV')  warnings.push('Risk Category IV: tornado speeds from Figs. 32.5-2A–H (MRI ≈ 3,000 yr).');
+  warnings.push('Vᵀ entered by user — verify against ASCE 7 Hazard Tool (ascehazardtool.org) for site coordinates, Risk Category ' + rc + ', Aₑ = ' + (Number(s.ch32Ae) || 10000).toLocaleString() + ' ft².');
+
+  return {
+    applicable: true,
+    VT: VT, KhTor: KhTor, qhT: qhT, GT: GT,
+    KdT_mwfrs: KdT_mwfrs, KdT_cc: KdT_cc,
+    KdT_cc_essen: KdT_cc_essen, KdT_cc_zone1p: KdT_cc_zone1p, KdT_cc_other: KdT_cc_other,
+    GCpiT_pos: GCpiT_pos, GCpiT_neg: GCpiT_neg,
+    ke: ke, h: h, enc: enc, theta: theta, L: L, B: B, LB: LB, hL: hL,
+    Cp_ww: Cp_ww, Cp_lw: Cp_lw, Cp_sw: Cp_sw,
+    pT_ww: pT_ww, pT_lw: pT_lw, pT_sw: pT_sw,
+    roofZones_mwfrs: roofZones_mwfrs,
+    cc_roof: cc_roof, cc_wall: cc_wall,
+    tornOpenFactor: tornOpenFactor,
+    essential: s.ch32Essential || false,
+    warnings: warnings
+  };
+}
+
+function reportCh32HTML(r32, r) {
+  if (!r32) return '';
+  if (!r32.applicable) {
+    return '<section class="rpt-section"><h2>Ch.32 — Tornado Loads</h2><div class="rpt-note warn">' + r32.reason + '</div></section>';
+  }
+  var f2 = function(v) { return (typeof v === 'number') ? v.toFixed(2) : '—'; };
+  var pf = function(v) { return v.toFixed(2) + ' psf'; };
+  var s = r && r.s ? r.s : {};
+
+  var h = '<section class="rpt-section"><h2>Ch.32 — Tornado Loads (ASCE 7-22)</h2>';
+
+  h += '<h3>1. Applicability &amp; Inputs</h3>';
+  h += '<table class="rpt-table"><thead><tr><th>Parameter</th><th>Value</th><th>Source</th></tr></thead><tbody>';
+  h += '<tr><td>Risk Category</td><td>' + (s.riskCategory || '—') + '</td><td>Table 1.5-1</td></tr>';
+  h += '<tr><td>Tornado Speed, V<sub>T</sub></td><td>' + r32.VT.toFixed(0) + ' mph</td><td>Sec. 32.5 / ASCE Hazard Tool</td></tr>';
+  h += '<tr><td>Eff. Plan Area, A<sub>e</sub></td><td>' + (s.ch32Ae ? Number(s.ch32Ae).toLocaleString() : '—') + ' ft²</td><td>Sec. 32.5.4</td></tr>';
+  h += '<tr><td>Enclosure</td><td>' + r32.enc + '</td><td>Sec. 32.12 / Table 32.13-1</td></tr>';
+  h += '</tbody></table>';
+
+  h += '<h3>2. Tornado Velocity Pressure</h3>';
+  h += '<table class="rpt-table"><thead><tr><th>Parameter</th><th>Value</th><th>Ref.</th></tr></thead><tbody>';
+  h += '<tr><td>K<sub>hTor</sub> (h = ' + r32.h.toFixed(0) + ' ft)</td><td>' + f2(r32.KhTor) + '</td><td>Table 32.10-1</td></tr>';
+  h += '<tr><td>K<sub>e</sub></td><td>' + f2(r32.ke) + '</td><td>Sec. 32.9</td></tr>';
+  h += '<tr><td>q<sub>hT</sub> = 0.00256 K<sub>hTor</sub> K<sub>e</sub> V<sub>T</sub>&sup2;</td><td>' + pf(r32.qhT) + '</td><td>Eq. 32.10-1</td></tr>';
+  h += '<tr><td>G<sub>T</sub></td><td>' + f2(r32.GT) + '</td><td>Sec. 32.11.1</td></tr>';
+  h += '</tbody></table>';
+
+  h += '<h3>3. Load Factors</h3>';
+  h += '<table class="rpt-table"><thead><tr><th>Factor</th><th>Value</th><th>Source</th></tr></thead><tbody>';
+  h += '<tr><td>K<sub>dT</sub> — MWFRS</td><td>' + f2(r32.KdT_mwfrs) + '</td><td>Table 32.6-1</td></tr>';
+  h += '<tr><td>K<sub>dT</sub> — C&amp;C (' + (r32.essential ? 'Essential Fac.' : 'standard') + ')</td><td>' + f2(r32.KdT_cc) + '</td><td>Table 32.6-1</td></tr>';
+  h += '<tr><td>(GC<sub>piT</sub>)<sub>+</sub></td><td>+' + f2(r32.GCpiT_pos) + '</td><td>Table 32.13-1</td></tr>';
+  h += '<tr><td>(GC<sub>piT</sub>)<sub>−</sub></td><td>' + f2(r32.GCpiT_neg) + '</td><td>Table 32.13-1</td></tr>';
+  h += '</tbody></table>';
+
+  var isOpen = (r32.enc === 'open' || r32.enc === 'openFreeRoof');
+  if (!isOpen) {
+    h += '<h3>4. MWFRS Tornado Pressures (Eq. 32.15-1)</h3>';
+    h += '<p style="font-size:0.88em;color:#555">p<sub>T</sub> = q<sub>hT</sub>·G<sub>T</sub>·K<sub>dT</sub>·K<sub>vT</sub>·C<sub>p</sub> − q<sub>hT</sub>·(GC<sub>piT</sub>)</p>';
+    h += '<table class="rpt-table"><thead><tr><th>Surface</th><th>C<sub>p</sub></th><th>K<sub>vT</sub></th><th>LC1 (+GC<sub>piT</sub>)</th><th>LC2 (−GC<sub>piT</sub>)</th><th>Governing</th></tr></thead><tbody>';
+    [['Windward Wall', r32.pT_ww], ['Leeward Wall', r32.pT_lw], ['Side Walls', r32.pT_sw]].forEach(function(row) {
+      var p = row[1];
+      h += '<tr><td>' + row[0] + '</td><td>' + f2(p.Cp) + '</td><td>' + f2(p.KvT) + '</td><td>' + pf(p.lc1) + '</td><td>' + pf(p.lc2) + '</td><td><strong>' + pf(p.gov) + '</strong></td></tr>';
+    });
+    h += '</tbody></table>';
+
+    if (r32.roofZones_mwfrs && r32.roofZones_mwfrs.length) {
+      h += '<p style="margin-top:10px;font-size:0.88em;color:#555">Roof zones (flat/low-slope, K<sub>vT</sub> = 1.1 uplift / 1.0 downward, Eq. 32.15-1):</p>';
+      h += '<table class="rpt-table"><thead><tr><th>Zone</th><th>C<sub>p</sub></th><th>Uplift LC1</th><th>Uplift LC2</th><th>Down LC1</th><th>Down LC2</th></tr></thead><tbody>';
+      r32.roofZones_mwfrs.forEach(function(z) {
+        h += '<tr><td>' + z.label + '</td><td>' + f2(z.cp1) + '</td><td>' + pf(z.pT_up_lc1) + '</td><td>' + pf(z.pT_up_lc2) + '</td><td>' + pf(z.pT_dn_lc1) + '</td><td>' + pf(z.pT_dn_lc2) + '</td></tr>';
+      });
+      h += '</tbody></table>';
+    }
+
+    h += '<h3>5. C&amp;C Tornado Pressures (Eq. 32.17-1)</h3>';
+    h += '<p style="font-size:0.88em;color:#555">p<sub>T</sub> = q<sub>hT</sub>·[K<sub>dT</sub>·K<sub>vT</sub>·(GC<sub>p</sub>) − (GC<sub>piT</sub>)]</p>';
+    h += '<table class="rpt-table"><thead><tr><th>Zone</th><th>(GC<sub>p</sub>)</th><th>K<sub>vT</sub></th><th>p<sub>T</sub> LC1</th><th>p<sub>T</sub> LC2</th><th>Governing</th></tr></thead><tbody>';
+    h += '<tr><td colspan="6" style="background:#f5f5f5;font-weight:600;font-size:0.85em">Roof Zones</td></tr>';
+    r32.cc_roof.forEach(function(z) {
+      [['neg','Uplift'], ['pos','Downward']].forEach(function(pair) {
+        var d = z[pair[0]];
+        h += '<tr><td>Z' + z.zone + ' ' + pair[1] + '</td><td>' + f2(d.gcv) + '</td><td>' + f2(d.KvT) + '</td><td>' + pf(d.pT_lc1) + '</td><td>' + pf(d.pT_lc2) + '</td><td><strong>' + pf(d.gov) + '</strong></td></tr>';
+      });
+    });
+    h += '<tr><td colspan="6" style="background:#f5f5f5;font-weight:600;font-size:0.85em">Wall Zones</td></tr>';
+    r32.cc_wall.forEach(function(z) {
+      [['neg','Suction'], ['pos','Pressure']].forEach(function(pair) {
+        var d = z[pair[0]];
+        h += '<tr><td>Z' + z.zone + ' ' + pair[1] + '</td><td>' + f2(d.gcv) + '</td><td>' + f2(d.KvT) + '</td><td>' + pf(d.pT_lc1) + '</td><td>' + pf(d.pT_lc2) + '</td><td><strong>' + pf(d.gov) + '</strong></td></tr>';
+      });
+    });
+    h += '</tbody></table>';
+  } else {
+    h += '<h3>4. Open Building Tornado Pressures (Eq. 32.15-2 / 32.17-3)</h3>';
+    h += '<p style="font-size:0.88em;color:#555">p<sub>T</sub> = q<sub>hT</sub>·G<sub>T</sub>·K<sub>dT</sub>·C<sub>N</sub></p>';
+    h += '<p>q<sub>hT</sub>·G<sub>T</sub>·K<sub>dT</sub> = ' + pf(r32.tornOpenFactor) + ' × C<sub>N</sub></p>';
+    h += '<p style="font-size:0.88em;color:#666">Multiply by C<sub>N</sub> values from the open building results above to obtain tornado pressures.</p>';
+  }
+
+  if (r32.warnings.length) {
+    h += '<div class="rpt-note warn" style="margin-top:14px">';
+    r32.warnings.forEach(function(w) { h += '<p>⚠ ' + w + '</p>'; });
+    h += '</div>';
+  }
+  h += '</section>';
+  return h;
 }
 
 /* =====================================================================
@@ -1994,6 +2247,16 @@ function renderResults() {
 
   renderOpenRoof(r);
   renderOpenRoofCC(r);
+  // Ch.32 Tornado Loads
+  var ch32El = document.getElementById('ch32ResultsSection');
+  if (ch32El) {
+    if (r.ch32) {
+      ch32El.innerHTML = reportCh32HTML(r.ch32, r);
+      ch32El.style.display = '';
+    } else {
+      ch32El.style.display = 'none';
+    }
+  }
   renderZoneDiagrams(r);
 
   // Show minimum wind load warning banner in UI
@@ -4205,6 +4468,43 @@ function bindInputs() {
   };
   bind305('ch305Lmin', 'ch305Lmin', parseFloat);
   bind305('ch305A',    'ch305A',    parseFloat);
+
+  // Ch.32 Tornado Loads bindings
+  var ch32EnabledEl = document.getElementById('ch32Enabled');
+  if (ch32EnabledEl) {
+    ch32EnabledEl.checked = state.ch32Enabled;
+    ch32EnabledEl.addEventListener('change', function(e) {
+      state.ch32Enabled = e.target.checked;
+      document.body.classList.toggle('ch32-enabled', state.ch32Enabled);
+      renderResults();
+    });
+  }
+  var ch32VTEl = document.getElementById('ch32VT');
+  if (ch32VTEl) {
+    ch32VTEl.value = state.ch32VT;
+    ch32VTEl.addEventListener('input', function(e) {
+      var v = parseFloat(e.target.value);
+      state.ch32VT = isNaN(v) ? 0 : v;
+      renderResults();
+    });
+  }
+  var ch32AeEl = document.getElementById('ch32Ae');
+  if (ch32AeEl) {
+    ch32AeEl.value = state.ch32Ae;
+    ch32AeEl.addEventListener('input', function(e) {
+      var v = parseFloat(e.target.value);
+      state.ch32Ae = isNaN(v) ? 1 : v;
+      renderResults();
+    });
+  }
+  var ch32EssentialEl = document.getElementById('ch32Essential');
+  if (ch32EssentialEl) {
+    ch32EssentialEl.checked = state.ch32Essential;
+    ch32EssentialEl.addEventListener('change', function(e) {
+      state.ch32Essential = e.target.checked;
+      renderResults();
+    });
+  }
 }
 
 /* =====================================================================
@@ -5560,6 +5860,11 @@ function init() {
   if (openWindFlowEl) openWindFlowEl.value = state.openWindFlow;
   const openLEl = document.getElementById('openL');
   if (openLEl) openLEl.value = state.openL;
+  const ch32VTi = document.getElementById('ch32VT'); if (ch32VTi) ch32VTi.value = state.ch32VT || 100;
+  const ch32Aei = document.getElementById('ch32Ae'); if (ch32Aei) ch32Aei.value = state.ch32Ae || 10000;
+  const ch32Eni = document.getElementById('ch32Enabled'); if (ch32Eni) ch32Eni.checked = !!state.ch32Enabled;
+  const ch32Esi = document.getElementById('ch32Essential'); if (ch32Esi) ch32Esi.checked = !!state.ch32Essential;
+  document.body.classList.toggle('ch32-enabled', !!state.ch32Enabled);
 
   // Project Information (report header)
   if (!state.projectDate) {
