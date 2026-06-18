@@ -260,7 +260,13 @@
      using CSS @page { size: <paper> <orientation>; }.
      Chrome honours this for both browser print and "Save as PDF".
      Other browsers (Firefox, Safari) may partially or fully ignore it. -->
-<style id="printPageStyle">@page{size:letter portrait;margin:.75in .5in;}</style>
+<style id="printPageStyle">@page{size:letter portrait;margin:.75in .5in;}
+/* Zone result rows: table left, diagram right */
+.zone-row{display:flex;align-items:flex-start;gap:14px;margin-bottom:6px;}
+.zone-row .zone-tbl{flex:1 1 auto;min-width:180px;overflow-x:auto;}
+.zone-row .zone-diag{flex:0 0 auto;width:180px;}
+@media(max-width:600px){.zone-row{flex-direction:column;}.zone-row .zone-diag{width:100%;}}
+</style>
 </head>
 <body>
 
@@ -829,16 +835,16 @@
         <span class="ref">Eq. 28.3-1, Figs. 28.3-1/28.3-2</span>
       </div>
       <h3>Load Case 1 (Zones 1&ndash;4, 1E&ndash;4E) &mdash; &theta;-dependent</h3>
-      <div id="mwfrsLC1Table"></div>
+      <div class="zone-row"><div id="mwfrsLC1Table" class="zone-tbl"></div><div id="mwfrsLC1Diag" class="zone-diag"></div></div>
       <h3>Load Case 2 (Zones 1&ndash;6, 1E&ndash;6E) &mdash; all &theta;</h3>
-      <div id="mwfrsLC2Table"></div>
+      <div class="zone-row"><div id="mwfrsLC2Table" class="zone-tbl"></div><div id="mwfrsLC2Diag" class="zone-diag"></div></div>
       <h3>Torsional Load Cases 3 &amp; 4 (T-zones) <span class="ref">Fig. 28.3-2</span></h3>
       <div class="alert info" id="torsionNote"></div>
       <div id="torsionDetails">
         <p class="muted" style="margin-top:6px;">Load Case 3 = Load Case 1 zone pressures above, plus the following T-zones:</p>
-        <div id="mwfrsLC3Table"></div>
+        <div class="zone-row"><div id="mwfrsLC3Table" class="zone-tbl"></div><div id="mwfrsLC3Diag" class="zone-diag"></div></div>
         <p class="muted" style="margin-top:6px;">Load Case 4 = Load Case 2 zone pressures above, plus the following T-zones:</p>
-        <div id="mwfrsLC4Table"></div>
+        <div class="zone-row"><div id="mwfrsLC4Table" class="zone-tbl"></div><div id="mwfrsLC4Diag" class="zone-diag"></div></div>
       </div>
       <button type="button" id="torsionToggle" class="btn" style="display:none; margin-top:8px; font-size:.8rem; padding:4px 10px;"></button>
     </div>
@@ -876,10 +882,10 @@
         <span class="ref">Eq. 30.3-1, Figs. 30.3-1/30.3-2A&ndash;2G</span>
       </div>
       <h3>Walls &mdash; Zones 4 &amp; 5 <span class="ref">Fig. 30.3-1</span></h3>
-      <div id="ccWallTable"></div>
+      <div class="zone-row"><div id="ccWallTable" class="zone-tbl"></div><div id="ccWallDiag" class="zone-diag"></div></div>
       <h3 id="ccRoofHeading">Roof &mdash; Zones 1&prime;, 1, 2, 3 <span class="ref">Fig. 30.3-2A, &theta; &le; 7&deg;</span></h3>
       <div class="alert warn" id="ccRoofNote" style="display:none;"></div>
-      <div id="ccRoofTable"></div>
+      <div class="zone-row"><div id="ccRoofTable" class="zone-tbl"></div><div id="ccRoofDiag" class="zone-diag"></div></div>
       <div id="ccOverhangSection" style="display:none;">
         <h3>Roof Overhangs &mdash; Net (Top + Bottom) <span class="ref">Sec. 30.7</span><button type="button" class="info-btn" data-info="overhang" aria-label="Learn more">i</button></h3>
         <p class="muted" style="margin:0 0 10px;">Net (GC<sub>p</sub>) = roof-surface (GC<sub>p</sub>) (top of overhang) &minus; wall-zone (GC<sub>p</sub>) (bottom/soffit), evaluated at the Roof C&amp;C effective wind area above. No (GC<sub>pi</sub>) term applies (see "i" for details).</p>

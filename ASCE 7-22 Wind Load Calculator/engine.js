@@ -1799,6 +1799,7 @@ function renderResults() {
   }
 
   renderOpenRoof(r);
+  renderZoneDiagrams(r);
 
   // Show minimum wind load warning banner in UI
   const minWarnEl = document.getElementById('minWindWarning');
@@ -2997,6 +2998,283 @@ function renderDiagram(r) {
         'Zone 1&prime; (an additional interior subzone for flat roofs, &theta; &le; 7&deg;, per Fig. 30.3-2A) is not separately delineated here &mdash; ' +
         'see the C&amp;C table for its value and Fig. 30.3-2A for its extent.'
       : '';
+  }
+}
+
+
+/* =====================================================================
+   ZONE PRESSURE DIAGRAMS  (plan-view SVGs shown next to result tables)
+   Source: ASCE 7-22 Fig. 28.3-1 (MWFRS), Figs. 30.3-1/30.3-2A (C&C).
+   These are schematic plan views — consult the Standard figures for
+   exact zone boundaries.
+   ===================================================================== */
+
+// Zone fill colours
+const ZONE_CLR = {
+  '1':'#d6ecf8','1E':'#aad2ed','1T':'#d6ecf8',"1'":'#eaf5fc',
+  '2':'#fde8a0','2E':'#f8cf5c','2T':'#fde8a0',
+  '3':'#f9c8a4','3E':'#f0a06e','3T':'#f9c8a4',
+  '4':'#c4ecb4','4E':'#96d880','4T':'#c4ecb4',
+  '5':'#e2d0f2','5E':'#c4aae4','5T':'#e2d0f2',
+  '6':'#e4e4cc','6E':'#cccc9e','6T':'#e4e4cc'
+};
+
+function _zOpen(h) {
+  return `<svg viewBox="0 0 220 ${h}" xmlns="http://www.w3.org/2000/svg" `+
+    `style="width:100%;max-width:220px;display:block" aria-hidden="true">`;
+}
+function _zR(x,y,w,h,clr,lbl) {
+  const fs = Math.min(10,Math.max(7,Math.min(w,h)*0.38));
+  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${clr}" stroke="#bbb" stroke-width="0.5" rx="1"/>`+
+    `<text x="${x+w/2}" y="${y+h/2}" font-size="${fs}" fill="#333" `+
+    `text-anchor="middle" dominant-baseline="middle" font-weight="600">${lbl}</text>`;
+}
+function _zArrow(id,x1,y1,x2,y2) {
+  return `<defs><marker id="za${id}" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">`+
+    `<path d="M0,0L6,3L0,6Z" fill="var(--accent)"/></marker></defs>`+
+    `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#za${id})"/>`;
+}
+
+// MWFRS LC1 — plan view, wind left→right, zones 1-4 + E-strip top/bottom
+function svgMWFRSLC1(r) {
+  const bx=30,by=20,bw=148,bh=98;
+  const aR=Math.min(0.28,Math.max(0.1,(r.a||0)/Math.max(state.minDim,1)));
+  const eH=Math.max(15,Math.min(30,Math.round(aR*bh)));
+  const w4=Math.max(11,Math.min(22,Math.round(0.13*bw)));
+  const w3=Math.max(11,Math.min(20,Math.round(0.12*bw)));
+  const w2=Math.round(0.3*bw);
+  const w1=bw-w2-w3-w4;
+  const x1=bx,x2=bx+w1,x3=x2+w2,x4=x3+w3;
+  const yI=by+eH,yJ=by+bh-eH,iH=yJ-yI;
+  const C=ZONE_CLR;
+  let s=_zOpen(by+bh+34);
+  // Interior
+  s+=_zR(x1,yI,w1,iH,C['1'],'1'); s+=_zR(x2,yI,w2,iH,C['2'],'2');
+  s+=_zR(x3,yI,w3,iH,C['3'],'3'); s+=_zR(x4,yI,w4,iH,C['4'],'4');
+  // N end zone
+  s+=_zR(x1,by,w1,eH,C['1E'],'1E'); s+=_zR(x2,by,w2,eH,C['2E'],'2E');
+  s+=_zR(x3,by,w3,eH,C['3E'],'3E'); s+=_zR(x4,by,w4,eH,C['4E'],'4E');
+  // S end zone
+  s+=_zR(x1,yJ,w1,eH,C['1E'],'1E'); s+=_zR(x2,yJ,w2,eH,C['2E'],'2E');
+  s+=_zR(x3,yJ,w3,eH,C['3E'],'3E'); s+=_zR(x4,yJ,w4,eH,C['4E'],'4E');
+  // Border
+  s+=`<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" fill="none" stroke="#888" stroke-width="1.5"/>`;
+  // a-dim
+  s+=`<line x1="${bx-7}" y1="${by}" x2="${bx-7}" y2="${by+eH}" stroke="#999" stroke-width="0.75"/>`;
+  s+=`<text x="${bx-9}" y="${by+eH/2}" font-size="7" fill="#999" text-anchor="end" dominant-baseline="middle">a</text>`;
+  // wind arrow
+  s+=_zArrow('lc1',5,by+bh/2,bx-3,by+bh/2);
+  s+=`<text x="5" y="${by+bh/2-7}" font-size="8" fill="var(--accent)">Wind</text>`;
+  // caption
+  s+=`<text x="${bx+bw/2}" y="${by+bh+14}" font-size="7.5" fill="#888" text-anchor="middle">Fig. 28.3-1, LC1 (schematic)</text>`;
+  s+=`<text x="${bx+bw/2}" y="${by+bh+27}" font-size="7" fill="#aaa" text-anchor="middle">E zones: within a of end walls (N/S)</text>`;
+  s+='</svg>'; return s;
+}
+
+// MWFRS LC2 — plan view, "frame" pattern + wall zones 4/5/6
+function svgMWFRSLC2(r) {
+  const bx=30,by=20,bw=148,bh=98;
+  const aR=Math.min(0.28,Math.max(0.1,(r.a||0)/Math.max(state.minDim,1)));
+  const aW=Math.max(14,Math.min(30,Math.round(aR*bw)));   // edge strip width
+  const aH=Math.max(12,Math.min(22,Math.round(aR*bh)));   // edge strip height
+  const wallW=Math.max(10,Math.min(18,Math.round(0.11*bw))); // wall strip width
+  const wallH=Math.max(8,Math.min(14,Math.round(0.1*bh)));   // wall strip height (6)
+  // inner roof rect
+  const rx=bx+aW,ry=by+aH,rw=bw-2*aW,rh=bh-2*aH;
+  const C=ZONE_CLR;
+  let s=_zOpen(by+bh+34);
+  // Zone 1 interior
+  s+=_zR(rx,ry,rw,rh,C['1'],'1');
+  // Zone 2 edge strips (4 sides, minus corners)
+  s+=_zR(rx,by,rw,aH,C['2'],'2');   // top
+  s+=_zR(rx,by+bh-aH,rw,aH,C['2'],'2'); // bottom
+  s+=_zR(bx,ry,aW,rh,C['2'],'2');   // left
+  s+=_zR(bx+bw-aW,ry,aW,rh,C['2'],'2'); // right
+  // Zone 3 corners
+  s+=_zR(bx,by,aW,aH,C['3'],'3');
+  s+=_zR(bx+bw-aW,by,aW,aH,C['3'],'3');
+  s+=_zR(bx,by+bh-aH,aW,aH,C['3'],'3');
+  s+=_zR(bx+bw-aW,by+bh-aH,aW,aH,C['3'],'3');
+  // Border
+  s+=`<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" fill="none" stroke="#888" stroke-width="1.5"/>`;
+  // Wall zones labels (outside building perimeter — just annotate)
+  // Zone 5 = windward (left)
+  s+=`<text x="${bx-3}" y="${by+bh/2}" font-size="7.5" fill="${ZONE_CLR['5']? '#7b4ea8':'#888'}" `+
+    `text-anchor="end" dominant-baseline="middle" font-weight="600">5/5E</text>`;
+  // Zone 4 = leeward (right)
+  s+=`<text x="${bx+bw+3}" y="${by+bh/2}" font-size="7.5" fill="#888" `+
+    `text-anchor="start" dominant-baseline="middle" font-weight="600">4/4E</text>`;
+  // Zone 6 = sides
+  s+=`<text x="${bx+bw/2}" y="${by-5}" font-size="7" fill="#aaa" text-anchor="middle">6/6E</text>`;
+  // wind arrow (from left = parallel to long axis)
+  s+=_zArrow('lc2',5,by+bh/2,bx-14,by+bh/2);
+  s+=`<text x="5" y="${by+bh/2-7}" font-size="8" fill="var(--accent)">Wind</text>`;
+  // a-dim
+  s+=`<line x1="${bx}" y1="${by+bh+8}" x2="${bx+aW}" y2="${by+bh+8}" stroke="#999" stroke-width="0.75"/>`;
+  s+=`<text x="${bx+aW/2}" y="${by+bh+18}" font-size="7" fill="#999" text-anchor="middle">a</text>`;
+  // caption
+  s+=`<text x="${bx+bw/2}" y="${by+bh+28}" font-size="7.5" fill="#888" text-anchor="middle">Fig. 28.3-1, LC2 (schematic)</text>`;
+  s+='</svg>'; return s;
+}
+
+// MWFRS LC3 T-zones — same layout as LC1 with T-zone labels, half-building torsion note
+function svgMWFRSLC3(r) {
+  const bx=30,by=20,bw=148,bh=98;
+  const aR=Math.min(0.28,Math.max(0.1,(r.a||0)/Math.max(state.minDim,1)));
+  const eH=Math.max(15,Math.min(30,Math.round(aR*bh)));
+  const w4=Math.max(11,Math.min(22,Math.round(0.13*bw)));
+  const w3=Math.max(11,Math.min(20,Math.round(0.12*bw)));
+  const w2=Math.round(0.3*bw);
+  const w1=bw-w2-w3-w4;
+  const x1=bx,x2=bx+w1,x3=x2+w2,x4=x3+w3;
+  const yI=by+eH,yJ=by+bh-eH,iH=yJ-yI;
+  const midY=by+bh/2;
+  const C=ZONE_CLR;
+  let s=_zOpen(by+bh+44);
+  // Top half = full LC1 (shown muted)
+  [['1','1T'],['2','2T'],['3','3T'],['4','4T']].forEach(([z,t],i) => {
+    const xx=[x1,x2,x3,x4][i], ww=[w1,w2,w3,w4][i];
+    s+=`<rect x="${xx}" y="${by}" width="${ww}" height="${midY-by}" fill="${C[z]}" stroke="#bbb" stroke-width="0.5" rx="1"/>`;
+    s+=`<text x="${xx+ww/2}" y="${(by+midY)/2}" font-size="8" fill="#bbb" text-anchor="middle" dominant-baseline="middle">${z}</text>`;
+  });
+  // N end zone top half (muted)
+  s+=`<rect x="${bx}" y="${by}" width="${bw}" height="${eH}" fill="none" stroke="#ddd" stroke-width="0.5"/>`;
+  // Bottom half = T-zones (25% — active)
+  [['1T'],['2T'],['3T'],['4T']].forEach((t,i) => {
+    const xx=[x1,x2,x3,x4][i], ww=[w1,w2,w3,w4][i];
+    s+=_zR(xx,midY,ww,by+bh-midY,C[t[0]],t[0]);
+  });
+  // S end zone bottom (E versions of T)
+  s+=_zR(x1,yJ,w1,eH,C['1T'],'1T'); s+=_zR(x2,yJ,w2,eH,C['2T'],'2T');
+  s+=_zR(x3,yJ,w3,eH,C['3T'],'3T'); s+=_zR(x4,yJ,w4,eH,C['4T'],'4T');
+  // Torsion divider line
+  s+=`<line x1="${bx}" y1="${midY}" x2="${bx+bw}" y2="${midY}" stroke="#e06030" stroke-width="1.5" stroke-dasharray="6,3"/>`;
+  s+=`<text x="${bx+bw+3}" y="${midY}" font-size="7" fill="#e06030" dominant-baseline="middle">½</text>`;
+  // Border
+  s+=`<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" fill="none" stroke="#888" stroke-width="1.5"/>`;
+  s+=_zArrow('lc3',5,by+bh/2,bx-3,by+bh/2);
+  s+=`<text x="5" y="${by+bh/2-7}" font-size="8" fill="var(--accent)">Wind</text>`;
+  s+=`<text x="${bx+bw/2}" y="${by+bh+14}" font-size="7.5" fill="#888" text-anchor="middle">Fig. 28.3-2, LC3 T-zones (schematic)</text>`;
+  s+=`<text x="${bx+bw/2}" y="${by+bh+27}" font-size="7" fill="#aaa" text-anchor="middle">T-zones = 25% of LC1; applied to lower half</text>`;
+  s+=`<text x="${bx+bw/2}" y="${by+bh+38}" font-size="7" fill="#aaa" text-anchor="middle">to create torsional load effect</text>`;
+  s+='</svg>'; return s;
+}
+
+// MWFRS LC4 T-zones — zones 5T, 6T (wall zones only)
+function svgMWFRSLC4(r) {
+  const bx=30,by=20,bw=148,bh=98;
+  const midX=bx+bw/2;
+  const C=ZONE_CLR;
+  let s=_zOpen(by+bh+34);
+  // Full building outline (muted)
+  s+=`<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" fill="#f8f8f4" stroke="#bbb" stroke-width="1"/>`;
+  // T-zone annotations on walls
+  const wallT=16;
+  // Zone 5T — windward wall (left), lower half
+  s+=_zR(bx,by+bh/2,wallT,bh/2,C['5T'],'5T');
+  // Zone 6T — leeward wall (right), lower half
+  s+=_zR(bx+bw-wallT,by+bh/2,wallT,bh/2,C['6T'],'6T');
+  // Muted labels for upper half
+  s+=`<text x="${bx+wallT/2}" y="${by+bh/4}" font-size="8" fill="#ccc" text-anchor="middle" dominant-baseline="middle">5</text>`;
+  s+=`<text x="${bx+bw-wallT/2}" y="${by+bh/4}" font-size="8" fill="#ccc" text-anchor="middle" dominant-baseline="middle">6</text>`;
+  // Torsion divider
+  s+=`<line x1="${bx}" y1="${by+bh/2}" x2="${bx+bw}" y2="${by+bh/2}" stroke="#e06030" stroke-width="1.5" stroke-dasharray="6,3"/>`;
+  // Border
+  s+=`<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" fill="none" stroke="#888" stroke-width="1.5"/>`;
+  s+=_zArrow('lc4',5,by+bh/2,bx-3,by+bh/2);
+  s+=`<text x="5" y="${by+bh/2-7}" font-size="8" fill="var(--accent)">Wind</text>`;
+  s+=`<text x="${bx+bw/2}" y="${by+bh+14}" font-size="7.5" fill="#888" text-anchor="middle">Fig. 28.3-2, LC4 T-zones (schematic)</text>`;
+  s+=`<text x="${bx+bw/2}" y="${by+bh+27}" font-size="7" fill="#aaa" text-anchor="middle">5T/6T = 25% of LC2 wall zones 5/6</text>`;
+  s+='</svg>'; return s;
+}
+
+// C&C Wall zones — building ELEVATION (one wall), zones 4 (field) + 5 (corner strips)
+function svgCCWall(r) {
+  const bx=30,by=20,bw=148,bh=98;
+  const aR=Math.min(0.3,Math.max(0.08,(r.a||0)/Math.max(state.minDim,1)));
+  const aW=Math.max(13,Math.min(32,Math.round(aR*bw)));
+  const C=ZONE_CLR;
+  let s=_zOpen(by+bh+28);
+  // Zone 4 field
+  s+=_zR(bx+aW,by,bw-2*aW,bh,C['4'],'4');
+  // Zone 5 corner strips
+  s+=_zR(bx,by,aW,bh,C['5'],'5'); s+=_zR(bx+bw-aW,by,aW,bh,C['5'],'5');
+  s+=`<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" fill="none" stroke="#888" stroke-width="1.5"/>`;
+  // a label
+  s+=`<line x1="${bx}" y1="${by+bh+8}" x2="${bx+aW}" y2="${by+bh+8}" stroke="#999" stroke-width="0.75"/>`;
+  s+=`<text x="${bx+aW/2}" y="${by+bh+18}" font-size="7" fill="#999" text-anchor="middle">a</text>`;
+  s+=`<text x="${bx+bw/2}" y="${by+bh+27}" font-size="7.5" fill="#888" text-anchor="middle">Fig. 30.3-1 — Wall elevation (schematic)</text>`;
+  s+='</svg>'; return s;
+}
+
+// C&C Roof flat (θ≤7°) — plan view, zones 1', 1, 2, 3
+function svgCCRoofFlat(r) {
+  const bx=30,by=20,bw=148,bh=98;
+  const aR=Math.min(0.3,Math.max(0.08,(r.a||0)/Math.max(state.minDim,1)));
+  const aP=Math.max(13,Math.min(32,Math.round(aR*Math.min(bw,bh))));
+  const iPct=0.45; // zone 1' inner zone fraction of interior
+  const C=ZONE_CLR;
+  const ix=bx+aP,iy=by+aP,iw=bw-2*aP,ih=bh-2*aP;
+  const i1x=ix+iw*((1-iPct)/2),i1y=iy+ih*((1-iPct)/2),i1w=iw*iPct,i1h=ih*iPct;
+  let s=_zOpen(by+bh+28);
+  // Zone 1 interior
+  s+=_zR(ix,iy,iw,ih,C['1'],'1');
+  // Zone 1' innermost (only if flat roof θ≤7°)
+  if (i1w>18 && i1h>14) s+=_zR(i1x,i1y,i1w,i1h,C["1'"],"1'");
+  // Zone 2 edge strips (4 sides minus corners)
+  s+=_zR(ix,by,iw,aP,C['2'],'2'); s+=_zR(ix,by+bh-aP,iw,aP,C['2'],'2');
+  s+=_zR(bx,iy,aP,ih,C['2'],'2'); s+=_zR(bx+bw-aP,iy,aP,ih,C['2'],'2');
+  // Zone 3 corners
+  s+=_zR(bx,by,aP,aP,C['3'],'3'); s+=_zR(bx+bw-aP,by,aP,aP,C['3'],'3');
+  s+=_zR(bx,by+bh-aP,aP,aP,C['3'],'3'); s+=_zR(bx+bw-aP,by+bh-aP,aP,aP,C['3'],'3');
+  s+=`<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" fill="none" stroke="#888" stroke-width="1.5"/>`;
+  s+=`<line x1="${bx}" y1="${by+bh+8}" x2="${bx+aP}" y2="${by+bh+8}" stroke="#999" stroke-width="0.75"/>`;
+  s+=`<text x="${bx+aP/2}" y="${by+bh+18}" font-size="7" fill="#999" text-anchor="middle">a</text>`;
+  s+=`<text x="${bx+bw/2}" y="${by+bh+27}" font-size="7.5" fill="#888" text-anchor="middle">Fig. 30.3-2A — Roof plan, θ≤7° (schematic)</text>`;
+  s+='</svg>'; return s;
+}
+
+// C&C Roof sloped (θ>7°) — plan view, zones 1, 2, 3 (no 1')
+function svgCCRoofSloped(r) {
+  const bx=30,by=20,bw=148,bh=98;
+  const aR=Math.min(0.3,Math.max(0.08,(r.a||0)/Math.max(state.minDim,1)));
+  const aP=Math.max(13,Math.min(32,Math.round(aR*Math.min(bw,bh))));
+  const C=ZONE_CLR;
+  const ix=bx+aP,iy=by+aP,iw=bw-2*aP,ih=bh-2*aP;
+  let s=_zOpen(by+bh+28);
+  // Zone 1 interior (ridge halves)
+  s+=_zR(ix,iy,iw,ih,C['1'],'1');
+  // Ridge line
+  const ridgeX=bx+bw/2;
+  s+=`<line x1="${ridgeX}" y1="${by}" x2="${ridgeX}" y2="${by+bh}" stroke="#888" stroke-width="1" stroke-dasharray="4,3"/>`;
+  s+=`<text x="${ridgeX+3}" y="${by+8}" font-size="7" fill="#999">ridge</text>`;
+  // Zone 2 edge strips
+  s+=_zR(ix,by,iw,aP,C['2'],'2'); s+=_zR(ix,by+bh-aP,iw,aP,C['2'],'2');
+  s+=_zR(bx,iy,aP,ih,C['2'],'2'); s+=_zR(bx+bw-aP,iy,aP,ih,C['2'],'2');
+  // Zone 3 corners
+  s+=_zR(bx,by,aP,aP,C['3'],'3'); s+=_zR(bx+bw-aP,by,aP,aP,C['3'],'3');
+  s+=_zR(bx,by+bh-aP,aP,aP,C['3'],'3'); s+=_zR(bx+bw-aP,by+bh-aP,aP,aP,C['3'],'3');
+  s+=`<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" fill="none" stroke="#888" stroke-width="1.5"/>`;
+  s+=`<line x1="${bx}" y1="${by+bh+8}" x2="${bx+aP}" y2="${by+bh+8}" stroke="#999" stroke-width="0.75"/>`;
+  s+=`<text x="${bx+aP/2}" y="${by+bh+18}" font-size="7" fill="#999" text-anchor="middle">a</text>`;
+  const figRef = state.roofShape==='hip' ? 'Figs. 30.3-2D–G' : 'Figs. 30.3-2B/2C';
+  s+=`<text x="${bx+bw/2}" y="${by+bh+27}" font-size="7.5" fill="#888" text-anchor="middle">${figRef} — Roof plan, θ&gt;7° (schematic)</text>`;
+  s+='</svg>'; return s;
+}
+
+// Populate all diagram containers (called from renderResults)
+function renderZoneDiagrams(r) {
+  const set = (id, html) => { const el=document.getElementById(id); if(el) el.innerHTML=html; };
+  if (state.mode === 'mwfrs' && state.mwfrsProcedure !== 'directional') {
+    set('mwfrsLC1Diag', svgMWFRSLC1(r));
+    set('mwfrsLC2Diag', svgMWFRSLC2(r));
+    set('mwfrsLC3Diag', svgMWFRSLC3(r));
+    set('mwfrsLC4Diag', svgMWFRSLC4(r));
+  }
+  if (state.mode === 'cc') {
+    set('ccWallDiag', svgCCWall(r));
+    const isFlat = state.theta <= 7;
+    set('ccRoofDiag', isFlat ? svgCCRoofFlat(r) : svgCCRoofSloped(r));
   }
 }
 
