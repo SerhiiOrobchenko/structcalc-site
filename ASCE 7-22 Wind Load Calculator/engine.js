@@ -3005,30 +3005,31 @@ const ZONE_CLR = {
   '6':'#e4e4cc','6E':'#cccc9e','6T':'#e4e4cc'
 };
 
-/* ── Iso helpers ─ oblique projection: x=along ridge, d=depth front→back, z=height ── */
-function _iP(x,d,z){return (15+x+d*0.48).toFixed(1)+','+(158-z+d*0.26).toFixed(1);}
+/* ── Iso helpers ─ oblique projection matching ASCE 7-22 Fig. 28.3-1 ──────────
+   x = along ridge (left→right), d = depth (front→back), z = height
+   px(x,d,z) = 12 + x + d*0.55      — depth goes RIGHT
+   py(x,d,z) = 170 − z − d*0.35     — depth also goes UP (matching ASCE view)
+   Building SVG units: L=128, D=50, H=60; R=dynamic (ridge height above eave)
+   ViewBox: 0 0 260 190
+   ─────────────────────────────────────────────────────────────────────────── */
+function _iP(x,d,z){return (12+x+d*0.55).toFixed(1)+','+(170-z-d*0.35).toFixed(1);}
 function _iPoly(pts,fill,stk,sw){
   return '<polygon points="'+pts.map(function(p){return _iP(p[0],p[1],p[2]);}).join(' ')+
-    '" fill="'+fill+'" stroke="'+(stk||'#999')+'" stroke-width="'+(sw||0.8)+'"/>';
+    '" fill="'+fill+'" stroke="'+(stk||'#888')+'" stroke-width="'+(sw||0.9)+'"/>';
 }
 function _iCirc(x,d,z,txt,fill){
-  var cx=(15+x+d*0.48).toFixed(1),cy=(158-z+d*0.26).toFixed(1);
+  var cx=(12+x+d*0.55).toFixed(1),cy=(170-z-d*0.35).toFixed(1);
   var big=txt.length>2;
-  return '<circle cx="'+cx+'" cy="'+cy+'" r="'+(big?6.5:7)+'" fill="'+(fill||'#fff')+
-    '" stroke="#555" stroke-width="0.8"/>'+
-    '<text x="'+cx+'" y="'+cy+'" font-size="'+(big?'6':'8')+'" fill="#222"'+
+  return '<circle cx="'+cx+'" cy="'+cy+'" r="'+(big?6.5:7.5)+'" fill="'+(fill||'#fff')+
+    '" stroke="#444" stroke-width="1"/>'+
+    '<text x="'+cx+'" y="'+cy+'" font-size="'+(big?'6.5':'8.5')+'" fill="#222"'+
     ' text-anchor="middle" dominant-baseline="middle" font-weight="700">'+txt+'</text>';
 }
-function _iText(x,d,z,txt,size,clr,anchor){
-  var px=(15+x+d*0.48).toFixed(1),py=(158-z+d*0.26).toFixed(1);
-  return '<text x="'+px+'" y="'+py+'" font-size="'+(size||6)+'" fill="'+(clr||'#555')+
-    '" text-anchor="'+(anchor||'middle')+'" font-style="italic">'+txt+'</text>';
-}
 function _iArrow(id,x1,y1,x2,y2){
-  return '<defs><marker id="'+id+'" markerWidth="5" markerHeight="5" refX="4" refY="2.5"'+
-    ' orient="auto"><path d="M0,0L5,2.5L0,5Z" fill="var(--accent)"/></marker></defs>'+
-    '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="var(--accent)"'+
-    ' stroke-width="1.5" marker-end="url(#'+id+')"/>';
+  return '<defs><marker id="'+id+'" markerWidth="6" markerHeight="6" refX="5" refY="3"'+
+    ' orient="auto"><path d="M0,0L6,3L0,6Z" fill="#222"/></marker></defs>'+
+    '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+
+    '" stroke="#222" stroke-width="2" marker-end="url(#'+id+')"/>';
 }
 function _iOpen(){
   return '<svg viewBox="0 0 260 190" xmlns="http://www.w3.org/2000/svg"'+
@@ -3047,248 +3048,263 @@ function _zArrow(id,x1,y1,x2,y2){return '<defs><marker id="'+id+'" markerWidth="
   ' y2="'+y2+'" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#'+id+')"/>';}
 
 // ── MWFRS LC1: wind ⊥ ridge, from FRONT ─────────────────────────────────────
-// Zone 1/1E = windward wall (front, d=0)
+// Zone 1/1E = windward wall (front face, d=0)     WINDWARD
 // Zone 2/2E = windward roof slope (d=0→D/2)
-// Zone 3/3E = leeward roof slope (d=D/2→D)
-// Zone 4   = leeward wall (back, not visible; labeled on right end wall)
+// Zone 3/3E = leeward roof slope  (d=D/2→D)      LEEWARD
+// Zone 4/4E = leeward wall (back, not visible) + end walls (x=0, x=L)
 function svgMWFRSLC1(r) {
-  var C=ZONE_CLR, L=110, D=38, H=52;
+  var C=ZONE_CLR, L=128, D=50, H=60;
   var aR=Math.min(0.28,Math.max(0.08,(r.a||0)/Math.max(state.minDim,1)));
-  var az=Math.max(10,Math.min(30,Math.round(aR*L)));
-  var R=Math.max(8,Math.min(28,Math.round(state.theta*0.72+8)));
+  var az=Math.max(10,Math.min(28,Math.round(aR*L)));
+  var R=Math.max(8,Math.min(30,Math.round(state.theta*0.8+8)));
   var s=_iOpen();
-  // ── painter's order: back faces first ──
+  // ── painter's order: back faces first ──────────────────────────────────
   // Leeward slope (Zone 3/3E): d = D/2 → D
-  s+=_iPoly([[0,D/2,H+R],[az,D/2,H+R],[az,D,H],[0,D,H]],C['3E'],'#aaa',0.6);
-  s+=_iPoly([[az,D/2,H+R],[L-az,D/2,H+R],[L-az,D,H],[az,D,H]],C['3'],'#aaa',0.6);
-  s+=_iPoly([[L-az,D/2,H+R],[L,D/2,H+R],[L,D,H],[L-az,D,H]],C['3E'],'#aaa',0.6);
-  // Left end wall — neutral (no primary MWFRS zone)
-  s+=_iPoly([[0,0,0],[0,D,0],[0,D,H],[0,D/2,H+R],[0,0,H]],'#d8d8d8','#aaa',0.8);
-  // Right end wall — neutral (leeward wall is behind building; "4" label here as proxy)
-  s+=_iPoly([[L,0,0],[L,D,0],[L,D,H],[L,D/2,H+R],[L,0,H]],'#e2e2e2','#bbb',0.5);
+  s+=_iPoly([[0,D/2,H+R],[az,D/2,H+R],[az,D,H],[0,D,H]],C['3E'],'#999',0.8);
+  s+=_iPoly([[az,D/2,H+R],[L-az,D/2,H+R],[L-az,D,H],[az,D,H]],C['3'],'#999',0.8);
+  s+=_iPoly([[L-az,D/2,H+R],[L,D/2,H+R],[L,D,H],[L-az,D,H]],C['3E'],'#999',0.8);
+  // Left gable end wall (Zone 4E): x=0, d=0→D, z=0→H (+ gable triangle)
+  s+=_iPoly([[0,0,0],[0,D,0],[0,D,H],[0,D/2,H+R],[0,0,H]],C['4E'],'#777',1);
+  // Right gable end wall (Zone 4E): x=L
+  s+=_iPoly([[L,0,0],[L,D,0],[L,D,H],[L,D/2,H+R],[L,0,H]],C['4E'],'#888',0.8);
   // Windward slope (Zone 2/2E): d = 0 → D/2
-  s+=_iPoly([[0,0,H],[az,0,H],[az,D/2,H+R],[0,D/2,H+R]],C['2E'],'#999',0.8);
-  s+=_iPoly([[az,0,H],[L-az,0,H],[L-az,D/2,H+R],[az,D/2,H+R]],C['2'],'#999',0.8);
-  s+=_iPoly([[L-az,0,H],[L,0,H],[L,D/2,H+R],[L-az,D/2,H+R]],C['2E'],'#999',0.8);
-  // Front wall — windward (Zone 1/1E): d = 0
-  s+=_iPoly([[0,0,0],[az,0,0],[az,0,H],[0,0,H]],C['1E'],'#999',0.9);
-  s+=_iPoly([[az,0,0],[L-az,0,0],[L-az,0,H],[az,0,H]],C['1'],'#999',0.9);
-  s+=_iPoly([[L-az,0,0],[L,0,0],[L,0,H],[L-az,0,H]],C['1E'],'#999',0.9);
-  // ── zone labels (positions verified non-overlapping) ──
-  s+=_iCirc(8,   0,  26, '1E', C['1E']); // front wall left end strip
-  s+=_iCirc(55,  0,  26, '1',  C['1']);  // front wall interior
-  s+=_iCirc(8,   9,  59, '2E', C['2E']); // windward slope left end
-  s+=_iCirc(50,  8,  62, '2',  C['2']);  // windward slope interior
-  s+=_iCirc(20,  29, 62, '3E', C['3E']); // leeward slope left end
-  s+=_iCirc(65,  29, 62, '3',  C['3']);  // leeward slope interior
-  s+=_iCirc(110, 23, 26, '4',  C['4']);  // right end wall = proxy for leeward wall
-  // ── face labels ──
-  s+=_iText(55, 0, 6, 'WINDWARD WALL', 5.5, '#555');
-  s+='<text x="137" y="131" font-size="5" fill="#888" text-anchor="middle"'+
-     ' font-style="italic">LEEWARD</text>';
-  // ── wind arrow ──
-  s+=_iArrow('lc1aw',4,167,14,167);
-  s+='<text x="2" y="164" font-size="7" fill="var(--accent)" font-weight="700">Wind</text>';
-  // ── a-dimension ──
-  s+='<line x1="15" y1="174" x2="'+(15+az)+'" y2="174" stroke="#ccc" stroke-width="0.8"/>';
-  s+='<text x="'+(15+az/2)+'" y="181" font-size="6" fill="#aaa" text-anchor="middle">a</text>';
-  s+='<text x="130" y="188" font-size="6" fill="#bbb" text-anchor="middle">'+
-     'ASCE 7-22 Fig. 28.3-1, LC1 (schematic)</text>';
+  s+=_iPoly([[0,0,H],[az,0,H],[az,D/2,H+R],[0,D/2,H+R]],C['2E'],'#888',0.9);
+  s+=_iPoly([[az,0,H],[L-az,0,H],[L-az,D/2,H+R],[az,D/2,H+R]],C['2'],'#888',0.9);
+  s+=_iPoly([[L-az,0,H],[L,0,H],[L,D/2,H+R],[L-az,D/2,H+R]],C['2E'],'#888',0.9);
+  // Front wall (Zone 1/1E): d=0 — WINDWARD face
+  s+=_iPoly([[0,0,0],[az,0,0],[az,0,H],[0,0,H]],C['1E'],'#888',0.9);
+  s+=_iPoly([[az,0,0],[L-az,0,0],[L-az,0,H],[az,0,H]],C['1'],'#888',0.9);
+  s+=_iPoly([[L-az,0,0],[L,0,0],[L,0,H],[L-az,0,H]],C['1E'],'#888',0.9);
+  // Ridge line
+  s+='<line x1="'+_iP(0,D/2,H+R).split(',')[0]+'" y1="'+_iP(0,D/2,H+R).split(',')[1]+
+    '" x2="'+_iP(L,D/2,H+R).split(',')[0]+'" y2="'+_iP(L,D/2,H+R).split(',')[1]+
+    '" stroke="#555" stroke-width="1.5" stroke-dasharray="4,3"/>';
+  // ── zone circle labels ──────────────────────────────────────────────────
+  s+=_iCirc(7.5, 35, 35, '4E', C['4E']); // left gable interior
+  s+=_iCirc(7.5, 0,  30, '1E', C['1E']); // front wall left strip
+  s+=_iCirc(64,  0,  30, '1',  C['1']);  // front wall interior
+  s+=_iCirc(7.5, 8,  65, '2E', C['2E']); // windward slope left
+  s+=_iCirc(64,  12, 68, '2',  C['2']);  // windward slope interior
+  s+=_iCirc(7.5, 35, 75, '3E', C['3E']); // leeward slope left
+  s+=_iCirc(64,  38, 73, '3',  C['3']);  // leeward slope interior
+  s+=_iCirc(110, 38, 73, '4',  C['4']);  // leeward slope right → leeward wall proxy
+  s+=_iCirc(128, 28, 30, '4E', C['4E']); // right gable
+  // ── face labels ─────────────────────────────────────────────────────────
+  s+='<text x="'+_iP(64,0,8).split(',')[0]+'" y="'+_iP(64,0,8).split(',')[1]+
+    '" font-size="7" fill="#444" text-anchor="middle" font-weight="600">WINDWARD</text>';
+  s+='<text x="'+_iP(64,40,80).split(',')[0]+'" y="'+(_iP(64,40,80).split(',')[1]-8)+
+    '" font-size="7" fill="#444" text-anchor="middle" font-weight="600">LEEWARD</text>';
+  // ── wind arrows (two, pointing toward building from bottom) ─────────────
+  s+=_iArrow('a1a', 76, 188, 76, 175);
+  s+=_iArrow('a1b', 60, 188, 68, 177);
+  s+='<text x="65" y="188" font-size="6.5" fill="#333" text-anchor="middle">ASSUMED WIND DIRECTIONS</text>';
+  // ── 'a' dimension ────────────────────────────────────────────────────────
+  var ax1=12, ax2=12+az, ay=183;
+  s+='<line x1="'+ax1+'" y1="'+ay+'" x2="'+ax2+'" y2="'+ay+'" stroke="#555" stroke-width="1"/>';
+  s+='<line x1="'+ax1+'" y1="'+(ay-3)+'" x2="'+ax1+'" y2="'+(ay+3)+'" stroke="#555" stroke-width="1"/>';
+  s+='<line x1="'+ax2+'" y1="'+(ay-3)+'" x2="'+ax2+'" y2="'+(ay+3)+'" stroke="#555" stroke-width="1"/>';
+  s+='<text x="'+(ax1+ax2)/2+'" y="'+(ay-3)+'" font-size="6" fill="#555" text-anchor="middle">a</text>';
+  s+='<text x="200" y="188" font-size="5.5" fill="#bbb" text-anchor="middle">ASCE 7-22 Fig. 28.3-1, LC1 (schematic)</text>';
   s+='</svg>';
   return s;
 }
 
 // ── MWFRS LC2: wind ∥ ridge, from LEFT ──────────────────────────────────────
-// Zone 5/5E = windward end wall (left gable)
-// Zone 6/6E = side walls (front & back long walls)
-// Zone 4    = leeward end wall (right gable)
-// Roof Zones 1, 2 by distance from windward end
+// Zone 5/5E = windward end wall (left gable, x=0)    WINDWARD
+// Zone 6/6E = side walls (front d=0, back d=D)
+// Zone 4/4E = leeward end wall (right gable, x=L)
+// Roof zones 1, 2 by distance from eave/ridge
 function svgMWFRSLC2(r) {
-  var C=ZONE_CLR, L=110, D=38, H=52;
+  var C=ZONE_CLR, L=128, D=50, H=60;
   var aR=Math.min(0.28,Math.max(0.08,(r.a||0)/Math.max(state.minDim,1)));
-  var az=Math.max(10,Math.min(30,Math.round(aR*L)));    // 'a' along building length
-  var adD=Math.max(7,Math.min(15,Math.round(aR*D)));    // 'a' along depth
-  var R=Math.max(8,Math.min(28,Math.round(state.theta*0.72+8)));
+  var az=Math.max(10,Math.min(28,Math.round(aR*L)));   // along length
+  var adD=Math.max(8,Math.min(18,Math.round(aR*D)));   // along depth
+  var R=Math.max(8,Math.min(30,Math.round(state.theta*0.8+8)));
   var s=_iOpen();
-  // ── painter's order: back faces first ──
-  // Leeward slope — Zone 2 interior
-  s+=_iPoly([[0,D/2,H+R],[L,D/2,H+R],[L,D,H],[0,D,H]],C['2'],'#aaa',0.6);
-  // Right end wall — Zone 4 (leeward)
-  s+=_iPoly([[L,0,0],[L,D,0],[L,D,H],[L,D/2,H+R],[L,0,H]],C['4'],'#aaa',0.5);
-  // Windward slope — Zone 2 end strip near left end, Zone 1 interior
-  s+=_iPoly([[0,0,H],[az,0,H],[az,D/2,H+R],[0,D/2,H+R]],C['2'],'#999',0.8);
-  s+=_iPoly([[az,0,H],[L,0,H],[L,D/2,H+R],[az,D/2,H+R]],C['1'],'#999',0.8);
-  // Front wall (side wall) — Zone 6E near left end, Zone 6 interior
-  s+=_iPoly([[0,0,0],[az,0,0],[az,0,H],[0,0,H]],C['6E'],'#999',0.9);
-  s+=_iPoly([[az,0,0],[L,0,0],[L,0,H],[az,0,H]],C['6'],'#999',0.9);
-  // Left end wall — windward: Zone 5E strip near front face, Zone 5 interior
-  s+=_iPoly([[0,0,0],[0,D,0],[0,D,H],[0,D/2,H+R],[0,0,H]],C['5'],'#888',0.8);      // full wall
-  s+=_iPoly([[0,0,0],[0,adD,0],[0,adD,H],[0,adD/2,H+R*2*adD/D],[0,0,H]],C['5E'],'#888',1); // front strip
-  // ── zone labels ──
-  s+=_iCirc(5,   0,  26, '6E', C['6E']); // front wall left (near windward end)
-  s+=_iCirc(65,  0,  26, '6',  C['6']);  // front wall interior
-  s+=_iCirc(0,   4,  42, '5E', C['5E']); // left end wall, front strip, mid-height
-  s+=_iCirc(0,   32, 8,  '5',  C['5']);  // left end wall, interior, low
-  s+=_iCirc(45,  9,  62, '1',  C['1']);  // windward slope interior
-  s+=_iCirc(80,  29, 62, '2',  C['2']);  // leeward slope interior
-  s+=_iCirc(110, 23, 26, '4',  C['4']);  // right end wall (leeward)
-  // ── face labels ──
-  s+=_iText(62, 0, 6, 'SIDE WALL', 5.5, '#555');
-  s+='<text x="14" y="152" font-size="5" fill="#555" text-anchor="start"'+
-     ' font-style="italic">WINDWARD</text>';
-  s+='<text x="14" y="158" font-size="5" fill="#555" text-anchor="start"'+
-     ' font-style="italic">END WALL</text>';
-  // ── wind arrow (from left) ──
-  s+=_iArrow('lc2aw',3,116,12,111);
-  s+='<text x="2" y="108" font-size="7" fill="var(--accent)" font-weight="700">Wind</text>';
-  s+='<text x="130" y="188" font-size="6" fill="#bbb" text-anchor="middle">'+
-     'ASCE 7-22 Fig. 28.3-1, LC2 (schematic)</text>';
+  // ── painter's order: back faces first ──────────────────────────────────
+  // Leeward slope (Zone 2 interior — from windward end to far)
+  s+=_iPoly([[0,D/2,H+R],[L,D/2,H+R],[L,D,H],[0,D,H]],C['2'],'#999',0.8);
+  // Right gable end wall (Zone 4 — leeward end)
+  s+=_iPoly([[L,0,0],[L,D,0],[L,D,H],[L,D/2,H+R],[L,0,H]],C['4'],'#888',0.8);
+  // Windward slope: Zone 2 near windward end (x=0..az), Zone 1 interior
+  s+=_iPoly([[0,0,H],[az,0,H],[az,D/2,H+R],[0,D/2,H+R]],C['2'],'#888',0.9);
+  s+=_iPoly([[az,0,H],[L,0,H],[L,D/2,H+R],[az,D/2,H+R]],C['1'],'#888',0.9);
+  // Front wall (side wall): Zone 6E near windward end (x=0..az), Zone 6 interior
+  s+=_iPoly([[0,0,0],[az,0,0],[az,0,H],[0,0,H]],C['6E'],'#888',0.9);
+  s+=_iPoly([[az,0,0],[L,0,0],[L,0,H],[az,0,H]],C['6'],'#888',0.9);
+  // Left gable end wall (Zone 5/5E — windward end): full face Zone 5, front strip Zone 5E
+  s+=_iPoly([[0,0,0],[0,D,0],[0,D,H],[0,D/2,H+R],[0,0,H]],C['5'],'#777',1);
+  // Zone 5E: strip near front face (d=0..adD)
+  var zR5E=H+R*2*adD/D; // z at d=adD on windward slope
+  s+=_iPoly([[0,0,0],[0,adD,0],[0,adD,H],[0,adD/2,zR5E],[0,0,H]],C['5E'],'#777',1);
+  // Ridge line
+  s+='<line x1="'+_iP(0,D/2,H+R).split(',')[0]+'" y1="'+_iP(0,D/2,H+R).split(',')[1]+
+    '" x2="'+_iP(L,D/2,H+R).split(',')[0]+'" y2="'+_iP(L,D/2,H+R).split(',')[1]+
+    '" stroke="#555" stroke-width="1.5" stroke-dasharray="4,3"/>';
+  // ── zone labels ─────────────────────────────────────────────────────────
+  s+=_iCirc(0,   5,  50, '5E', C['5E']); // left end wall front strip (high)
+  s+=_iCirc(0,   35, 35, '5',  C['5']);  // left end wall interior
+  s+=_iCirc(7.5, 0,  30, '6E', C['6E']); // front wall near windward end
+  s+=_iCirc(75,  0,  30, '6',  C['6']);  // front wall interior
+  s+=_iCirc(75,  12, 68, '1',  C['1']);  // windward slope interior
+  s+=_iCirc(75,  38, 73, '2',  C['2']);  // leeward slope interior
+  s+=_iCirc(128, 28, 30, '4',  C['4']);  // right end wall (leeward)
+  // ── face labels ─────────────────────────────────────────────────────────
+  s+='<text x="'+_iP(64,0,8).split(',')[0]+'" y="'+_iP(64,0,8).split(',')[1]+
+    '" font-size="7" fill="#444" text-anchor="middle" font-weight="600">WINDWARD SIDE</text>';
+  s+='<text x="'+_iP(64,40,80).split(',')[0]+'" y="'+(_iP(64,40,80).split(',')[1]-8)+
+    '" font-size="7" fill="#444" text-anchor="middle" font-weight="600">LEEWARD</text>';
+  s+='<text x="14" y="157" font-size="6" fill="#555" text-anchor="start" font-weight="600">WINDWARD</text>';
+  s+='<text x="14" y="164" font-size="6" fill="#555" text-anchor="start" font-weight="600">END WALL</text>';
+  // ── wind arrows (from left, parallel to ridge) ───────────────────────────
+  s+=_iArrow('a2a', 8, 188, 16, 175);
+  s+=_iArrow('a2b', 20, 185, 20, 172);
+  s+='<text x="22" y="188" font-size="6.5" fill="#333" text-anchor="start">ASSUMED WIND DIRECTIONS</text>';
+  s+='<text x="200" y="188" font-size="5.5" fill="#bbb" text-anchor="middle">ASCE 7-22 Fig. 28.3-1, LC2 (schematic)</text>';
   s+='</svg>';
   return s;
 }
 
 // ── MWFRS LC3: torsional transverse ─────────────────────────────────────────
-// Same wind direction as LC1 but reduced uniform + torsional offset.
-// T-zone highlights on half of each face.
+// Same as LC1 direction but with torsional offset. T-zones on half-building.
 function svgMWFRSLC3(r) {
-  var C=ZONE_CLR, L=110, D=38, H=52;
-  var R=Math.max(8,Math.min(28,Math.round(state.theta*0.72+8)));
-  var g='#ebebea';
+  var C=ZONE_CLR, L=128, D=50, H=60;
+  var R=Math.max(8,Math.min(30,Math.round(state.theta*0.8+8)));
+  var g='#ebebea', gs='#ddd';
   var s=_iOpen();
-  // full building in neutral gray
-  s+=_iPoly([[0,D/2,H+R],[L,D/2,H+R],[L,D,H],[0,D,H]],g,'#bbb',0.6);
-  s+=_iPoly([[0,0,0],[0,D,0],[0,D,H],[0,D/2,H+R],[0,0,H]],'#ddd','#bbb',0.8);
-  s+=_iPoly([[L,0,0],[L,D,0],[L,D,H],[L,D/2,H+R],[L,0,H]],'#e2e2e2','#bbb',0.5);
-  s+=_iPoly([[0,0,H],[L,0,H],[L,D/2,H+R],[0,D/2,H+R]],'#f0f0ec','#bbb',0.7);
-  s+=_iPoly([[0,0,0],[L,0,0],[L,0,H],[0,0,H]],'#f4f4f0','#bbb',0.7);
-  // T-zone highlights — right half of building (offset load)
-  s+=_iPoly([[L/2,0,H],[L,0,H],[L,D/2,H+R],[L/2,D/2,H+R]],C['1T'],'#999',0.8);
-  s+=_iPoly([[0,D/2,H+R],[L/2,D/2,H+R],[L/2,D,H],[0,D,H]],C['2T'],'#aaa',0.7);
-  s+=_iPoly([[L/2,0,0],[L,0,0],[L,0,H],[L/2,0,H]],C['3T'],'#999',0.8);
+  // full building neutral
+  s+=_iPoly([[0,D/2,H+R],[L,D/2,H+R],[L,D,H],[0,D,H]],g,'#bbb',0.7);
+  s+=_iPoly([[0,0,0],[0,D,0],[0,D,H],[0,D/2,H+R],[0,0,H]],gs,'#aaa',0.8);
+  s+=_iPoly([[L,0,0],[L,D,0],[L,D,H],[L,D/2,H+R],[L,0,H]],gs,'#aaa',0.7);
+  s+=_iPoly([[0,0,H],[L,0,H],[L,D/2,H+R],[0,D/2,H+R]],'#f0f0ec','#bbb',0.8);
+  s+=_iPoly([[0,0,0],[L,0,0],[L,0,H],[0,0,H]],'#f4f4f0','#bbb',0.8);
+  // T-zones on right half (offset load)
+  s+=_iPoly([[L/2,0,H],[L,0,H],[L,D/2,H+R],[L/2,D/2,H+R]],C['1T'],'#888',0.9);
+  s+=_iPoly([[0,D/2,H+R],[L/2,D/2,H+R],[L/2,D,H],[0,D,H]],C['2T'],'#999',0.8);
+  s+=_iPoly([[L/2,0,0],[L,0,0],[L,0,H],[L/2,0,H]],C['3T'],'#888',0.9);
   // labels
   s+=_iCirc(L*0.75, D*0.25, H+R*0.6, '1T', C['1T']);
-  s+=_iCirc(L*0.25, D*0.75, H+R*0.5, '2T', C['2T']);
+  s+=_iCirc(L*0.25, D*0.75, H+R*0.4, '2T', C['2T']);
   s+=_iCirc(L*0.75, 0, H*0.5, '3T', C['3T']);
-  // wind arrow
-  s+=_iArrow('lc3aw',4,167,14,167);
-  s+='<text x="2" y="164" font-size="7" fill="var(--accent)" font-weight="700">Wind</text>';
-  s+='<text x="130" y="184" font-size="6" fill="#bbb" text-anchor="middle">'+
-     'ASCE 7-22 Fig. 28.3-1, LC3 — torsional (schematic)</text>';
-  s+='<text x="130" y="189" font-size="5.5" fill="#ccc" text-anchor="middle">'+
-     'Reduced uniform + T-zone offset on interior frames</text>';
+  // wind arrows
+  s+=_iArrow('a3a', 76, 188, 76, 175);
+  s+=_iArrow('a3b', 60, 188, 68, 177);
+  s+='<text x="65" y="188" font-size="6.5" fill="#333" text-anchor="middle">ASSUMED WIND DIRECTIONS</text>';
+  s+='<text x="200" y="183" font-size="6" fill="#bbb" text-anchor="middle">ASCE 7-22 Fig. 28.3-1, LC3 — torsional (schematic)</text>';
+  s+='<text x="200" y="189" font-size="5.5" fill="#ccc" text-anchor="middle">Reduced uniform load + T-zone offset</text>';
   s+='</svg>';
   return s;
 }
 
 // ── MWFRS LC4: torsional longitudinal ───────────────────────────────────────
-// Same wind direction as LC2 but with torsional offset.
 function svgMWFRSLC4(r) {
-  var C=ZONE_CLR, L=110, D=38, H=52;
-  var R=Math.max(8,Math.min(28,Math.round(state.theta*0.72+8)));
-  var g='#ebebea';
+  var C=ZONE_CLR, L=128, D=50, H=60;
+  var R=Math.max(8,Math.min(30,Math.round(state.theta*0.8+8)));
+  var g='#ebebea', gs='#ddd';
   var s=_iOpen();
-  // full building neutral gray
-  s+=_iPoly([[0,D/2,H+R],[L,D/2,H+R],[L,D,H],[0,D,H]],g,'#bbb',0.6);
-  s+=_iPoly([[L,0,0],[L,D,0],[L,D,H],[L,D/2,H+R],[L,0,H]],'#e2e2e2','#bbb',0.5);
-  s+=_iPoly([[0,0,H],[L,0,H],[L,D/2,H+R],[0,D/2,H+R]],'#f0f0ec','#bbb',0.7);
-  s+=_iPoly([[0,0,0],[L,0,0],[L,0,H],[0,0,H]],'#f4f4f0','#bbb',0.7);
-  s+=_iPoly([[0,0,0],[0,D,0],[0,D,H],[0,D/2,H+R],[0,0,H]],'#ddd','#bbb',0.8);
-  // T-zone highlights — left end (windward) with torsional offset
-  s+=_iPoly([[0,0,H],[L/2,0,H],[L/2,D/2,H+R],[0,D/2,H+R]],C['1T'],'#999',0.8);
-  s+=_iPoly([[L/2,D/2,H+R],[L,D/2,H+R],[L,D,H],[L/2,D,H]],C['2T'],'#aaa',0.7);
-  s+=_iPoly([[0,0,0],[L/2,0,0],[L/2,0,H],[0,0,H]],C['5T'],'#999',0.9);
-  s+=_iPoly([[0,0,0],[0,D,0],[0,D,H],[0,D/2,H+R],[0,0,H]],C['5T'],'#888',1);
+  // full building neutral
+  s+=_iPoly([[0,D/2,H+R],[L,D/2,H+R],[L,D,H],[0,D,H]],g,'#bbb',0.7);
+  s+=_iPoly([[L,0,0],[L,D,0],[L,D,H],[L,D/2,H+R],[L,0,H]],gs,'#aaa',0.7);
+  s+=_iPoly([[0,0,H],[L,0,H],[L,D/2,H+R],[0,D/2,H+R]],'#f0f0ec','#bbb',0.8);
+  s+=_iPoly([[0,0,0],[L,0,0],[L,0,H],[0,0,H]],'#f4f4f0','#bbb',0.8);
+  s+=_iPoly([[0,0,0],[0,D,0],[0,D,H],[0,D/2,H+R],[0,0,H]],gs,'#aaa',0.8);
+  // T-zones on left end (windward end with torsional offset)
+  s+=_iPoly([[0,0,H],[L/2,0,H],[L/2,D/2,H+R],[0,D/2,H+R]],C['1T'],'#888',0.9);
+  s+=_iPoly([[L/2,D/2,H+R],[L,D/2,H+R],[L,D,H],[L/2,D,H]],C['2T'],'#999',0.8);
+  s+=_iPoly([[0,0,0],[L/2,0,0],[L/2,0,H],[0,0,H]],C['5T'],'#888',0.9);
   // labels
   s+=_iCirc(L*0.25, D*0.25, H+R*0.6, '1T', C['1T']);
-  s+=_iCirc(L*0.75, D*0.75, H+R*0.5, '2T', C['2T']);
+  s+=_iCirc(L*0.75, D*0.75, H+R*0.4, '2T', C['2T']);
   s+=_iCirc(L*0.25, 0, H*0.5, '5T', C['5T']);
-  // wind arrow (from left)
-  s+=_iArrow('lc4aw',3,116,12,111);
-  s+='<text x="2" y="108" font-size="7" fill="var(--accent)" font-weight="700">Wind</text>';
-  s+='<text x="130" y="184" font-size="6" fill="#bbb" text-anchor="middle">'+
-     'ASCE 7-22 Fig. 28.3-1, LC4 — torsional (schematic)</text>';
-  s+='<text x="130" y="189" font-size="5.5" fill="#ccc" text-anchor="middle">'+
-     'Reduced uniform + T-zone offset on interior frames</text>';
+  // wind arrows
+  s+=_iArrow('a4a', 8, 188, 16, 175);
+  s+=_iArrow('a4b', 20, 185, 20, 172);
+  s+='<text x="22" y="188" font-size="6.5" fill="#333" text-anchor="start">ASSUMED WIND DIRECTIONS</text>';
+  s+='<text x="200" y="183" font-size="6" fill="#bbb" text-anchor="middle">ASCE 7-22 Fig. 28.3-1, LC4 — torsional (schematic)</text>';
+  s+='<text x="200" y="189" font-size="5.5" fill="#ccc" text-anchor="middle">Reduced uniform load + T-zone offset</text>';
   s+='</svg>';
   return s;
 }
 
-// ── C&C Combined: wall zones 4/5 + roof zones (flat or sloped) ──────────────
-// Wall: Zone 5 = corner strips within 'a' of corners; Zone 4 = interior
-// Sloped roof: Zone 3 = eave edge strips; Zone 2 = mid-slope; Zone 1 = near ridge
-// Flat/low-slope roof (θ≤7): adds Zone 1′ at far field
+// ── C&C Combined: wall zones 4/5 + roof zones ────────────────────────────────
 function svgCCCombined(r) {
-  var C=ZONE_CLR, L=110, D=38, H=52;
+  var C=ZONE_CLR, L=128, D=50, H=60;
   var aR=Math.min(0.30,Math.max(0.08,(r.a||0)/Math.max(state.minDim,1)));
-  var az=Math.max(10,Math.min(28,Math.round(aR*L)));
-  var adD=Math.max(7,Math.min(15,Math.round(aR*D)));
+  var az=Math.max(10,Math.min(26,Math.round(aR*L)));
+  var adD=Math.max(8,Math.min(16,Math.round(aR*D)));
   var isFlat=state.theta<=7;
-  var R=isFlat?2:Math.max(8,Math.min(28,Math.round(state.theta*0.7+8)));
-  var dMid=isFlat?adD:D/2*0.42;  // zone boundary within slope
+  var R=isFlat?2:Math.max(8,Math.min(30,Math.round(state.theta*0.7+8)));
+  var dMid=D/2*0.45; // boundary between Zone 2 and Zone 1 on windward slope
   var s=_iOpen();
-  // ── back faces first ──
+  // ── painter's order: back faces first ──────────────────────────────────
   if (!isFlat) {
-    // Leeward slope — Zone 2
-    s+=_iPoly([[0,D/2,H+R],[L,D/2,H+R],[L,D,H],[0,D,H]],C['2'],'#aaa',0.6);
+    // Leeward slope: Zone 2
+    s+=_iPoly([[0,D/2,H+R],[L,D/2,H+R],[L,D,H],[0,D,H]],C['2'],'#999',0.8);
   } else {
-    // Flat roof back strip — Zone 1′
-    s+=_iPoly([[0,D-adD,H],[L,D-adD,H],[L,D,H],[0,D,H]],C["1'"],'#aaa',0.6);
+    // Flat roof back strip: Zone 1'
+    s+=_iPoly([[0,D-adD,H],[L,D-adD,H],[L,D,H],[0,D,H]],C["1'"],'#999',0.8);
   }
-  // Left end wall — Zone 5 (corner) / Zone 4 (interior)
-  s+=_iPoly([[0,0,0],[0,D,0],[0,D,H],[0,D/2,H+R],[0,0,H]],C['4'],'#888',0.8);      // full = 4
-  s+=_iPoly([[0,0,0],[0,adD,0],[0,adD,H],[0,adD/2,H+R*2*adD/D],[0,0,H]],C['5'],'#888',1); // front strip = 5
-  // Windward slope or flat top — zones by distance from eave
+  // Left gable: front strip Zone 5, interior Zone 4
+  s+=_iPoly([[0,0,0],[0,D,0],[0,D,H],[0,D/2,H+R],[0,0,H]],C['4'],'#777',0.9);
+  var zR5=H+R*2*adD/D;
+  s+=_iPoly([[0,0,0],[0,adD,0],[0,adD,H],[0,adD/2,zR5],[0,0,H]],C['5'],'#777',1);
+  // Right gable: Zone 4
+  s+=_iPoly([[L,0,0],[L,D,0],[L,D,H],[L,D/2,H+R],[L,0,H]],C['4'],'#888',0.7);
+  // Windward slope / flat roof zones
   if (!isFlat) {
-    // Sloped roof: Zone 3 (eave strips), Zone 2 (middle), Zone 1 (ridge area)
-    s+=_iPoly([[0,0,H],[az,0,H],[az,dMid,H+R*2*dMid/D],[0,dMid,H+R*2*dMid/D]],C['3'],'#999',0.8);
-    s+=_iPoly([[L-az,0,H],[L,0,H],[L,dMid,H+R*2*dMid/D],[L-az,dMid,H+R*2*dMid/D]],C['3'],'#999',0.8);
-    s+=_iPoly([[az,0,H],[L-az,0,H],[L-az,dMid,H+R*2*dMid/D],[az,dMid,H+R*2*dMid/D]],C['2'],'#999',0.8);
-    s+=_iPoly([[0,dMid,H+R*2*dMid/D],[az,dMid,H+R*2*dMid/D],[az,D/2,H+R],[0,D/2,H+R]],C['3'],'#999',0.8);
-    s+=_iPoly([[L-az,dMid,H+R*2*dMid/D],[L,dMid,H+R*2*dMid/D],[L,D/2,H+R],[L-az,D/2,H+R]],C['3'],'#999',0.8);
-    s+=_iPoly([[az,dMid,H+R*2*dMid/D],[L-az,dMid,H+R*2*dMid/D],[L-az,D/2,H+R],[az,D/2,H+R]],C['1'],'#999',0.8);
+    // Zone 3 eave strips, Zone 2 lower middle, Zone 1 upper (near ridge)
+    s+=_iPoly([[0,0,H],[az,0,H],[az,dMid,H+R*2*dMid/D],[0,dMid,H+R*2*dMid/D]],C['3'],'#888',0.8);
+    s+=_iPoly([[L-az,0,H],[L,0,H],[L,dMid,H+R*2*dMid/D],[L-az,dMid,H+R*2*dMid/D]],C['3'],'#888',0.8);
+    s+=_iPoly([[az,0,H],[L-az,0,H],[L-az,dMid,H+R*2*dMid/D],[az,dMid,H+R*2*dMid/D]],C['2'],'#888',0.8);
+    s+=_iPoly([[0,dMid,H+R*2*dMid/D],[az,dMid,H+R*2*dMid/D],[az,D/2,H+R],[0,D/2,H+R]],C['3'],'#888',0.8);
+    s+=_iPoly([[L-az,dMid,H+R*2*dMid/D],[L,dMid,H+R*2*dMid/D],[L,D/2,H+R],[L-az,D/2,H+R]],C['3'],'#888',0.8);
+    s+=_iPoly([[az,dMid,H+R*2*dMid/D],[L-az,dMid,H+R*2*dMid/D],[L-az,D/2,H+R],[az,D/2,H+R]],C['1'],'#888',0.8);
   } else {
-    // Flat roof: Zone 3 (corners), Zone 2 (edge), Zone 1 (interior), Zone 1′ (far)
-    s+=_iPoly([[0,0,H],[az,0,H],[az,adD,H],[0,adD,H]],C['3'],'#999',0.8);
-    s+=_iPoly([[L-az,0,H],[L,0,H],[L,adD,H],[L-az,adD,H]],C['3'],'#999',0.8);
-    s+=_iPoly([[az,0,H],[L-az,0,H],[L-az,adD,H],[az,adD,H]],C['2'],'#999',0.8);
-    s+=_iPoly([[0,adD,H],[az,adD,H],[az,D-adD,H],[0,D-adD,H]],C['2'],'#999',0.8);
-    s+=_iPoly([[L-az,adD,H],[L,adD,H],[L,D-adD,H],[L-az,D-adD,H]],C['2'],'#999',0.8);
-    s+=_iPoly([[az,adD,H],[L-az,adD,H],[L-az,D-adD,H],[az,D-adD,H]],C['1'],'#999',0.8);
+    s+=_iPoly([[0,0,H],[az,0,H],[az,adD,H],[0,adD,H]],C['3'],'#888',0.8);
+    s+=_iPoly([[L-az,0,H],[L,0,H],[L,adD,H],[L-az,adD,H]],C['3'],'#888',0.8);
+    s+=_iPoly([[az,0,H],[L-az,0,H],[L-az,adD,H],[az,adD,H]],C['2'],'#888',0.8);
+    s+=_iPoly([[0,adD,H],[az,adD,H],[az,D-adD,H],[0,D-adD,H]],C['2'],'#888',0.8);
+    s+=_iPoly([[L-az,adD,H],[L,adD,H],[L,D-adD,H],[L-az,D-adD,H]],C['2'],'#888',0.8);
+    s+=_iPoly([[az,adD,H],[L-az,adD,H],[L-az,D-adD,H],[az,D-adD,H]],C['1'],'#888',0.8);
   }
-  // Front wall — Zone 5 (corner strips) / Zone 4 (interior)
-  s+=_iPoly([[0,0,0],[az,0,0],[az,0,H],[0,0,H]],C['5'],'#999',0.9);
-  s+=_iPoly([[az,0,0],[L-az,0,0],[L-az,0,H],[az,0,H]],C['4'],'#999',0.9);
-  s+=_iPoly([[L-az,0,0],[L,0,0],[L,0,H],[L-az,0,H]],C['5'],'#999',0.9);
-  // Right end wall — Zone 4/5
-  s+=_iPoly([[L,0,0],[L,D,0],[L,D,H],[L,D/2,H+R],[L,0,H]],C['4'],'#bbb',0.5);
-  // ── zone labels ──
-  s+=_iCirc(8,   0,  26, '5',  C['5']);  // front wall left corner
-  s+=_iCirc(55,  0,  26, '4',  C['4']);  // front wall interior
-  s+=_iCirc(0,   4,  26, '5',  C['5']);  // left end wall, near front
-  s+=_iCirc(0,   28, 20, '4',  C['4']);  // left end wall, interior
+  // Front wall: Zone 5 corners, Zone 4 interior
+  s+=_iPoly([[0,0,0],[az,0,0],[az,0,H],[0,0,H]],C['5'],'#888',0.9);
+  s+=_iPoly([[az,0,0],[L-az,0,0],[L-az,0,H],[az,0,H]],C['4'],'#888',0.9);
+  s+=_iPoly([[L-az,0,0],[L,0,0],[L,0,H],[L-az,0,H]],C['5'],'#888',0.9);
+  // Ridge line
+  s+='<line x1="'+_iP(0,D/2,H+R).split(',')[0]+'" y1="'+_iP(0,D/2,H+R).split(',')[1]+
+    '" x2="'+_iP(L,D/2,H+R).split(',')[0]+'" y2="'+_iP(L,D/2,H+R).split(',')[1]+
+    '" stroke="#555" stroke-width="1.5" stroke-dasharray="4,3"/>';
+  // ── zone labels ─────────────────────────────────────────────────────────
+  s+=_iCirc(7.5,  0,  30, '5',  C['5']);  // front wall left corner
+  s+=_iCirc(64,   0,  30, '4',  C['4']);  // front wall interior
+  s+=_iCirc(0,    5,  50, '5',  C['5']);  // left end wall front strip
+  s+=_iCirc(0,    35, 35, '4',  C['4']);  // left end wall interior
   if (!isFlat) {
-    s+=_iCirc(8,   dMid*0.5, H+R*(dMid/D), '3', C['3']); // windward slope eave strip
-    s+=_iCirc(50,  8,  62, '2', C['2']);  // windward slope middle
-    s+=_iCirc(50,  D*0.4, H+R*0.8, '1', C['1']); // windward slope near ridge
-    s+=_iCirc(65,  29, 62, '2', C['2']);  // leeward slope
+    s+=_iCirc(7.5, 8,  65, '3', C['3']); // windward slope eave strip
+    s+=_iCirc(64,  12, 68, '2', C['2']); // windward slope middle
+    s+=_iCirc(64,  D*0.42, H+R*0.88, '1', C['1']); // windward slope near ridge
+    s+=_iCirc(64,  38, 73, '2', C['2']); // leeward slope
   } else {
-    s+=_iCirc(8,   6,  H, '3',   C['3']);
-    s+=_iCirc(55,  6,  H, '2',   C['2']);
-    s+=_iCirc(55,  D*0.5, H, '1', C['1']);
-    s+=_iCirc(55,  D-6, H, "1'", C["1'"]);
+    s+=_iCirc(7.5, 6, H, '3', C['3']);
+    s+=_iCirc(64,  6, H, '2', C['2']);
+    s+=_iCirc(64, D*0.5, H, '1', C['1']);
+    s+=_iCirc(64, D-6, H, "1'", C["1'"]);
   }
-  // ── a-dimension ──
-  s+='<line x1="15" y1="174" x2="'+(15+az)+'" y2="174" stroke="#ccc" stroke-width="0.8"/>';
-  s+='<text x="'+(15+az/2)+'" y="181" font-size="6" fill="#aaa" text-anchor="middle">a</text>';
+  // a-dim
+  var ax1=12, ax2=12+az, ay=183;
+  s+='<line x1="'+ax1+'" y1="'+ay+'" x2="'+ax2+'" y2="'+ay+'" stroke="#555" stroke-width="1"/>';
+  s+='<line x1="'+ax1+'" y1="'+(ay-3)+'" x2="'+ax1+'" y2="'+(ay+3)+'" stroke="#555" stroke-width="1"/>';
+  s+='<line x1="'+ax2+'" y1="'+(ay-3)+'" x2="'+ax2+'" y2="'+(ay+3)+'" stroke="#555" stroke-width="1"/>';
+  s+='<text x="'+(ax1+ax2)/2+'" y="'+(ay-3)+'" font-size="6" fill="#555" text-anchor="middle">a</text>';
   var fig2=isFlat?'30.3-2A':'30.3-2B/2C';
-  s+='<text x="130" y="188" font-size="6" fill="#bbb" text-anchor="middle">'+
-     'ASCE 7-22 Figs. 30.3-1 &amp; '+fig2+' (schematic)</text>';
+  s+='<text x="200" y="188" font-size="5.5" fill="#bbb" text-anchor="middle">'+
+    'ASCE 7-22 Figs. 30.3-1 &amp; '+fig2+' (schematic)</text>';
   s+='</svg>';
   return s;
 }
 
 
-// ── Combined C&C table: walls (zones 4/5) + roof (zones 1'/1/2/3 or 1/2/3) ──
 function renderCCCombined(r) {
   var el = document.getElementById('ccCombinedTable');
   if (!el) return;
