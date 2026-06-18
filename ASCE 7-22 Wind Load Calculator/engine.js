@@ -3708,6 +3708,23 @@ function bindPrintButton() {
 }
 
 /* =====================================================================
+   LAZY CDN LOADER — loads xlsx / docx only when export is triggered,
+   so a slow or unavailable CDN never blocks the main calculator.
+   ===================================================================== */
+function loadScript(url) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector('script[src="' + url + '"]')) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = url;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Failed to load ' + url));
+    document.head.appendChild(s);
+  });
+}
+const CDN_XLSX = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+const CDN_DOCX = 'https://unpkg.com/docx@8.5.0/build/index.js';
+
+/* =====================================================================
    WORD (.docx) EXPORT  (docx library — loaded from unpkg CDN)
    Produces a .docx calculation package matching the print report:
    • Repeating title block in the Word Header (company, project, job ref,
@@ -3810,7 +3827,13 @@ function docxHeading(text) {
 // directly from r/state — no new calculations or citations are added.
 async function exportReportDOCX(r) {
   if (typeof docx === 'undefined') {
-    alert('Word export library failed to load (requires internet access to unpkg.com). Please check your connection and try again.');
+    try { await loadScript(CDN_DOCX); } catch(e) {
+      alert('Word export library failed to load (requires internet access to unpkg.com). Please check your connection and try again.');
+      return;
+    }
+  }
+  if (typeof docx === 'undefined') {
+    alert('Word export library failed to load. Please check your connection and try again.');
     return;
   }
   if (!r) {
@@ -4465,9 +4488,15 @@ function appendAoaSheet(wb, sheetName, title, aoa) {
 // standalone References sheets are intentionally omitted — the PDF/print
 // report carries those; Excel is for tabular data exchange only.
 // r should be lastResult (the most recent compute() output).
-function exportReportXLSX(r) {
+async function exportReportXLSX(r) {
   if (typeof XLSX === 'undefined') {
-    alert('Excel export library failed to load (requires internet access to cdnjs.cloudflare.com). Please check your connection and try again.');
+    try { await loadScript(CDN_XLSX); } catch(e) {
+      alert('Excel export library failed to load (requires internet access to cdnjs.cloudflare.com). Please check your connection and try again.');
+      return;
+    }
+  }
+  if (typeof XLSX === 'undefined') {
+    alert('Excel export library failed to load. Please check your connection and try again.');
     return;
   }
   if (!r) {
