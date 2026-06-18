@@ -3031,9 +3031,58 @@ function _iArrow(id,x1,y1,x2,y2){
     '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+
     '" stroke="#222" stroke-width="2" marker-end="url(#'+id+')"/>';
 }
-function _iOpen(){
-  return '<svg viewBox="0 0 260 190" xmlns="http://www.w3.org/2000/svg"'+
+function _iOpen(h){
+  h=h||190;
+  return '<svg viewBox="0 0 260 '+h+'" xmlns="http://www.w3.org/2000/svg"'+
     ' style="width:100%;display:block" aria-hidden="true">';
+}
+// Compact pressure table appended inside SVG below the building (y starts at yOff)
+// zones: array of {zone, p:{min,max}} or {zone, p:{min,max}} from mwfrsLC* or cc*
+function _iPressTable(zones, yOff, cols){
+  // cols: number of columns to split zones into (1 or 2)
+  cols=cols||1;
+  var u=' '+pUnit();
+  var fp=function(v){if(v==null)return '–'; return (v>=0?'+':'')+fmt(pVal(v),1);};
+  var s='';
+  // separator line
+  s+='<line x1="4" y1="'+yOff+'" x2="256" y2="'+yOff+'" stroke="#ccc" stroke-width="0.8"/>';
+  yOff+=5;
+  // column layout
+  var n=zones.length;
+  var perCol=Math.ceil(n/cols);
+  var colW=Math.floor(248/cols);
+  for(var c=0;c<cols;c++){
+    var xBase=4+c*colW;
+    // column header
+    s+='<text x="'+(xBase+1)+'" y="'+(yOff+3)+'" font-size="5.2" fill="#555"'+
+      ' font-weight="700">Zone</text>';
+    s+='<text x="'+(xBase+28)+'" y="'+(yOff+3)+'" font-size="5.2" fill="#1a5c1a"'+
+      ' font-weight="700">p⁺'+u+'</text>';
+    s+='<text x="'+(xBase+65)+'" y="'+(yOff+3)+'" font-size="5.2" fill="#8b2020"'+
+      ' font-weight="700">p⁻'+u+'</text>';
+    // header underline
+    s+='<line x1="'+xBase+'" y1="'+(yOff+5.5)+'" x2="'+(xBase+colW-4)+'" y2="'+(yOff+5.5)+
+      '" stroke="#ddd" stroke-width="0.6"/>';
+    // rows
+    var start=c*perCol;
+    var end=Math.min(start+perCol,n);
+    for(var i=start;i<end;i++){
+      var row=zones[i];
+      var ry=yOff+12+(i-start)*8;
+      var bg=i%2===0?'#f8f8f8':'#fff';
+      s+='<rect x="'+xBase+'" y="'+(ry-5.5)+'" width="'+(colW-4)+'" height="8"'+
+        ' fill="'+bg+'" rx="1"/>';
+      s+='<text x="'+(xBase+1)+'" y="'+ry+'" font-size="5.5" fill="#222">'+
+        row.zone+'</text>';
+      var pmax=row.p?row.p.max:null;
+      var pmin=row.p?row.p.min:null;
+      s+='<text x="'+(xBase+28)+'" y="'+ry+'" font-size="5.5" fill="#1a5c1a">'+
+        fp(pmax)+'</text>';
+      s+='<text x="'+(xBase+65)+'" y="'+ry+'" font-size="5.5" fill="#8b2020">'+
+        fp(pmin)+'</text>';
+    }
+  }
+  return s;
 }
 /* flat-diagram backward-compat helpers */
 function _zOpen(h){return '<svg viewBox="0 0 220 '+h+'" xmlns="http://www.w3.org/2000/svg"'+
@@ -3057,7 +3106,9 @@ function svgMWFRSLC1(r) {
   var aR=Math.min(0.28,Math.max(0.08,(r.a||0)/Math.max(state.minDim,1)));
   var az=Math.max(10,Math.min(28,Math.round(aR*L)));
   var R=Math.max(8,Math.min(30,Math.round(state.theta*0.8+8)));
-  var s=_iOpen();
+  // B2: Build zone pressure lookup
+  var zP1={}; if(r&&r.mwfrsLC1) r.mwfrsLC1.forEach(function(z){zP1[z.zone]=z.p;});
+  var s=_iOpen(240);
   // ── painter's order: back faces first ──────────────────────────────────
   // Leeward slope (Zone 3/3E): d = D/2 → D
   s+=_iPoly([[0,D/2,H+R],[az,D/2,H+R],[az,D,H],[0,D,H]],C['3E'],'#999',0.8);
@@ -3105,6 +3156,11 @@ function svgMWFRSLC1(r) {
   s+='<line x1="'+ax2+'" y1="'+(ay-3)+'" x2="'+ax2+'" y2="'+(ay+3)+'" stroke="#555" stroke-width="1"/>';
   s+='<text x="'+(ax1+ax2)/2+'" y="'+(ay-3)+'" font-size="6" fill="#555" text-anchor="middle">a</text>';
   s+='<text x="200" y="188" font-size="5.5" fill="#bbb" text-anchor="middle">ASCE 7-22 Fig. 28.3-1, LC1 (schematic)</text>';
+  // B2: pressure table
+  var lc1rows=['1','1E','2','2E','3','3E','4','4E'].map(function(z){
+    return {zone:z,p:zP1[z]||null};
+  });
+  s+=_iPressTable(lc1rows,192,2);
   s+='</svg>';
   return s;
 }
@@ -3120,7 +3176,8 @@ function svgMWFRSLC2(r) {
   var az=Math.max(10,Math.min(28,Math.round(aR*L)));   // along length
   var adD=Math.max(8,Math.min(18,Math.round(aR*D)));   // along depth
   var R=Math.max(8,Math.min(30,Math.round(state.theta*0.8+8)));
-  var s=_iOpen();
+  var zP2={}; if(r&&r.mwfrsLC2) r.mwfrsLC2.forEach(function(z){zP2[z.zone]=z.p;});
+  var s=_iOpen(250);
   // ── painter's order: back faces first ──────────────────────────────────
   // Leeward slope (Zone 2 interior — from windward end to far)
   s+=_iPoly([[0,D/2,H+R],[L,D/2,H+R],[L,D,H],[0,D,H]],C['2'],'#999',0.8);
@@ -3161,6 +3218,10 @@ function svgMWFRSLC2(r) {
   s+=_iArrow('a2b', 20, 185, 20, 172);
   s+='<text x="22" y="188" font-size="6.5" fill="#333" text-anchor="start">ASSUMED WIND DIRECTIONS</text>';
   s+='<text x="200" y="188" font-size="5.5" fill="#bbb" text-anchor="middle">ASCE 7-22 Fig. 28.3-1, LC2 (schematic)</text>';
+  var lc2rows=['1','1E','2','2E','3','3E','4','4E','5','5E','6','6E'].map(function(z){
+    return {zone:z,p:zP2[z]||null};
+  });
+  s+=_iPressTable(lc2rows,192,3);
   s+='</svg>';
   return s;
 }
@@ -3235,7 +3296,9 @@ function svgCCCombined(r) {
   var isFlat=state.theta<=7;
   var R=isFlat?2:Math.max(8,Math.min(30,Math.round(state.theta*0.7+8)));
   var dMid=D/2*0.45; // boundary between Zone 2 and Zone 1 on windward slope
-  var s=_iOpen();
+  var zPW={}; if(r&&r.ccWall) r.ccWall.forEach(function(z){zPW[z.zone]=z.p;});
+  var zPR={}; if(r&&r.ccRoof) r.ccRoof.forEach(function(z){zPR[z.zone]=z.p;});
+  var s=_iOpen(240);
   // ── painter's order: back faces first ──────────────────────────────────
   if (!isFlat) {
     // Leeward slope: Zone 2
@@ -3300,6 +3363,14 @@ function svgCCCombined(r) {
   var fig2=isFlat?'30.3-2A':'30.3-2B/2C';
   s+='<text x="200" y="188" font-size="5.5" fill="#bbb" text-anchor="middle">'+
     'ASCE 7-22 Figs. 30.3-1 &amp; '+fig2+' (schematic)</text>';
+  // B2: CC pressure table — walls then roof
+  var ccRows=[
+    {zone:'4',p:zPW['4']||null},{zone:'5',p:zPW['5']||null},
+    {zone:'1',p:zPR['1']||null},{zone:'2',p:zPR['2']||null},
+    {zone:'3',p:zPR['3']||null}
+  ];
+  if(zPR["1'"]){ccRows.splice(2,0,{zone:"1'",p:zPR["1'"]});}
+  s+=_iPressTable(ccRows,192,2);
   s+='</svg>';
   return s;
 }
