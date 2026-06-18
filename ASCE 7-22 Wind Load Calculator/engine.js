@@ -155,6 +155,32 @@ const GCP_ROOF_P2_FLAT = {
   '3': { neg: { lo: -2.8, hi: -1.1 }, pos: { lo: 0.3, hi: 0.3 } }
 };
 
+// ── Ch.27 / Fig. 27.3-1 — Sloped Roof Cp, Wind Normal to Ridge (θ ≥ 10°) ──────────────────────────
+// Source: ASCE 7-22 Fig. 27.3-1, p.284, read from PDF image (ASCESEI 7-22 PDF, page idx 344).
+// Two Cp values per cell — both cases shall be designed for per Fig. 27.3-1 Note 3.
+//   cp1 = more-negative / less-positive value (primary suction / transitional)
+//   cp2 = less-negative / more-positive value (reattachment / positive pressure check)
+// θ breakpoints: [10,15,20,25,30,35,45]°; linear interpolation permitted (Note 1).
+// h/L breakpoints: [0.25, 0.5, 1.0]; clamp hL to [0.25,1.0]; linear interpolation.
+// For θ > 45°: Cp = 0.01θ (h/L-independent, single positive value), capped at 0.8 for θ > 80°.
+// Leeward slope (all h/L): 10°→−0.3, 15°→−0.5, ≥20°→−0.6; interpolate for intermediate θ.
+const CP_ROOF_NTR = {
+  thetas: [10, 15, 20, 25, 30, 35, 45],
+  hLs:    [0.25, 0.5, 1.0],
+  // cp1[hL idx][θ idx] — more-negative / less-positive
+  cp1: [
+    [-0.7,  -0.5,  -0.3,  -0.2,  -0.2,  0.3,  0.4],   // h/L ≤ 0.25  (0.3ᵃ = interpolation anchor)
+    [-0.9,  -0.7,  -0.4,  -0.3,  -0.2, -0.2,  0.0],   // h/L = 0.5   (0.0ᵃ = interpolation anchor)
+    [-1.3,  -1.0,  -0.7,  -0.5,  -0.3, -0.2,  0.0],   // h/L ≥ 1.0   (−1.3ᵃ, 0.0ᵃ = anchors)
+  ],
+  // cp2[hL idx][θ idx] — less-negative / more-positive (Note 3 dual-case)
+  cp2: [
+    [-0.18,  0.0,  0.2,  0.3,  0.3,  0.4,  0.4],      // h/L ≤ 0.25  (0.0ᵃ = interpolation anchor)
+    [-0.18, -0.18, 0.0,  0.2,  0.2,  0.3,  0.4],      // h/L = 0.5   (0.0ᵃ = interpolation anchor)
+    [-0.18, -0.18, -0.18, 0.0,  0.2,  0.2,  0.3],     // h/L ≥ 1.0   (0.0ᵃ = interpolation anchor)
+  ]
+};
+
 // Figure 30.3-2A, Roof (theta <= 7 deg) — GCp vs effective wind area A (sf), log-linear A=10..500
 const GCP_ROOF_LE7 = {
   Alo: 10, Ahi: 500,
@@ -852,6 +878,48 @@ function cpLeewardWall(LB) {
 // Fig. 27.3-1: Roof C_p zones for flat / low-slope (θ ≤ 10°), wind normal to ridge.
 // Three zones measured from the windward edge (in multiples of h):
 //   Zone A: 0 to h    Zone B: h to 2h    Zone C: > 2h
+// Windward slope Cp — bilinear interpolation in θ and h/L from CP_ROOF_NTR table.
+// For θ > 45°: returns { cp1: 0.01θ (capped 0.8 for θ>80°), cp2: null }.
+// hL is clamped to [0.25, 1.0] (no extrapolation beyond table).
+// Returns { cp1, cp2 } — both values must be checked per Fig. 27.3-1 Note 3.
+function cpRoofNtrWindward(theta, hL) {
+  if (theta > 80) return { cp1: 0.8, cp2: null };
+  if (theta > 45) return { cp1: 0.01 * theta, cp2: null };
+
+  const tbl   = CP_ROOF_NTR;
+  const ths   = tbl.thetas;
+  const hLc   = Math.min(Math.max(hL, 0.25), 1.0);
+  const thetaC = Math.min(Math.max(theta, 10), 45);
+
+  // θ index + weight
+  let iT = ths.length - 2, tT = 1;
+  for (let i = 0; i < ths.length - 1; i++) {
+    if (thetaC <= ths[i + 1]) { iT = i; tT = (thetaC - ths[i]) / (ths[i + 1] - ths[i]); break; }
+  }
+
+  // h/L index + weight
+  let iH, tH;
+  if (hLc <= 0.5) { iH = 0; tH = (hLc - 0.25) / 0.25; }
+  else            { iH = 1; tH = (hLc - 0.5)  / 0.5;  }
+
+  const lerp = (a, b, t) => a + t * (b - a);
+  const bilin = (arr) =>
+    lerp(lerp(arr[iH][iT], arr[iH][iT + 1], tT),
+         lerp(arr[iH + 1][iT], arr[iH + 1][iT + 1], tT), tH);
+
+  return { cp1: bilin(tbl.cp1), cp2: bilin(tbl.cp2) };
+}
+
+// Leeward slope Cp (Wind Normal to Ridge) — θ-dependent only (all h/L same).
+// Source: ASCE 7-22 Fig. 27.3-1, Leeward column, p.284.
+// 10°→−0.3, 15°→−0.5, ≥20°→−0.6; linear interpolation for intermediate θ.
+function cpRoofNtrLeeward(theta) {
+  if (theta <= 10) return -0.3;
+  if (theta >= 20) return -0.6;
+  if (theta <= 15) return -0.3 + (-0.5 - -0.3) * (theta - 10) / 5;
+  return -0.5 + (-0.6 - -0.5) * (theta - 15) / 5;
+}
+
 // Two C_p values per zone per Fig. 27.3-1 Note 3 (wind reattachment on large roofs).
 // Cp1 is the more negative (primary suction) value; Cp2 = −0.18 (always, per Note 3).
 // Cp1 linearly interpolated between h/L = 0.5 (−0.9/−0.5/−0.3) and h/L ≥ 1.0 (−1.3/−0.7/−0.7).
@@ -930,34 +998,58 @@ function computeCh27(s) {
   const pSW_lc1 = qh * G * CP_SW - qh * gcpi; // governing suction, side walls
   const pSW_lc2 = qh * G * CP_SW + qh * gcpi;
 
-  // ── Roof zones (flat/low-slope only, θ ≤ 10°) ──
-  // q = qh, qi = qh (Sec. 27.3.1). Two Cp values per zone per Fig. 27.3-1 Note 3.
-  // Both Cp1 and Cp2 shall be used in design (governing condition per load combination).
+  // ── Roof pressures ──────────────────────────────────────────────────────────────────────────────
+  // All roof Cp values use q = qh, qi = qh (Sec. 27.3.1, Eq. 27.3-1).
+  // Both Cp values per cell must be checked per Fig. 27.3-1 Note 3.
+  // Pressure equation: p = qh·G·Cp − qh·(±GCpi)
+  //   LC1 (+GCpi): p = qh·G·Cp − qh·GCpi  (max suction when Cp is negative)
+  //   LC2 (−GCpi): p = qh·G·Cp + qh·GCpi  (max pressure when Cp is positive)
+
+  const p = (cp, lc) => qh * G * cp + (lc === 2 ? 1 : -1) * qh * gcpi;
+
+  // ── Flat / Wind Parallel to Ridge (θ ≤ 10°: Normal to Ridge; all θ: Parallel to Ridge) ──────
+  // Zone-based approach: Cp from Fig. 27.3-1 (lower-left table), horizontal distance zones.
+  // Used for:  (a) θ ≤ 10° (only roof case), (b) θ > 10° Wind Parallel to Ridge direction.
+  const roofZonesPTR = roofZonesCp(hL).map(zone => ({
+    ...zone,
+    p1_lc1: p(zone.cp1, 1), p1_lc2: p(zone.cp1, 2),
+    p2_lc1: p(zone.cp2, 1), p2_lc2: p(zone.cp2, 2)
+  }));
   const roofApplicable = s.theta <= 10;
-  let roofZones = null;
-  if (roofApplicable) {
-    roofZones = roofZonesCp(hL).map(zone => {
-      // Cp1 (primary suction): governing is +GCpi (internal adds to suction)
-      const p1_lc1 = qh * G * zone.cp1 - qh * gcpi;  // governing suction from Cp1
-      const p1_lc2 = qh * G * zone.cp1 + qh * gcpi;  // alternate
-      // Cp2 = −0.18 (near-zero/positive net): check with −GCpi for potential outward pressure
-      const p2_lc1 = qh * G * zone.cp2 - qh * gcpi;  // more suction
-      const p2_lc2 = qh * G * zone.cp2 + qh * gcpi;  // potential positive (governs uplift check from below)
-      return { ...zone, p1_lc1, p1_lc2, p2_lc1, p2_lc2 };
-    });
+  const roofZones      = roofApplicable ? roofZonesPTR : null;
+
+  // ── Sloped Roof, Wind Normal to Ridge (θ > 10°) — Fig. 27.3-1 upper table ─────────────────────
+  // Windward slope: bilinear Cp from CP_ROOF_NTR; both cp1 + cp2 per Note 3.
+  // Leeward slope:  single Cp from cpRoofNtrLeeward(), varies with θ only.
+  let roofNTR = null;
+  if (s.theta > 10) {
+    const wwCp  = cpRoofNtrWindward(s.theta, hL);
+    const lwCp  = cpRoofNtrLeeward(s.theta);
+    // Windward slope pressure cases
+    const ww_p1_lc1 = p(wwCp.cp1, 1);                               // governing suction (Cp1 + +GCpi)
+    const ww_p1_lc2 = p(wwCp.cp1, 2);                               // alternate LC2
+    const ww_p2_lc1 = wwCp.cp2 !== null ? p(wwCp.cp2, 1) : null;   // Cp2 + +GCpi
+    const ww_p2_lc2 = wwCp.cp2 !== null ? p(wwCp.cp2, 2) : null;   // governing pressure (Cp2 + −GCpi)
+    // Leeward slope
+    const lw_lc1 = p(lwCp, 1);   // governing suction
+    const lw_lc2 = p(lwCp, 2);   // alternate
+    roofNTR = {
+      theta: s.theta, hL,
+      ww: { cp1: wwCp.cp1, cp2: wwCp.cp2, p1_lc1: ww_p1_lc1, p1_lc2: ww_p1_lc2, p2_lc1: ww_p2_lc1, p2_lc2: ww_p2_lc2 },
+      lw: { cp: lwCp, lc1: lw_lc1, lc2: lw_lc2 }
+    };
   }
 
   // ── Minimum design wind loads (Sec. 27.1.5) ──
-  // Walls ≥ 16 psf, roof ≥ 8 psf, net pressure in any horizontal direction.
   const PSF_MIN_WALL = 16.0, PSF_MIN_ROOF = 8.0;
-  const wwAtH = wwProfile[wwProfile.length - 1];
-  const wwAtHGovern = Math.max(wwAtH.pLC1, wwAtH.pLC2);  // governing windward at h
-  // Combined windward + leeward for minimum check: Sec. 27.1.5 applies to the net horizontal load
-  // Conservative check: max(|p_ww at h|, |p_lw|) vs 16 psf
+  const wwAtH       = wwProfile[wwProfile.length - 1];
+  const wwAtHGovern = Math.max(wwAtH.pLC1, wwAtH.pLC2);
   const wallMinGoverns = wwAtHGovern < PSF_MIN_WALL || Math.abs(pLW_lc1) < PSF_MIN_WALL;
   const roofMinGoverns = roofZones
     ? roofZones.some(z => Math.abs(z.p1_lc1) < PSF_MIN_ROOF)
-    : false;
+    : roofNTR
+      ? (Math.abs(roofNTR.ww.p1_lc1) < PSF_MIN_ROOF || Math.abs(roofNTR.lw.lc1) < PSF_MIN_ROOF)
+      : false;
 
   return {
     procedure: 'directional', G, KD, ke, qh, gcpi,
@@ -965,7 +1057,7 @@ function computeCh27(s) {
     CP_WW, CP_LW, CP_SW,
     wwProfile,
     pLW_lc1, pLW_lc2, pSW_lc1, pSW_lc2,
-    roofApplicable, roofZones,
+    roofApplicable, roofZones, roofNTR, roofZonesPTR,
     wallMinGoverns, roofMinGoverns,
     PSF_MIN_WALL, PSF_MIN_ROOF
   };
@@ -1868,6 +1960,7 @@ function reportCh27HTML(r) {
 
   // ── Flat/low-slope roof zones ──
   if (c.roofApplicable && c.roofZones) {
+    // ── Flat/low-slope: θ ≤ 10° — Wind Normal to Ridge ──────────────────────────────────────────
     html += '<h3>Roof &mdash; Flat/Low-slope (&theta; &le; 10&deg;), Wind Normal to Ridge'
           + ' <span class="ref">Fig. 27.3-1; q = q<sub>h</sub></span></h3>';
     html += '<p class="muted" style="margin-bottom:6px;">'
@@ -1888,11 +1981,67 @@ function reportCh27HTML(r) {
     html += '<p class="muted" style="font-size:.8rem; margin-top:6px;">'
           + 'p(C<sub>p2</sub>, LC2) = q<sub>h</sub>(G&sdot;C<sub>p2</sub> + GC<sub>pi</sub>) may be positive (downward pressure). '
           + 'All four combinations [C<sub>p1</sub>/C<sub>p2</sub>] &times; [&plusmn;GC<sub>pi</sub>] must be checked per Fig. 27.3-1 Note 3.</p>';
-  } else if (!c.roofApplicable) {
-    html += '<div class="alert warn" style="margin-top:12px;">'
-          + 'Sloped roof C<sub>p</sub> (&theta; &gt; 10&deg;) from Fig. 27.3-1 is not yet implemented. '
-          + 'Verify roof pressures directly from ASCE 7-22 Fig. 27.3-1 for sloped roofs.'
-          + '</div>';
+  } else if (c.roofNTR) {
+    // ── Sloped roof: θ > 10° — Wind Normal to Ridge ──────────────────────────────────────────────
+    const ntr = c.roofNTR;
+    html += '<h3>Roof &mdash; Sloped (&theta; = ' + fmt(s.theta, 1) + '&deg;) &mdash; Wind Normal to Ridge'
+          + ' <span class="ref">Fig. 27.3-1, p.284; q = q<sub>h</sub></span></h3>';
+    html += '<p class="muted" style="margin-bottom:6px;">'
+          + 'Eq. 27.3-1: p = q<sub>h</sub>&sdot;G&sdot;C<sub>p</sub> &minus; q<sub>h</sub>&sdot;(GC<sub>pi</sub>). '
+          + 'Both C<sub>p</sub> values per Note 3 must be checked; h/L = ' + fmt(ntr.hL, 2) + '. '
+          + 'Interpolated from Fig. 27.3-1 table (ASCE 7-22 p.284).</p>';
+
+    // Windward slope
+    html += '<table class="report-input-table"><thead><tr>'
+          + '<th>Slope</th>'
+          + '<th>C<sub>p1</sub></th>'
+          + '<th>p(C<sub>p1</sub>, LC1) (' + pu + ')</th>'
+          + '<th>p(C<sub>p1</sub>, LC2) (' + pu + ')</th>'
+          + (ntr.ww.cp2 !== null
+            ? '<th>C<sub>p2</sub></th><th>p(C<sub>p2</sub>, LC1) (' + pu + ')</th><th>p(C<sub>p2</sub>, LC2) (' + pu + ')</th>'
+            : '')
+          + '</tr></thead><tbody>';
+
+    const wwCols = ntr.ww.cp2 !== null
+      ? '<td>' + fmt(ntr.ww.cp2, 3) + '</td>'
+        + '<td>' + pf(ntr.ww.p2_lc1) + '</td>'
+        + '<td>' + pf(ntr.ww.p2_lc2) + '</td>'
+      : '';
+    html += '<tr><td>Windward slope &#x2191;</td>'
+          + '<td>' + fmt(ntr.ww.cp1, 3) + '</td>'
+          + '<td>' + pf(ntr.ww.p1_lc1) + '</td>'
+          + '<td>' + pf(ntr.ww.p1_lc2) + '</td>'
+          + wwCols + '</tr>';
+    html += '<tr><td>Leeward slope &#x2193;</td>'
+          + '<td>' + fmt(ntr.lw.cp, 3) + '</td>'
+          + '<td>' + pf(ntr.lw.lc1) + '</td>'
+          + '<td>' + pf(ntr.lw.lc2) + '</td>'
+          + (ntr.ww.cp2 !== null ? '<td colspan="3" class="muted">—</td>' : '')
+          + '</tr>';
+    html += '</tbody></table>';
+    html += '<p class="muted" style="font-size:.8rem; margin-top:6px;">'
+          + 'LC1 = +GC<sub>pi</sub> (max suction / min pressure); '
+          + 'LC2 = &minus;GC<sub>pi</sub> (min suction / max pressure). '
+          + 'Governing leeward suction: LC1 (most negative). '
+          + 'Windward slope: check all four combinations per Note 3.</p>';
+
+    // Wind Parallel to Ridge (zone-based, same as flat roof formula)
+    html += '<h3>Roof &mdash; Sloped (&theta; = ' + fmt(s.theta, 1) + '&deg;) &mdash; Wind Parallel to Ridge'
+          + ' <span class="ref">Fig. 27.3-1, p.284; q = q<sub>h</sub></span></h3>';
+    html += '<p class="muted" style="margin-bottom:6px;">'
+          + 'For wind parallel to ridge (all &theta;): use horizontal-distance zones same as flat roof (Fig. 27.3-1 Note 8). '
+          + 'Zones measured from windward edge; h = ' + fmt(s.h, 0) + ' ft, h/L = ' + fmt(ntr.hL, 2) + '.</p>';
+    html += '<table class="report-input-table"><thead><tr>'
+          + '<th>Zone (from WW edge)</th>'
+          + '<th>C<sub>p1</sub></th><th>p(C<sub>p1</sub>, LC1) (' + pu + ')</th>'
+          + '<th>C<sub>p2</sub></th><th>p(C<sub>p2</sub>, LC2) (' + pu + ')</th>'
+          + '</tr></thead><tbody>';
+    c.roofZonesPTR.forEach(z => {
+      html += '<tr><td>' + z.label + '</td>'
+            + '<td>' + fmt(z.cp1, 2) + '</td><td>' + pf(z.p1_lc1) + '</td>'
+            + '<td>' + fmt(z.cp2, 2) + '</td><td>' + pf(z.p2_lc2) + '</td></tr>';
+    });
+    html += '</tbody></table>';
   }
 
   // ── Minimum pressure note ──
@@ -3928,7 +4077,6 @@ function init() {
   const topoLhEl = document.getElementById('topoLh');
   if (topoLhEl) topoLhEl.value = state.topoLh;
   const topoXEl2 = document.getElementById('topoX');
-  if (topoXEl2) topoXEl2.value = state.topoX;
   document.getElementById('groundElev').value = state.groundElev;
   document.getElementById('h').value = state.h;
   document.getElementById('minDim').value = state.minDim;
