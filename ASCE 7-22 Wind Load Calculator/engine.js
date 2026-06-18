@@ -834,8 +834,9 @@ function computeCC30Part2(s) {
     };
   });
 
-  // Flat/low-slope roof (θ ≤ 10°) — all qh
-  const roofApplicable = s.theta <= 10;
+  // Flat/low-slope roof (θ ≤ 7°) — Fig. 30.4-1 direct.
+  // Source: Fig. 30.4-1 Note 6: "Coefficients are for roofs with angle θ ≤ 7°."
+  const roofApplicable = s.theta <= 7;
   const roofZones = roofApplicable
     ? ['1', '2', '3'].map(zn => {
         const gc = gcpRoofP2(zn, Ar);
@@ -847,6 +848,24 @@ function computeCC30Part2(s) {
       })
     : null;
 
+  // Sloped roof (θ > 7°) — Fig. 30.4-1 Note 6: use GCp from Part 1 figures with attendant qh.
+  // "For other roof angles and geometry, use (GCp) values from Fig. 30.3-2A–2I and
+  //  Fig. 30.3-5A, 5B and attendant qh based on exposure defined in Section 26.7."
+  // Reuses gcpRoofSloped() (gable: Figs. 30.3-2B/2C; hip: Figs. 30.3-2D-G equiv.).
+  // Both +GCp and −GCp use qh (not qz) — "attendant qh" means qh throughout for roofs.
+  const roofSlopedP2 = !roofApplicable
+    ? { shape: s.roofShape, theta: s.theta,
+        zones: ['1', '2', '3'].map(zn => {
+          const gc = gcpRoofSloped(zn, Ar, s.theta, s.roofShape);
+          return {
+            zone: zn, gcp: gc, capped: gc.capped,
+            pMax: qh * KD * gc.pos + qh * KD * gcpiVal,
+            pMin: qh * KD * gc.neg - qh * KD * gcpiVal
+          };
+        })
+      }
+    : null;
+
   const PSF_MIN_WALL = 16.0;
   const topRow = wwProfile[wwProfile.length - 1];
   const wallMinGoverns = Math.abs(topRow.z4_pmin) < PSF_MIN_WALL ||
@@ -854,7 +873,7 @@ function computeCC30Part2(s) {
 
   return {
     procedure: 'ch30part2', KD, ke, qh, gcpiVal, kh, Aw, Ar,
-    gc4, gc5, wwProfile, roofApplicable, roofZones, wallMinGoverns, PSF_MIN_WALL
+    gc4, gc5, wwProfile, roofApplicable, roofZones, roofSlopedP2, wallMinGoverns, PSF_MIN_WALL
   };
 }
 
@@ -2151,8 +2170,33 @@ function reportCC30P2HTML(r) {
         '<td class="val-neg">' + fmt2(z.pMin) + '</td></tr>';
     }
     html += '</tbody></table>';
-  } else if (!c.roofApplicable) {
-    html += '<div class="alert warn" style="margin-top:10px;">Sloped roof (&theta; &gt; 10&deg;): Ch.30 Part 2 sloped-roof C&amp;C (Fig. 30.4-1) is not yet implemented. Use the Standard directly for roof C&amp;C when &theta; &gt; 10&deg;.</div>';
+  } else if (c.roofSlopedP2) {
+    const rs = c.roofSlopedP2;
+    const isCapped = rs.zones.some(z => z.capped);
+    const figRef  = rs.shape === 'hip' ? 'Figs. 30.3-2D&ndash;G equiv.' : 'Figs. 30.3-2B/2C';
+    const capMsg  = rs.shape === 'hip'
+      ? 'Roof angle &theta; &gt; 45&deg;: Figs. 30.3-2D&ndash;G (hip) do not extend past &theta; = 45&deg;. The &theta; = 45&deg; coefficients are used as a capped approximation &mdash; verify against the Standard.'
+      : 'Roof angle &theta; &gt; 27&deg;: Figs. 30.3-2B/2C (gable) do not extend past &theta; = 27&deg;. The &theta; = 20&deg;&ndash;27&deg; (Fig. 30.3-2C) coefficients are used as a capped approximation &mdash; verify against the Standard.';
+    html += '<h3>Roof C&amp;C &mdash; Zones 1, 2, 3 (&theta; &gt; 7&deg;) <span class="ref">' + figRef + ', per Fig. 30.4-1 Note 6</span></h3>';
+    html += '<p class="muted" style="margin:0 0 8px;">' +
+      'Fig. 30.4-1 Note 6: for &theta; &gt; 7&deg;, use GC<sub>p</sub> from Part 1 figures (Fig. 30.3-2A&ndash;I) with attendant q<sub>h</sub>. ' +
+      'p<sub>max</sub> = q<sub>h</sub>&middot;K<sub>d</sub>&middot;(+GC<sub>p</sub>) + q<sub>h</sub>&middot;K<sub>d</sub>&middot;GC<sub>pi</sub> &nbsp;|&nbsp; ' +
+      'p<sub>min</sub> = q<sub>h</sub>&middot;K<sub>d</sub>&middot;(GC<sub>p</sub><sup>&minus;</sup>) &minus; q<sub>h</sub>&middot;K<sub>d</sub>&middot;GC<sub>pi</sub></p>';
+    if (isCapped) {
+      html += '<div class="alert warn">' + capMsg + '</div>';
+    }
+    html += '<table class="report-table"><thead><tr>' +
+      '<th>Zone</th><th>(GC<sub>p</sub>)<sup>+</sup></th><th>(GC<sub>p</sub>)<sup>&minus;</sup></th>' +
+      '<th>p<sub>max</sub> (' + pU + ')</th><th>p<sub>min</sub> (' + pU + ')</th>' +
+      '</tr></thead><tbody>';
+    for (const z of rs.zones) {
+      html += '<tr><td>' + z.zone + '</td>' +
+        '<td class="val-pos">+' + fmt(z.gcp.pos, 2) + '</td>' +
+        '<td class="val-neg">' + fmt(z.gcp.neg, 2) + '</td>' +
+        '<td class="val-pos">' + fmt2(z.pMax) + '</td>' +
+        '<td class="val-neg">' + fmt2(z.pMin) + '</td></tr>';
+    }
+    html += '</tbody></table>';
   }
 
   // Minimum load warning
@@ -4186,7 +4230,6 @@ document.addEventListener('DOMContentLoaded', init);
       state.roofShape = roofShapeSel.value;
     }
     const hasOverhangEl = document.getElementById('hasOverhang');
-    if (hasOverhangEl) hasOverhangEl.checked = !!state.hasOverhang;
     const hasParapetEl = document.getElementById('hasParapet');
     if (hasParapetEl) hasParapetEl.checked = !!state.hasParapet;
     const parapetHeightEl = document.getElementById('parapetHeight');
