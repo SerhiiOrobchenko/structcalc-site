@@ -3232,7 +3232,8 @@ function svgMWFRSLC3(r) {
   var C=ZONE_CLR, L=128, D=50, H=60;
   var R=Math.max(8,Math.min(30,Math.round(state.theta*0.8+8)));
   var g='#ebebea', gs='#ddd';
-  var s=_iOpen();
+  var zP3={}; if(r&&r.mwfrsLC3) r.mwfrsLC3.forEach(function(z){zP3[z.zone]=z.p;});
+  var s=_iOpen(230);
   // full building neutral
   s+=_iPoly([[0,D/2,H+R],[L,D/2,H+R],[L,D,H],[0,D,H]],g,'#bbb',0.7);
   s+=_iPoly([[0,0,0],[0,D,0],[0,D,H],[0,D/2,H+R],[0,0,H]],gs,'#aaa',0.8);
@@ -3244,15 +3245,23 @@ function svgMWFRSLC3(r) {
   s+=_iPoly([[0,D/2,H+R],[L/2,D/2,H+R],[L/2,D,H],[0,D,H]],C['2T'],'#999',0.8);
   s+=_iPoly([[L/2,0,0],[L,0,0],[L,0,H],[L/2,0,H]],C['3T'],'#888',0.9);
   // labels
+  // Zone 4T — right end wall (torsional end zone)
+  s+=_iPoly([[L,0,0],[L,D,0],[L,D,H],[L,D/2,H+R],[L,0,H]],C['4T'],'#888',0.9);
   s+=_iCirc(L*0.75, D*0.25, H+R*0.6, '1T', C['1T']);
   s+=_iCirc(L*0.25, D*0.75, H+R*0.4, '2T', C['2T']);
   s+=_iCirc(L*0.75, 0, H*0.5, '3T', C['3T']);
+  s+=_iCirc(L, D*0.5, H*0.5, '4T', C['4T']);
   // wind arrows
   s+=_iArrow('a3a', 76, 188, 76, 175);
   s+=_iArrow('a3b', 60, 188, 68, 177);
   s+='<text x="65" y="188" font-size="6.5" fill="#333" text-anchor="middle">ASSUMED WIND DIRECTIONS</text>';
   s+='<text x="200" y="183" font-size="6" fill="#bbb" text-anchor="middle">ASCE 7-22 Fig. 28.3-1, LC3 — torsional (schematic)</text>';
   s+='<text x="200" y="189" font-size="5.5" fill="#ccc" text-anchor="middle">Reduced uniform load + T-zone offset</text>';
+  // B2: pressure table for LC3 T-zones
+  var lc3rows=['1T','2T','3T','4T'].map(function(z){
+    return {zone:z,p:zP3[z]||null};
+  });
+  s+=_iPressTable(lc3rows,192,2);
   s+='</svg>';
   return s;
 }
@@ -3262,7 +3271,8 @@ function svgMWFRSLC4(r) {
   var C=ZONE_CLR, L=128, D=50, H=60;
   var R=Math.max(8,Math.min(30,Math.round(state.theta*0.8+8)));
   var g='#ebebea', gs='#ddd';
-  var s=_iOpen();
+  var zP4={}; if(r&&r.mwfrsLC4) r.mwfrsLC4.forEach(function(z){zP4[z.zone]=z.p;});
+  var s=_iOpen(230);
   // full building neutral
   s+=_iPoly([[0,D/2,H+R],[L,D/2,H+R],[L,D,H],[0,D,H]],g,'#bbb',0.7);
   s+=_iPoly([[L,0,0],[L,D,0],[L,D,H],[L,D/2,H+R],[L,0,H]],gs,'#aaa',0.7);
@@ -3270,19 +3280,25 @@ function svgMWFRSLC4(r) {
   s+=_iPoly([[0,0,0],[L,0,0],[L,0,H],[0,0,H]],'#f4f4f0','#bbb',0.8);
   s+=_iPoly([[0,0,0],[0,D,0],[0,D,H],[0,D/2,H+R],[0,0,H]],gs,'#aaa',0.8);
   // T-zones on left end (windward end with torsional offset)
-  s+=_iPoly([[0,0,H],[L/2,0,H],[L/2,D/2,H+R],[0,D/2,H+R]],C['1T'],'#888',0.9);
-  s+=_iPoly([[L/2,D/2,H+R],[L,D/2,H+R],[L,D,H],[L/2,D,H]],C['2T'],'#999',0.8);
+  // LC4 T-zones: 5T = windward half, 6T = leeward half (Fig. 28.3-2)
+  s+=_iPoly([[0,0,H],[L/2,0,H],[L/2,D/2,H+R],[0,D/2,H+R]],C['5T'],'#888',0.9);
+  s+=_iPoly([[L/2,D/2,H+R],[L,D/2,H+R],[L,D,H],[L/2,D,H]],C['6T'],'#999',0.8);
   s+=_iPoly([[0,0,0],[L/2,0,0],[L/2,0,H],[0,0,H]],C['5T'],'#888',0.9);
+  s+=_iPoly([[L/2,0,0],[L,0,0],[L,0,H],[L/2,0,H]],C['6T'],'#999',0.8);
   // labels
-  s+=_iCirc(L*0.25, D*0.25, H+R*0.6, '1T', C['1T']);
-  s+=_iCirc(L*0.75, D*0.75, H+R*0.4, '2T', C['2T']);
-  s+=_iCirc(L*0.25, 0, H*0.5, '5T', C['5T']);
+  s+=_iCirc(L*0.25, D*0.25, H+R*0.6, '5T', C['5T']);
+  s+=_iCirc(L*0.75, D*0.75, H+R*0.4, '6T', C['6T']);
   // wind arrows
   s+=_iArrow('a4a', 8, 188, 16, 175);
   s+=_iArrow('a4b', 20, 185, 20, 172);
   s+='<text x="22" y="188" font-size="6.5" fill="#333" text-anchor="start">ASSUMED WIND DIRECTIONS</text>';
   s+='<text x="200" y="183" font-size="6" fill="#bbb" text-anchor="middle">ASCE 7-22 Fig. 28.3-1, LC4 — torsional (schematic)</text>';
   s+='<text x="200" y="189" font-size="5.5" fill="#ccc" text-anchor="middle">Reduced uniform load + T-zone offset</text>';
+  // B2: pressure table for LC4 T-zones
+  var lc4rows=['5T','6T'].map(function(z){
+    return {zone:z,p:zP4[z]||null};
+  });
+  s+=_iPressTable(lc4rows,192,1);
   s+='</svg>';
   return s;
 }
