@@ -1729,17 +1729,25 @@ function renderResults() {
   zoneTable('mwfrsLC3Table', r.mwfrsLC3, false);
   zoneTable('mwfrsLC4Table', r.mwfrsLC4, false);
 
-  // C&C procedure toggle: Part 1 (h ≤ 60 ft) vs Part 2 (h > 60 ft)
+  // C&C procedure: auto-selected from h (Sec. 30.3.1 / 30.4.1)
+  // h ≤ 60 ft → Part 1 (Fig. 30.3-1); h > 60 ft → Part 2 (Fig. 30.4-1)
+  state.ccProcedure = state.h > 60 ? 'part2' : 'part1';
   const ccP1Div    = document.getElementById('cc30Part1Results');
   const ccP2Div    = document.getElementById('cc30Part2Results');
   const cc30P1Warn = document.getElementById('cc30Part1Warning');
-  const ccProcSeg  = document.getElementById('ccProcedureSeg');
   const isPart2    = state.ccProcedure === 'part2';
   if (ccP1Div)   ccP1Div.style.display   = isPart2 ? 'none' : '';
   if (ccP2Div)   ccP2Div.style.display   = isPart2 ? '' : 'none';
-  if (cc30P1Warn) {
-    const tooTall = state.h > 60;
-    cc30P1Warn.style.display = (!isPart2 && tooTall) ? '' : 'none';
+  if (cc30P1Warn) cc30P1Warn.style.display = 'none';
+  // Auto-selection info banner
+  const ccAutoInfo = document.getElementById('ccAutoInfo');
+  if (ccAutoInfo) {
+    const hDisp = fmt(state.unitSystem === 'SI' ? state.h * 0.3048 : state.h, 1) +
+                  (state.unitSystem === 'SI' ? ' m' : ' ft');
+    ccAutoInfo.innerHTML = isPart2
+      ? '<strong>Ch.30 Part 2 auto-selected</strong> &mdash; h = ' + hDisp + ' &gt; 60 ft (Sec. 30.4.1)'
+      : '<strong>Ch.30 Part 1 auto-selected</strong> &mdash; h = ' + hDisp + ' &le; 60 ft (Sec. 30.3.1)';
+    ccAutoInfo.style.display = '';
   }
   if (isPart2 && r.cc30p2) {
     const el = document.getElementById('cc30Part2Results');
