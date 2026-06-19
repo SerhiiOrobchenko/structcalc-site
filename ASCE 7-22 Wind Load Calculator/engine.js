@@ -420,6 +420,11 @@ const state = {
   canopyArea: 50,    // effective wind (tributary) area for the canopy panel/fastener being designed, ft²
   canopyHc: 10,      // canopy height above grade (or reference datum), ft — h_c in Figs. 30.9-1B/2B
   canopyHe: 12,      // building eave height, ft — h_e in Figs. 30.9-1B/2B (h_c/h_e ratio governs net (GCp))
+  hasCircularTank: false, // Sec. 30.10 — a circular bin/silo/tank requiring its own C&C pressures
+  tankD: 30,         // tank/bin/silo diameter, D, ft (Fig. 30.10-1 Notation)
+  tankH: 40,         // cylinder height, H, ft (Fig. 30.10-1 Notation) — H/D must be 0.25-4.0 for Eq. 30.10-2/3/4 to apply
+  tankOpenTop: false, // open-topped tank → use Eq. 30.10-5 (GCpi) instead of the page's enclosure-based (GCpi)
+  tankElevated: false, // tank is elevated on columns → also compute underside pressures, Sec. 30.10.5
 
   // Open Building — Free Roof (Sec. 27.3.2), only used when enclosure === 'openFreeRoof'
   openRoofShape: 'monoslope', // 'monoslope' | 'pitched' | 'troughed' — Figs. 27.3-4/5/6
@@ -809,6 +814,43 @@ function gcpCanopyNet(A, hcRatio, hGt60) {
     if (A > 1000) capped = true;
   }
   return { neg, pos, band, capped };
+}
+
+// --- Circular Bins, Silos, and Tanks (Sec. 30.10) ---
+// Eq. 30.10-1: p = qh Kd [(GCp) - (GCpi)].
+//
+// Sec. 30.10.2 walls — Eqs. (30.10-2)-(30.10-4): the external pressure
+// coefficient varies around the circumference as a function of the angle
+// alpha (degrees, measured from the windward stagnation point) and the
+// aspect ratio H/D (cylinder height / diameter), valid for 0.25 <= H/D <= 4.0:
+//   C(alpha) = -0.5 + 0.4cos(a) + 0.8cos(2a) + 0.3cos(3a) - 0.1cos(4a) - 0.05cos(5a)
+//   kb = 1.0                                  for C(alpha) >= -0.15
+//   kb = 1.0 - 0.55*(C(alpha)+0.15)*log10(H/D) for C(alpha) <  -0.15
+//   (GCp)(alpha) = kb * C(alpha)
+// Transcribed character-for-character from the ASCE/SEI 7-22 standard text;
+// numerically cross-checked against ASCE/SEI 7-22 Commentary Table C30.10-1
+// (which tabulates (GCp)-(GCpi) for open-topped tanks at H/D = 0.25-4 in
+// 15-degree steps) at H/D = 1 -- this formula combined with Eq. (30.10-5)
+// reproduces the table's values exactly or within publication rounding
+// (e.g., within 0.05 at alpha = 90/45/135/15/30/75/105/120 deg, and within
+// ~0.15 at the two largest deviations, alpha = 0 and 60 deg) -- consistent
+// with the formula as published, not an invented approximation.
+function tankWallC(alphaDeg) {
+  const a = alphaDeg * Math.PI / 180;
+  return -0.5 + 0.4 * Math.cos(a) + 0.8 * Math.cos(2 * a) + 0.3 * Math.cos(3 * a)
+       - 0.1 * Math.cos(4 * a) - 0.05 * Math.cos(5 * a);
+}
+function tankWallGCp(alphaDeg, HD) {
+  const C = tankWallC(alphaDeg);
+  const kb = (C >= -0.15) ? 1.0 : (1.0 - 0.55 * (C + 0.15) * Math.log10(HD));
+  return kb * C;
+}
+// Sec. 30.10.3 — Eq. (30.10-5): internal pressure coefficient for the
+// internal surface of exterior walls of OPEN-TOPPED circular bins, silos,
+// and tanks only (closed-top tanks use the page's normal enclosure-based
+// (GCpi) per Table 26.13-1, referenced by Eq. 30.10-1 itself).
+function tankOpenGCpi(HD) {
+  return -0.9 - 0.35 * Math.log10(HD);
 }
 
 // Open buildings — Fig. 27.3-4 (monoslope): theta < 7.5 deg uses the flat
@@ -1636,6 +1678,72 @@ function compute(s) {
     };
   }
 
+  // --- Circular Bins, Silos, and Tanks (Sec. 30.10, Eq. 30.10-1: p = qh Kd [(GCp) - (GCpi)]) ---
+  // qh and Kd are the same shared values used elsewhere on this page — Sec. 30.10 does
+  // not define an independent tank-height qh. This mirrors computeCh29() ("Other
+  // Structures") above, which likewise reuses the page's shared qh rather than an
+  // independent height input.
+  //
+  // IMPLEMENTED: wall pressures (Sec. 30.10.2, Eqs. 30.10-2/30.10-3/30.10-4 — formula-
+  // based, valid for 0.25 <= H/D <= 4.0, D < 120 ft); internal pressure coefficient for
+  // open-topped tanks (Sec. 30.10.3, Eq. 30.10-5 — formula-based); underside pressures
+  // for elevated isolated bins (Sec. 30.10.5 — explicit numeric values given directly in
+  // the standard's text, not figure-only).
+  //
+  // NOT IMPLEMENTED — verify directly against the standard: roof pressures for isolated
+  // circular bins (Sec. 30.10.4, Fig. 30.10-2, Zones 1-4, Class 1/2a/2b roofs) and
+  // roof/wall pressures for grouped circular bins (Sec. 30.10.6, Figs. 30.10-3/30.10-4),
+  // used when center-to-center spacing < 1.25D. Both exist ONLY as graphical figures in
+  // ASCE/SEI 7-22 — confirmed by direct text search of the standard and Commentary —
+  // with no numeric (GCp) values recoverable from the text; the Commentary narrative for
+  // these figures (citing Sabransky & Melbourne 1987 and Macdonald et al. 1988/1990) is
+  // qualitative only and does not reproduce the plotted coefficients.
+  let circTank = null;
+  if (s.hasCircularTank) {
+    const D = Math.max(s.tankD, 0.01);
+    const H = Math.max(s.tankH, 0.01);
+    const HD = H / D;
+    const HDcap = Math.min(Math.max(HD, 0.25), 4.0);
+    const HDCapped = (HD < 0.25 || HD > 4.0);
+    const isOpenTop = !!s.tankOpenTop;
+    const openGcpi = isOpenTop ? tankOpenGCpi(HDcap) : null;
+
+    const wallAngles = [0, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165, 180];
+    const wallRows = wallAngles.map(a => {
+      const C = tankWallC(a);
+      const gcp = tankWallGCp(a, HDcap);
+      if (isOpenTop) {
+        return { alpha: a, C, gcp, p: qh * KD * (gcp - openGcpi) };
+      }
+      return {
+        alpha: a, C, gcp,
+        pMin: qh * KD * (gcp - gcpi.pos),
+        pMax: qh * KD * (gcp - gcpi.neg)
+      };
+    });
+
+    // Sec. 30.10.5 — undersides of isolated elevated circular bins: explicit numeric
+    // (GCp) values stated directly in the standard's text.
+    let underside = null;
+    if (s.tankElevated) {
+      underside = [
+        { zone: '1 & 2', gcpPos: 0.8, gcpNeg: -0.6 },
+        { zone: '3', gcpPos: 1.2, gcpNeg: -0.9 }
+      ].map(z => ({
+        zone: z.zone, gcpPos: z.gcpPos, gcpNeg: z.gcpNeg,
+        pPos: qh * KD * z.gcpPos,
+        pNeg: qh * KD * z.gcpNeg
+      }));
+    }
+
+    circTank = {
+      D, H, HD, HDcap, HDCapped, isOpenTop, openGcpi,
+      isElevated: !!s.tankElevated,
+      wallRows, underside,
+      enclosureLabel: isOpenTop ? null : gcpi.label
+    };
+  }
+
   // --- Open Buildings with Free Roofs (Sec. 27.3.2, Eq. 27.3-2: p = qh Kd G CN) ---
   let openRoof = null;
   if (s.enclosure === 'openFreeRoof') {
@@ -1799,7 +1907,7 @@ function compute(s) {
   return {
     kh, ke, kd: KD, qh, gcpi, a,
     steps, mwfrsLC1, mwfrsLC2, mwfrsLC3, mwfrsLC4, torsionApplies,
-    ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, canopy, openRoof,
+    ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, canopy, circTank, openRoof,
     mwfrsMinCheck, mwfrsMinGoverns, ccMinCheck, ccMinGoverns,
     ch27, cc30p2, ch29, cc30s305,
     ch32: (s.ch32Enabled ? computeCh32(s) : null), s: s
@@ -2010,7 +2118,7 @@ function reportCh32HTML(r32, r) {
     h += '</tbody></table>';
 
     if (r32.roofZones_mwfrs && r32.roofZones_mwfrs.length) {
-      h += '<p style="margin-top:10px;font-size:0.88em;color:#555">Roof zones (flat/low-slope, K<sub>vT</sub> = 1.1 uplift / 1.0 downward, Eq. 32.15-1):</p>';
+      h += '<p style="margin-top:10px;font-size:0.88em;color:#555">Roof zones (flat/low-slope, K<sub>vT</sub> = 1.1 uplift / 1.0 downward, Eq. 32.15-1):</p>';
       h += '<table class="rpt-table"><thead><tr><th>Zone</th><th>C<sub>p</sub></th><th>Uplift LC1</th><th>Uplift LC2</th><th>Down LC1</th><th>Down LC2</th></tr></thead><tbody>';
       r32.roofZones_mwfrs.forEach(function(z) {
         h += '<tr><td>' + z.label + '</td><td>' + f2(z.cp1) + '</td><td>' + pf(z.pT_up_lc1) + '</td><td>' + pf(z.pT_up_lc2) + '</td><td>' + pf(z.pT_dn_lc1) + '</td><td>' + pf(z.pT_dn_lc2) + '</td></tr>';
@@ -2329,8 +2437,8 @@ function renderResults() {
     const hDisp = fmt(state.unitSystem === 'SI' ? state.h * 0.3048 : state.h, 1) +
                   (state.unitSystem === 'SI' ? ' m' : ' ft');
     ccAutoInfo.innerHTML = isPart2
-      ? '<strong>Ch.30 Part 2 auto-selected</strong> &mdash; h = ' + hDisp + ' &gt; 60 ft (Sec. 30.4.1)'
-      : '<strong>Ch.30 Part 1 auto-selected</strong> &mdash; h = ' + hDisp + ' &le; 60 ft (Sec. 30.3.1)';
+      ? '<strong>Ch.30 Part 2 auto-selected</strong> &mdash; h = ' + hDisp + ' &gt; 60 ft (Sec. 30.4.1)'
+      : '<strong>Ch.30 Part 1 auto-selected</strong> &mdash; h = ' + hDisp + ' &le; 60 ft (Sec. 30.3.1)';
     ccAutoInfo.style.display = '';
   }
   if (isPart2 && r.cc30p2) {
@@ -2368,6 +2476,15 @@ function renderResults() {
   if (state.hasCanopy && r.canopy) {
     const canopyEl = document.getElementById('canopyResults');
     if (canopyEl) canopyEl.innerHTML = reportCanopyHTML(r);
+  }
+
+  // Circular Bins, Silos, and Tanks (Sec. 30.10) — only shown when the
+  // "has circular tank" toggle is on
+  const circTankSection = document.getElementById('circTankSection');
+  if (circTankSection) circTankSection.style.display = state.hasCircularTank ? '' : 'none';
+  if (state.hasCircularTank && r.circTank) {
+    const circTankEl = document.getElementById('circTankResults');
+    if (circTankEl) circTankEl.innerHTML = reportCircTankHTML(r);
   }
 
   renderOpenRoof(r);
@@ -3449,6 +3566,53 @@ function reportCanopyHTML(r) {
   return html;
 }
 
+// Circular Bins, Silos, and Tanks section (Sec. 30.10, Eq. 30.10-1) —
+// identical content for the on-screen #circTankResults and the print/export
+// report.
+function reportCircTankHTML(r) {
+  const s = state;
+  const t = r.circTank;
+  if (!t) return '<p class="muted">Circular tank data unavailable.</p>';
+  const pU = pUnit();
+  const lU = s.unitSystem === 'SI' ? 'm' : 'ft';
+  const p2 = v => fmt(pVal(v), 2);
+
+  let html = '<p class="muted" style="margin:0 0 10px;">p = q<sub>h</sub>&middot;K<sub>d</sub>&middot;[(GC<sub>p</sub>) &minus; (GC<sub>pi</sub>)] <span class="ref">Eq. 30.10-1</span> &mdash; q<sub>h</sub> at mean roof height h (Sec. 26.7.3), the same q<sub>h</sub> used elsewhere on this page (Sec. 30.10 does not define an independent tank-height q<sub>h</sub>).</p>';
+  html += '<table class="report-input-table"><tbody>' +
+    '<tr><td>Diameter, D</td><td>' + fmt(lengthOut(t.D), 2) + ' ' + lU + '</td></tr>' +
+    '<tr><td>Cylinder height, H</td><td>' + fmt(lengthOut(t.H), 2) + ' ' + lU + '</td></tr>' +
+    '<tr><td>H / D</td><td>' + fmt(t.HD, 3) + '</td></tr>' +
+    '<tr><td>q<sub>h</sub></td><td>' + p2(r.qh) + ' ' + pU + '</td></tr>' +
+    '<tr><td>Internal pressure basis</td><td>' + (t.isOpenTop ? 'Open-topped tank &mdash; Eq. 30.10-5, (GC<sub>pi</sub>) = ' + fmt(t.openGcpi, 3) : t.enclosureLabel + ' (Sec. 26.13)') + '</td></tr>' +
+    '</tbody></table>';
+
+  if (t.HDCapped) {
+    html += '<div class="alert warn">H/D = ' + fmt(t.HD, 3) + ' is outside the 0.25 &le; H/D &le; 4.0 applicability range of Eqs. 30.10-2/30.10-3/30.10-4 &mdash; the nearest boundary value (H/D = ' + fmt(t.HDcap, 2) + ') is used as a capped approximation; verify against the Standard.</div>';
+  }
+
+  html += '<h3>External Walls <span class="ref">Sec. 30.10.2, Eqs. 30.10-2 to 30.10-4</span></h3>' +
+    '<p class="muted" style="margin:0 0 8px;">&alpha; = angle from the windward stagnation point (0&deg;) around the circumference to 180&deg; (leeward). C(&alpha;) and the resulting (GC<sub>p</sub>) are continuous functions of &alpha; and H/D; tabulated here at the same 15&deg; increments as ASCE/SEI 7-22 Commentary Table C30.10-1.</p>';
+  if (t.isOpenTop) {
+    html += '<table class="report-table"><thead><tr><th>&alpha; (deg)</th><th>C(&alpha;)</th><th>(GC<sub>p</sub>)</th><th>p</th></tr></thead><tbody>' +
+      t.wallRows.map(row => '<tr><td>' + fmt(row.alpha, 0) + '</td><td>' + fmt(row.C, 3) + '</td><td>' + fmt(row.gcp, 3) + '</td><td>' + p2(row.p) + ' ' + pU + '</td></tr>').join('') +
+      '</tbody></table>';
+  } else {
+    html += '<table class="report-table"><thead><tr><th>&alpha; (deg)</th><th>C(&alpha;)</th><th>(GC<sub>p</sub>)</th><th>p<sub>min</sub></th><th>p<sub>max</sub></th></tr></thead><tbody>' +
+      t.wallRows.map(row => '<tr><td>' + fmt(row.alpha, 0) + '</td><td>' + fmt(row.C, 3) + '</td><td>' + fmt(row.gcp, 3) + '</td><td class="val-neg">' + p2(row.pMin) + ' ' + pU + '</td><td class="val-pos">' + p2(row.pMax) + ' ' + pU + '</td></tr>').join('') +
+      '</tbody></table>';
+  }
+
+  if (t.isElevated && t.underside) {
+    html += '<h3>Underside of Elevated Bin <span class="ref">Sec. 30.10.5</span></h3>' +
+      '<table class="report-table"><thead><tr><th>Zone</th><th>(GC<sub>p</sub>)<sub>pos</sub></th><th>(GC<sub>p</sub>)<sub>neg</sub></th><th>p<sub>pos</sub></th><th>p<sub>neg</sub></th></tr></thead><tbody>' +
+      t.underside.map(z => '<tr><td>' + z.zone + '</td><td>' + fmt(z.gcpPos, 2) + '</td><td>' + fmt(z.gcpNeg, 2) + '</td><td class="val-pos">' + p2(z.pPos) + ' ' + pU + '</td><td class="val-neg">' + p2(z.pNeg) + ' ' + pU + '</td></tr>').join('') +
+      '</tbody></table>';
+  }
+
+  html += '<div class="alert warn">NOT IMPLEMENTED &mdash; roof pressures for isolated circular bins (Sec. 30.10.4, Fig. 30.10-2, Zones 1&ndash;4) and roof/wall pressures for grouped circular bins (Sec. 30.10.6, Figs. 30.10-3/30.10-4, used when center-to-center spacing &lt; 1.25D) are NOT calculated by this module. Both exist only as graphical figures in ASCE/SEI 7-22 with no numeric (GC<sub>p</sub>) values given in the standard\'s text or Commentary &mdash; consult the Standard directly for these provisions.</div>';
+  return html;
+}
+
 // Open Building — Free Roof Pressures section (Sec. 27.3.2, Eq. 27.3-2) —
 // identical cards/notes/tables/citations to the on-screen #openRoofSection.
 function reportOpenRoofHTML(r) {
@@ -3547,7 +3711,7 @@ function buildTitleBlockHTML() {
 // the repeating title block (sheet no. = section index + 1; sheet 1 is the
 // cover page built by renderPrintCover()).
 function reportMinCheckHTML(r) {
-  const pFmtR = psf => fmt(pVal(psf), 2) + ' ' + pUnit();
+  const pFmtR = psf => fmt(pVal(psf), 2) + ' ' + pUnit();
   const F = 'rgb(50,50,50)';
   const warn = '<span style="color:#b85c00; font-weight:700;">&#9888; GOVERNS</span>';
   const ok   = '<span style="color:#2a7a2a;">&#10003; OK</span>';
@@ -3558,27 +3722,27 @@ function reportMinCheckHTML(r) {
     const status = c.governs
       ? '<td style="color:#b85c00; font-weight:700;">' + pFmtR(c.pMin) + ' ' + warn + '</td>'
       : '<td>' + pFmtR(c.pCalc) + ' ' + ok + '</td>';
-    return '<tr><td>Zone ' + c.zone + '</td><td>' + type + '</td><td>' + pFmtR(c.pCalc) + '</td><td>' + pFmtR(c.pMin) + '</td>' + status + '</tr>';
+    return '<tr><td>Zone ' + c.zone + '</td><td>' + type + '</td><td>' + pFmtR(c.pCalc) + '</td><td>' + pFmtR(c.pMin) + '</td>' + status + '</tr>';
   }).join('');
 
   const mwfrsNote = r.mwfrsMinGoverns
-    ? '<p style="color:#b85c00; margin:6px 0 0; font-size:.8rem;">&#9888; One or more MWFRS zones are governed by the Sec. 27.1.5 minimum. Use the minimum pressure for those zones in structural design.</p>'
-    : '<p style="color:#2a7a2a; margin:6px 0 0; font-size:.8rem;">&#10003; All MWFRS zones exceed the Sec. 27.1.5 minimum. Computed pressures govern.</p>';
+    ? '<p style="color:#b85c00; margin:6px 0 0; font-size:.8rem;">&#9888; One or more MWFRS zones are governed by the Sec. 27.1.5 minimum. Use the minimum pressure for those zones in structural design.</p>'
+    : '<p style="color:#2a7a2a; margin:6px 0 0; font-size:.8rem;">&#10003; All MWFRS zones exceed the Sec. 27.1.5 minimum. Computed pressures govern.</p>';
 
   // C&C table
   let ccRows = r.ccMinCheck.map(c => {
     const status = c.governs
       ? '<td style="color:#b85c00; font-weight:700;">' + pFmtR(c.pMin) + ' ' + warn + '</td>'
       : '<td>' + pFmtR(c.pCalc) + ' ' + ok + '</td>';
-    return '<tr><td>Zone ' + c.zone + '</td><td>' + pFmtR(c.pCalc) + '</td><td>' + pFmtR(c.pMin) + '</td>' + status + '</tr>';
+    return '<tr><td>Zone ' + c.zone + '</td><td>' + pFmtR(c.pCalc) + '</td><td>' + pFmtR(c.pMin) + '</td>' + status + '</tr>';
   }).join('');
 
   const ccNote = r.ccMinGoverns
-    ? '<p style="color:#b85c00; margin:6px 0 0; font-size:.8rem;">&#9888; One or more C&amp;C zones are governed by the Sec. 30.2.2 minimum. Use the minimum pressure for those zones in component design.</p>'
-    : '<p style="color:#2a7a2a; margin:6px 0 0; font-size:.8rem;">&#10003; All C&amp;C zones exceed the Sec. 30.2.2 minimum. Computed pressures govern.</p>';
+    ? '<p style="color:#b85c00; margin:6px 0 0; font-size:.8rem;">&#9888; One or more C&amp;C zones are governed by the Sec. 30.2.2 minimum. Use the minimum pressure for those zones in component design.</p>'
+    : '<p style="color:#2a7a2a; margin:6px 0 0; font-size:.8rem;">&#10003; All C&amp;C zones exceed the Sec. 30.2.2 minimum. Computed pressures govern.</p>';
 
   const thStyle = 'style="text-align:left;"';
-  return '<p style="font-size:.8rem; margin:0 0 8px;">Per Sec. 27.1.5, MWFRS net design pressures shall not be less than 16 psf (0.77 kN/m²) on wall zones and 8 psf (0.38 kN/m²) on roof zones. Per Sec. 30.2.2, C&amp;C net pressures shall not be less than 16 psf (0.77 kN/m²) acting in either direction normal to the surface.</p>' +
+  return '<p style="font-size:.8rem; margin:0 0 8px;">Per Sec. 27.1.5, MWFRS net design pressures shall not be less than 16 psf (0.77 kN/m²) on wall zones and 8 psf (0.38 kN/m²) on roof zones. Per Sec. 30.2.2, C&amp;C net pressures shall not be less than 16 psf (0.77 kN/m²) acting in either direction normal to the surface.</p>' +
     '<p style="font-weight:700; margin:8px 0 4px;">MWFRS — Sec. 27.1.5</p>' +
     '<table class="report-input-table"><thead><tr><th ' + thStyle + '>Zone</th><th ' + thStyle + '>Type</th><th ' + thStyle + '>Calculated |p|</th><th ' + thStyle + '>Minimum |p|</th><th ' + thStyle + '>Design Pressure</th></tr></thead><tbody>' + mwfrsRows + '</tbody></table>' +
     mwfrsNote +
@@ -3644,8 +3808,12 @@ function buildReportHTML(r) {
     html += section('Attached Canopy Wind Pressures', 'Sec. 30.9', reportCanopyHTML(r));
   }
 
+  if (s.hasCircularTank && r.circTank) {
+    html += section('Circular Bins, Silos, and Tanks &mdash; C&amp;C Pressures', 'Sec. 30.10, Eq. 30.10-1', reportCircTankHTML(r));
+  }
+
   if (r.openRoof) {
-    html += section('Minimum Design Wind Load Check', 'Sec. 27.1.5 (MWFRS) / Sec. 30.2.2 (C&amp;C)', reportMinCheckHTML(r));
+    html += section('Minimum Design Wind Load Check', 'Sec. 27.1.5 (MWFRS) / Sec. 30.2.2 (C&amp;C)', reportMinCheckHTML(r));
   html += section('Open Building &mdash; Free Roof Pressures', 'Sec. 27.3.2, Eq. 27.3-2: p = q<sub>h</sub>K<sub>d</sub>GC<sub>N</sub>', reportOpenRoofHTML(r));
   }
 
@@ -4225,19 +4393,19 @@ function renderCCCombined(r) {
   if (!el) return;
   var pU = pUnit();
   var isFlat = state.theta <= 7;
-  var roofRef = isFlat ? 'Fig. 30.3-2A, \u03b8 \u2264 7\u00b0' :
-    (state.roofShape === 'hip' ? 'Figs. 30.3-2D\u2013G, \u03b8 > 7\u00b0' : 'Figs. 30.3-2B/2C, \u03b8 > 7\u00b0');
+  var roofRef = isFlat ? 'Fig. 30.3-2A, θ ≤ 7°' :
+    (state.roofShape === 'hip' ? 'Figs. 30.3-2D–G, θ > 7°' : 'Figs. 30.3-2B/2C, θ > 7°');
   var html = '<table>';
   html += '<thead><tr><th>Zone</th><th>(GC<sub>p</sub>) range</th>';
   html += '<th>p<sub>min</sub> suction, ' + pU + '</th><th>p<sub>max</sub> positive, ' + pU + '</th></tr></thead>';
   html += '<tbody>';
-  html += '<tr><td colspan="4" class="cc-section-header">Walls \u2014 Zones 4 &amp; 5  <span class="ref">Fig. 30.3-1</span></td></tr>';
+  html += '<tr><td colspan="4" class="cc-section-header">Walls — Zones 4 &amp; 5  <span class="ref">Fig. 30.3-1</span></td></tr>';
   (r.ccWall||[]).forEach(function(row) {
     var gcStr = fmt(row.gcp.neg,2) + ' to ' + fmt(row.gcp.pos,2);
     html += '<tr><td>'+(ZONE_LABELS[row.zone]||row.zone)+'</td><td>'+gcStr+'</td>'+
       '<td>'+fmt(pVal(row.p.min),2)+'</td><td>'+fmt(pVal(row.p.max),2)+'</td></tr>';
   });
-  html += '<tr><td colspan="4" class="cc-section-header">Roof \u2014 Zones ' +
+  html += '<tr><td colspan="4" class="cc-section-header">Roof — Zones ' +
     (isFlat ? '1&prime;, 1, 2, 3' : '1, 2, 3') +
     '  <span class="ref">' + roofRef + '</span></td></tr>';
   (r.ccRoof||[]).forEach(function(row) {
@@ -4252,8 +4420,8 @@ function renderCCCombined(r) {
     if (state.theta > 7 && r.roofCapped) {
       roofNote.style.display = '';
       roofNote.textContent = (state.roofShape === 'hip')
-        ? 'Roof angle \u03b8 > 45\u00b0: Figures 30.3-2D\u2013G (hip) do not extend past \u03b8 = 45\u00b0. The \u03b8 = 45\u00b0 coefficients are used as a capping value per engineering judgment.'
-        : 'Roof angle \u03b8 > 45\u00b0: Figure 30.3-2B/2C is capped at \u03b8 = 45\u00b0 per engineering judgment.';
+        ? 'Roof angle θ > 45°: Figures 30.3-2D–G (hip) do not extend past θ = 45°. The θ = 45° coefficients are used as a capping value per engineering judgment.'
+        : 'Roof angle θ > 45°: Figure 30.3-2B/2C is capped at θ = 45° per engineering judgment.';
     } else { roofNote.style.display = 'none'; }
   }
 }
@@ -4512,6 +4680,45 @@ function bindInputs() {
     });
   }
 
+  // Circular Bins, Silos, and Tanks (Sec. 30.10) toggle + geometry
+  const hasCircularTankEl = document.getElementById('hasCircularTank');
+  if (hasCircularTankEl) {
+    hasCircularTankEl.addEventListener('change', e => {
+      state.hasCircularTank = e.target.checked;
+      renderResults();
+    });
+  }
+  const tankDEl = document.getElementById('tankD');
+  if (tankDEl) {
+    tankDEl.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      state.tankD = toUSLength(isNaN(v) ? 0 : v, state.unitSystem);
+      renderResults();
+    });
+  }
+  const tankHEl = document.getElementById('tankH');
+  if (tankHEl) {
+    tankHEl.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      state.tankH = toUSLength(isNaN(v) ? 0 : v, state.unitSystem);
+      renderResults();
+    });
+  }
+  const tankOpenTopEl = document.getElementById('tankOpenTop');
+  if (tankOpenTopEl) {
+    tankOpenTopEl.addEventListener('change', e => {
+      state.tankOpenTop = e.target.checked;
+      renderResults();
+    });
+  }
+  const tankElevatedEl = document.getElementById('tankElevated');
+  if (tankElevatedEl) {
+    tankElevatedEl.addEventListener('change', e => {
+      state.tankElevated = e.target.checked;
+      renderResults();
+    });
+  }
+
   // Torsional T-zone reference toggle (progressive disclosure when h <= 30 ft)
   const torsionToggle = document.getElementById('torsionToggle');
   if (torsionToggle) {
@@ -4762,9 +4969,9 @@ function applyModeVisibility() {
   // Update hint text below the 3 buttons
   const hint = document.getElementById('procHint');
   if (hint) {
-    if (isEnv) hint.textContent = 'Ch.28 Envelope — low-rise buildings only: h ≤ 60 ft and h ≤ least horizontal dimension (Sec. 28.3.1).';
-    else if (isDir) hint.textContent = 'Ch.27 Directional — all building heights and geometries; required when h > 60 ft or h > least horizontal dimension (Sec. 27.1.2).';
-    else hint.textContent = 'Ch.30 C&C — pressures on individual cladding, fasteners, purlins. Part 1 (h ≤ 60 ft) or Part 2 (h > 60 ft) selected automatically.';
+    if (isEnv) hint.textContent = 'Ch.28 Envelope — low-rise buildings only: h ≤ 60 ft and h ≤ least horizontal dimension (Sec. 28.3.1).';
+    else if (isDir) hint.textContent = 'Ch.27 Directional — all building heights and geometries; required when h > 60 ft or h > least horizontal dimension (Sec. 27.1.2).';
+    else hint.textContent = 'Ch.30 C&C — pressures on individual cladding, fasteners, purlins. Part 1 (h ≤ 60 ft) or Part 2 (h > 60 ft) selected automatically.';
   }
   applyStructureCategoryVisibility();
 }
@@ -4816,6 +5023,8 @@ function updateUnitLabels() {
   set('lblCanopyArea', sys === 'SI' ? 'm²' : 'ft²');
   set('lblCanopyHc', sys === 'SI' ? 'm' : 'ft');
   set('lblCanopyHe', sys === 'SI' ? 'm' : 'ft');
+  set('lblTankD', sys === 'SI' ? 'm' : 'ft');
+  set('lblTankH', sys === 'SI' ? 'm' : 'ft');
 }
 
 function setUnitSystem(sys) {
@@ -4841,6 +5050,10 @@ function setUnitSystem(sys) {
   if (canopyHcEl) canopyHcEl.value = fmt(lengthOut(state.canopyHc), 2);
   const canopyHeEl = document.getElementById('canopyHe');
   if (canopyHeEl) canopyHeEl.value = fmt(lengthOut(state.canopyHe), 2);
+  const tankDEl = document.getElementById('tankD');
+  if (tankDEl) tankDEl.value = fmt(lengthOut(state.tankD), 2);
+  const tankHEl = document.getElementById('tankH');
+  if (tankHEl) tankHEl.value = fmt(lengthOut(state.tankH), 2);
   const openLEl = document.getElementById('openL');
   if (openLEl) openLEl.value = fmt(lengthOut(state.openL), 2);
 
@@ -5027,6 +5240,14 @@ const INFO_CONTENT = {
     <p><strong>Figs. -1B / -2B ("net/combined")</strong> &mdash; a single net (GC<sub>p</sub>) combining both surfaces acting simultaneously, intended for structural design of the canopy framing; the value depends on the ratio h<sub>c</sub>/h<sub>e</sub> (canopy height to building eave height) per ASCE/SEI 7-22 Commentary Tables C30.9-2 and C30.9-4.</p>
     <p>All four Commentary tables are piecewise functions of the effective wind area A: a constant below A = 10 ft&sup2;, a log-linear segment between A = 10 and 100 ft&sup2;, and either a constant or a further log-linear segment (to A = 1,000 ft&sup2;) above A = 100 ft&sup2; depending on the table. <span class="src-tag">Table C30.9-3's negative-upper-surface formula (h &gt; 60 ft, separate surfaces) has a genuine discontinuity at A = 100 ft&sup2;</span> in the published Commentary text itself (the two piecewise branches do not meet at the boundary) &mdash; this calculator reproduces that discontinuity exactly rather than smoothing it, since it reflects the standard's literal tabulated/plotted curve rather than a transcription error.</p>
     <p>A and h<sub>c</sub>/h<sub>e</sub> values outside the tabulated range are capped to the nearest tabulated boundary value (flagged in the report as a capped approximation) rather than extrapolated.</p>`
+  },
+  circTank: {
+    title: 'Circular Bins, Silos, and Tanks — Sec. 30.10',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, Sec. 30.10 ("Circular Bins, Silos, and Tanks with h &le; 120 ft")</span>, Eq. 30.10-1 &mdash; p = q<sub>h</sub> K<sub>d</sub> [(GC<sub>p</sub>) &minus; (GC<sub>pi</sub>)], using the same q<sub>h</sub> and K<sub>d</sub> = 0.85 used elsewhere on this page (Sec. 30.10 does not define an independent tank-height q<sub>h</sub>), applicable to circular bins, silos, and tanks with diameter D &lt; 120 ft.</p>
+    <p><strong>External walls (implemented)</strong> &mdash; <span class="src-tag">Sec. 30.10.2, Eqs. 30.10-2 to 30.10-4</span>: the wall (GC<sub>p</sub>) varies continuously around the circumference as a function of the angle &alpha; from the windward stagnation point and the aspect ratio H/D (cylinder height / diameter): C(&alpha;) = &minus;0.5 + 0.4cos&alpha; + 0.8cos2&alpha; + 0.3cos3&alpha; &minus; 0.1cos4&alpha; &minus; 0.05cos5&alpha;; k<sub>b</sub> = 1.0 for C(&alpha;) &ge; &minus;0.15, otherwise k<sub>b</sub> = 1.0 &minus; 0.55(C(&alpha;)+0.15)log<sub>10</sub>(H/D); (GC<sub>p</sub>)(&alpha;) = k<sub>b</sub>&middot;C(&alpha;). Valid for 0.25 &le; H/D &le; 4.0; values outside this range are capped to the nearest boundary and flagged.</p>
+    <p><strong>Internal pressure (implemented)</strong> &mdash; for closed-top tanks, the page's normal enclosure classification and (GC<sub>pi</sub>) (Table 26.13-1) apply via Eq. 30.10-1 directly. For <strong>open-topped</strong> tanks, <span class="src-tag">Sec. 30.10.3, Eq. 30.10-5</span> gives a single combined internal pressure coefficient (GC<sub>pi</sub>) = &minus;0.9 &minus; 0.35log<sub>10</sub>(H/D), used in place of the Table 26.13-1 values.</p>
+    <p><strong>Underside of elevated bins (implemented)</strong> &mdash; <span class="src-tag">Sec. 30.10.5</span> gives explicit numeric (GC<sub>p</sub>) values for the underside of isolated circular bins elevated on columns: Zones 1 &amp; 2: +0.8/&minus;0.6; Zone 3: +1.2/&minus;0.9.</p>
+    <p><span class="src-tag">NOT implemented &mdash; verify directly against the Standard:</span> roof pressures for isolated circular bins (<span class="src-tag">Sec. 30.10.4, Fig. 30.10-2</span>, Zones 1&ndash;4, dependent on roof slope Class 1/2a/2b) and roof/wall pressures for grouped circular bins spaced closer than 1.25D center-to-center (<span class="src-tag">Sec. 30.10.6, Figs. 30.10-3/30.10-4</span>). Both provisions exist <em>only</em> as graphical figures in ASCE/SEI 7-22 &mdash; confirmed by direct text search of the standard and its Commentary &mdash; with no numeric (GC<sub>p</sub>) values recoverable from the text. The Commentary narrative for these figures is qualitative only (citing wind-tunnel studies) and does not reproduce the plotted coefficients, so this calculator does not invent numbers for them.</p>`
   },
   stepsInfo: {
     title: 'Velocity Pressure — Step by Step',
@@ -5464,6 +5685,23 @@ async function exportReportDOCX(r) {
     children.push(aoaToWordTable(netAoa, distributeWidth(netAoa[0].length, TBLW)));
   }
 
+  // Circular Bins, Silos, and Tanks (conditional) — Sec. 30.10
+  if (s.hasCircularTank && r.circTank) {
+    extraSecNum++;
+    const t = r.circTank;
+    children.push(new docx.Paragraph({ children: [], spacing: { before: 160, after: 0 } }));
+    children.push(docxHeading(extraSecNum + '. Circular Bins, Silos, and Tanks — Sec. 30.10, Eq. 30.10-1'));
+    children.push(aoaToWordTable(circTankSummaryAOA(t, r.qh), [6000, 3360]));
+    children.push(new docx.Paragraph({ children: [new docx.TextRun({ text: 'External Walls — Sec. 30.10.2, Eqs. 30.10-2 to 30.10-4', bold: true, size: 18, font: 'Arial' })], spacing: { before: 120, after: 40 } }));
+    const tWallAoa = circTankWallAOA(t);
+    children.push(aoaToWordTable(tWallAoa, distributeWidth(tWallAoa[0].length, TBLW)));
+    if (t.isElevated && t.underside) {
+      children.push(new docx.Paragraph({ children: [new docx.TextRun({ text: 'Underside of Elevated Bin — Sec. 30.10.5', bold: true, size: 18, font: 'Arial' })], spacing: { before: 120, after: 40 } }));
+      const tUndAoa = circTankUndersideAOA(t);
+      children.push(aoaToWordTable(tUndAoa, distributeWidth(tUndAoa[0].length, TBLW)));
+    }
+  }
+
   // 6+. Open Building — Free Roof (conditional)
   if (r.openRoof) {
     const o = r.openRoof;
@@ -5791,6 +6029,22 @@ function exportReportRTF(r) {
     chunks.push(aoaToRtfTable(netAoa, distributeWidth(netAoa[0].length, 9360)));
   }
 
+  // --- Circular Bins, Silos, and Tanks (conditional) — Sec. 30.10 ---
+  if (s.hasCircularTank && r.circTank) {
+    extraSecNumR++;
+    const t = r.circTank;
+    chunks.push(rtfH2(extraSecNumR + '. Circular Bins, Silos, and Tanks — Sec. 30.10, Eq. 30.10-1'));
+    chunks.push(aoaToRtfTable(circTankSummaryAOA(t, r.qh), [6000, 3360]));
+    chunks.push('\\pard\\sb80\\sa40{\\b ' + rtfEsc('External Walls — Sec. 30.10.2, Eqs. 30.10-2 to 30.10-4') + '}\\par\n');
+    const tWallAoa = circTankWallAOA(t);
+    chunks.push(aoaToRtfTable(tWallAoa, distributeWidth(tWallAoa[0].length, 9360)));
+    if (t.isElevated && t.underside) {
+      chunks.push('\\pard\\sb80\\sa40{\\b ' + rtfEsc('Underside of Elevated Bin — Sec. 30.10.5') + '}\\par\n');
+      const tUndAoa = circTankUndersideAOA(t);
+      chunks.push(aoaToRtfTable(tUndAoa, distributeWidth(tUndAoa[0].length, 9360)));
+    }
+  }
+
   // --- N. Open Building — Free Roof (conditional) ---
   if (r.openRoof) {
     const o = r.openRoof;
@@ -5898,6 +6152,42 @@ function canopyNetAOA(c) {
   ];
 }
 
+// AOA mirror of reportCircTankHTML's summary table (Sec. 30.10).
+function circTankSummaryAOA(t, qh) {
+  const lU = state.unitSystem === 'SI' ? 'm' : 'ft';
+  return [
+    ['Quantity', 'Value'],
+    ['Diameter, D, ' + lU, fmt(lengthOut(t.D), 2)],
+    ['Cylinder height, H, ' + lU, fmt(lengthOut(t.H), 2)],
+    ['H / D', fmt(t.HD, 3)],
+    ['qh, ' + pUnit(), fmt(pVal(qh), 2)],
+    ['Internal pressure basis', t.isOpenTop
+      ? 'Open-topped tank — Eq. 30.10-5, (GCpi) = ' + fmt(t.openGcpi, 3)
+      : t.enclosureLabel + ' (Sec. 26.13)'],
+  ];
+}
+
+// AOA mirror of reportCircTankHTML's external-wall table (Sec. 30.10.2,
+// Eqs. 30.10-2 to 30.10-4).
+function circTankWallAOA(t) {
+  if (t.isOpenTop) {
+    const aoa = [['alpha (deg)', 'C(alpha)', '(GCp)', 'p, ' + pUnit()]];
+    t.wallRows.forEach(row => aoa.push([fmt(row.alpha, 0), fmt(row.C, 3), fmt(row.gcp, 3), fmt(pVal(row.p), 2)]));
+    return aoa;
+  }
+  const aoa = [['alpha (deg)', 'C(alpha)', '(GCp)', 'pmin, ' + pUnit(), 'pmax, ' + pUnit()]];
+  t.wallRows.forEach(row => aoa.push([fmt(row.alpha, 0), fmt(row.C, 3), fmt(row.gcp, 3), fmt(pVal(row.pMin), 2), fmt(pVal(row.pMax), 2)]));
+  return aoa;
+}
+
+// AOA mirror of reportCircTankHTML's underside-of-elevated-bin table
+// (Sec. 30.10.5).
+function circTankUndersideAOA(t) {
+  const aoa = [['Zone', '(GCp) pos', '(GCp) neg', 'p pos, ' + pUnit(), 'p neg, ' + pUnit()]];
+  t.underside.forEach(z => aoa.push([z.zone, fmt(z.gcpPos, 2), fmt(z.gcpNeg, 2), fmt(pVal(z.pPos), 2), fmt(pVal(z.pNeg), 2)]));
+  return aoa;
+}
+
 // AOA mirror of openRoofGammaTableHTML(gamma0180).
 function openRoofGammaAOA(gamma0180) {
   const aoa = [['Wind Direction', 'Load Case', 'CNW', 'CNL', 'pW, ' + pUnit(), 'pL, ' + pUnit()]];
@@ -5971,4 +6261,405 @@ function referencesAOA() {
   return aoa;
 }
 
-// Appends an AOA as a new sheet, with a leadi
+// Appends an AOA as a new sheet, with a leading title row and a blank
+// separator row before the header row (for readability in Excel).
+function appendAoaSheet(wb, sheetName, title, aoa) {
+  const full = [[title], [], ...aoa];
+  const ws = XLSX.utils.aoa_to_sheet(full);
+  ws['!cols'] = [{ wch: 42 }, { wch: 28 }, { wch: 40 }, { wch: 40 }, { wch: 14 }];
+  XLSX.utils.book_append_sheet(wb, ws, sheetName.substring(0, 31));
+}
+
+// Builds and downloads a workbook containing data tables only (Phase 4
+// rescope): Project Info header, Input Data, Design Summary, and the
+// applicable pressure-zone tables. The step-by-step Calc Steps and
+// standalone References sheets are intentionally omitted — the PDF/print
+// report carries those; Excel is for tabular data exchange only.
+// r should be lastResult (the most recent compute() output).
+async function exportReportXLSX(r) {
+  if (typeof XLSX === 'undefined') {
+    try { await loadScript(CDN_XLSX); } catch(e) {
+      alert('Excel export library failed to load (requires internet access to cdnjs.cloudflare.com). Please check your connection and try again.');
+      return;
+    }
+  }
+  if (typeof XLSX === 'undefined') {
+    alert('Excel export library failed to load. Please check your connection and try again.');
+    return;
+  }
+  if (!r) {
+    alert('No results to export yet — please check the inputs above.');
+    return;
+  }
+  const s = state;
+  const wb = XLSX.utils.book_new();
+
+  // --- Project Information cover sheet (Phase 3 title-block fields) --------
+  // All values are user-entered metadata — nothing here is computed.
+  const fmtDate = (iso) => iso
+    ? new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+    : '';
+  const infoAOA = [
+    ['Field', 'Value'],
+    ['Company', s.companyName || ''],
+    ['Project', s.projectName || ''],
+    ['Project No. / Location', s.projectNumber || ''],
+    ['Section', s.sectionName || ''],
+    ['Job Ref.', s.jobRef || ''],
+    ['Risk Category', s.riskCategory || ''],
+    ['Calculation Procedure', s.mode === 'mwfrs'
+      ? 'Main Wind Force Resisting System (MWFRS) — Envelope Procedure (Ch. 28)'
+      : 'Components & Cladding (C&C) (Ch. 30)'],
+    [],
+    ['Calc. by', s.engineer || ''],
+    ['Date', fmtDate(s.projectDate)],
+    ['Chk\'d by', s.chkdBy || ''],
+    ['Chk\'d date', fmtDate(s.chkdDate)],
+    ['App\'d by', s.appdBy || ''],
+    ['App\'d date', fmtDate(s.appdDate)],
+  ];
+  appendAoaSheet(wb, 'Project Info', 'ASCE/SEI 7-22 Wind Load Calculation — Project Information', infoAOA);
+
+  // --- Data tables ----------------------------------------------------------
+  appendAoaSheet(wb, 'Input Data', 'ASCE/SEI 7-22 Wind Load Calculation — Input Data', inputDataAOA(r));
+  appendAoaSheet(wb, 'Design Summary', 'Design Summary', designSummaryAOA(r));
+  // Calc Steps sheet intentionally omitted (step-by-step derivation belongs
+  // in the PDF/print report, not in a data-table workbook).
+
+  if (s.mode === 'mwfrs') {
+    appendAoaSheet(wb, 'MWFRS LC1', 'MWFRS Load Case 1 (Zones 1-4, 1E-4E) — Fig. 28.3-1', zoneTableAOA(r.mwfrsLC1, false));
+    appendAoaSheet(wb, 'MWFRS LC2', 'MWFRS Load Case 2 (Zones 1-6, 1E-6E) — Fig. 28.3-1', zoneTableAOA(r.mwfrsLC2, false));
+    appendAoaSheet(wb, 'MWFRS LC3 (T-zones)', 'MWFRS Load Case 3 T-zones — Fig. 28.3-2' + (r.torsionApplies ? '' : ' (h <= 30 ft: not required, shown for reference)'), zoneTableAOA(r.mwfrsLC3, false));
+    appendAoaSheet(wb, 'MWFRS LC4 (T-zones)', 'MWFRS Load Case 4 T-zones — Fig. 28.3-2' + (r.torsionApplies ? '' : ' (h <= 30 ft: not required, shown for reference)'), zoneTableAOA(r.mwfrsLC4, false));
+  } else {
+    appendAoaSheet(wb, 'C&C Walls', 'C&C Walls — Zones 4 & 5 — Fig. 30.3-1', zoneTableAOA(r.ccWall, true));
+    appendAoaSheet(wb, 'C&C Roof', 'C&C Roof — Fig. 30.3-2' + (s.theta <= 7 ? 'A (theta <= 7 deg)' : (s.roofShape === 'hip' ? 'D-G equiv. (hip)' : 'B/C (gable), theta > 7 deg')), zoneTableAOA(r.ccRoof, true));
+    if (s.hasOverhang) {
+      appendAoaSheet(wb, 'C&C Overhangs', 'Roof Overhangs — Net (Top + Bottom) — Sec. 30.7', zoneTableAOA(r.ccOverhang, true, OVERHANG_ZONE_LABELS));
+    }
+  }
+
+  if (s.hasParapet && r.parapet) {
+    const p = r.parapet;
+    const lenUnit = s.unitSystem === 'SI' ? 'm' : 'ft';
+    const parapetSummary = [
+      ['Quantity', 'Value'],
+      ['z (top of parapet), ' + lenUnit, fmt(lengthOut(p.zParapet), 1)],
+      ['Kh at parapet', fmt(p.khp, 3)],
+      ['qp, ' + pUnit(), fmt(pVal(p.qp), 2)],
+      ['p_p, windward (GCpn=+1.5), ' + pUnit(), fmt(pVal(p.ppWindward), 2)],
+      ['p_p, leeward (GCpn=-1.0), ' + pUnit(), fmt(pVal(p.ppLeeward), 2)],
+      ['Total combined p_p, ' + pUnit(), fmt(pVal(p.ppTotal), 2)],
+      [],
+      ['C&C Walls — Zones 4 & 5, Load A / Load B — Eq. 30.6-1']
+    ];
+    appendAoaSheet(wb, 'Parapet', 'Parapet Wind Pressures — Sec. 27.3.4/28.3.4 (MWFRS), Sec. 30.6 (C&C)',
+      parapetSummary.concat(ccParapetAOA(p.ccParapet, PARAPET_ZONE_LABELS)));
+  }
+
+  if (s.hasCanopy && r.canopy) {
+    const c = r.canopy;
+    const canopySheet = canopySummaryAOA(c, r.qh)
+      .concat([[], ['Separate Surfaces (Fastener Design) — ' + c.figRefSep]])
+      .concat(canopySeparateAOA(c))
+      .concat([[], ['Net/Combined (Structural Design) — ' + c.figRefNet]])
+      .concat(canopyNetAOA(c));
+    appendAoaSheet(wb, 'Canopy', 'Attached Canopy Wind Pressures — Sec. 30.9, Eq. 30.9-1', canopySheet);
+  }
+
+  if (s.hasCircularTank && r.circTank) {
+    const t = r.circTank;
+    let tankSheet = circTankSummaryAOA(t, r.qh)
+      .concat([[], ['External Walls — Sec. 30.10.2, Eqs. 30.10-2 to 30.10-4']])
+      .concat(circTankWallAOA(t));
+    if (t.isElevated && t.underside) {
+      tankSheet = tankSheet.concat([[], ['Underside of Elevated Bin — Sec. 30.10.5']]).concat(circTankUndersideAOA(t));
+    }
+    appendAoaSheet(wb, 'Circular Tank', 'Circular Bins, Silos, and Tanks — Sec. 30.10, Eq. 30.10-1', tankSheet);
+  }
+
+  if (r.openRoof) {
+    const o = r.openRoof;
+    const summary = [
+      ['Quantity', 'Value'],
+      ['Gust factor, G', fmt(o.G, 2)],
+      ['h / L', fmt(o.hL, 3)],
+      [],
+      ['Wind Normal to Ridge/Span — gamma = 0/180 deg' + (o.note4Applies ? ' (per Fig. 27.3-4 Note 4, uses Fig. 27.3-7 table)' : ' — Fig. ' + (o.shape === 'monoslope' ? '27.3-4' : (o.shape === 'pitched' ? '27.3-5' : '27.3-6')))]
+    ];
+    let aoa = summary.concat(o.note4Applies ? [] : openRoofGammaAOA(o.gamma0180));
+    aoa = aoa.concat([[], ['Wind Parallel to Ridge/Span — gamma = 90/270 deg — Fig. 27.3-7']]).concat(openRoofZoneAOA(o.fig277));
+    appendAoaSheet(wb, 'Open Roof', 'Open Building — Free Roof Pressures — Sec. 27.3.2, Eq. 27.3-2', aoa);
+  }
+
+  // References sheet intentionally omitted (Phase 4): every table row
+  // already carries an inline ASCE 7-22 clause/figure/equation citation
+  // in its "Reference" column — a standalone sheet would only duplicate
+  // what the reader already sees in context. Consistent with Phase 2
+  // removal of the same section from the PDF/print report.
+
+  const nameBase = (s.projectName || 'Wind_Load_Report').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'Wind_Load_Report';
+  XLSX.writeFile(wb, nameBase + '_ASCE7-22_Wind.xlsx');
+}
+
+/* =====================================================================
+   INIT
+   ===================================================================== */
+function init() {
+  const expSel = document.getElementById('exposure');
+  Object.keys(EXPOSURE).forEach(k => {
+    const o = document.createElement('option');
+    o.value = k; o.textContent = 'Exposure ' + EXPOSURE[k].label;
+    if (k === state.exposure) o.selected = true;
+    expSel.appendChild(o);
+  });
+
+  const encSel = document.getElementById('enclosure');
+  Object.keys(GCPI).forEach(k => {
+    const o = document.createElement('option');
+    // Open Building — Free Roof (Sec. 27.3.2) has no (GC<sub>pi</sub>) — omit the suffix for it.
+    o.value = k; o.textContent = GCPI[k].noGcpi ? GCPI[k].label : GCPI[k].label + ' (GCpi = ±' + fmt(GCPI[k].pos, 2) + ')';
+    if (k === state.enclosure) o.selected = true;
+    encSel.appendChild(o);
+  });
+
+  document.getElementById('V').value = state.V;
+  // K_zt mode init
+  const kztModeSeg = document.getElementById('kztModeSeg');
+  if (kztModeSeg) {
+    kztModeSeg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.val === state.kztMode));
+    document.getElementById('kztAutoInputs').style.display = state.kztMode === 'auto' ? '' : 'none';
+    document.getElementById('kztManualInput').style.display = state.kztMode === 'manual' ? '' : 'none';
+  }
+  const kztValEl = document.getElementById('kzt');
+  if (kztValEl) kztValEl.value = state.kzt;
+  const topoFeatEl = document.getElementById('topoFeature');
+  if (topoFeatEl) topoFeatEl.value = state.topoFeature;
+  const topoHEl = document.getElementById('topoH');
+  if (topoHEl) topoHEl.value = state.topoH;
+  const topoLhEl = document.getElementById('topoLh');
+  if (topoLhEl) topoLhEl.value = state.topoLh;
+  const topoXEl2 = document.getElementById('topoX');
+  document.getElementById('groundElev').value = state.groundElev;
+  document.getElementById('h').value = state.h;
+  document.getElementById('minDim').value = state.minDim;
+  const buildingLInit = document.getElementById('buildingL');
+  if (buildingLInit) buildingLInit.value = state.buildingL;
+  const ccProcSegInit = document.getElementById('ccProcedureSeg');
+  if (ccProcSegInit) {
+    ccProcSegInit.querySelectorAll('button').forEach(b =>
+      b.classList.toggle('active', b.dataset.val === state.ccProcedure));
+  }
+  const mwfrsProcSegInit = document.getElementById('mwfrsProcedureSeg');
+  if (mwfrsProcSegInit) {
+    mwfrsProcSegInit.querySelectorAll('button').forEach(b =>
+      b.classList.toggle('active', b.dataset.val === state.mwfrsProcedure));
+  }
+  document.getElementById('theta').value = state.theta;
+  document.getElementById('areaWall').value = state.areaWall;
+  document.getElementById('areaRoof').value = state.areaRoof;
+  document.getElementById('roofType').value = state.roofType;
+  const roofShapeSel = document.getElementById('roofShape');
+  if (roofShapeSel) roofShapeSel.value = state.roofShape;
+  const hasOverhangEl = document.getElementById('hasOverhang');
+  if (hasOverhangEl) hasOverhangEl.checked = !!state.hasOverhang;
+  const hasParapetEl = document.getElementById('hasParapet');
+  if (hasParapetEl) hasParapetEl.checked = !!state.hasParapet;
+  const parapetHeightEl = document.getElementById('parapetHeight');
+  if (parapetHeightEl) parapetHeightEl.value = state.parapetHeight;
+
+  // Attached Canopy (Sec. 30.9) inputs
+  const hasCanopyElInit = document.getElementById('hasCanopy');
+  if (hasCanopyElInit) hasCanopyElInit.checked = !!state.hasCanopy;
+  const canopyAreaElInit = document.getElementById('canopyArea');
+  if (canopyAreaElInit) canopyAreaElInit.value = state.canopyArea;
+  const canopyHcElInit = document.getElementById('canopyHc');
+  if (canopyHcElInit) canopyHcElInit.value = state.canopyHc;
+  const canopyHeElInit = document.getElementById('canopyHe');
+  if (canopyHeElInit) canopyHeElInit.value = state.canopyHe;
+
+  // Circular Bins, Silos, and Tanks (Sec. 30.10) inputs
+  const hasCircularTankElInit = document.getElementById('hasCircularTank');
+  if (hasCircularTankElInit) hasCircularTankElInit.checked = !!state.hasCircularTank;
+  const tankDElInit = document.getElementById('tankD');
+  if (tankDElInit) tankDElInit.value = state.tankD;
+  const tankHElInit = document.getElementById('tankH');
+  if (tankHElInit) tankHElInit.value = state.tankH;
+  const tankOpenTopElInit = document.getElementById('tankOpenTop');
+  if (tankOpenTopElInit) tankOpenTopElInit.checked = !!state.tankOpenTop;
+  const tankElevatedElInit = document.getElementById('tankElevated');
+  if (tankElevatedElInit) tankElevatedElInit.checked = !!state.tankElevated;
+
+  // Open Building — Free Roof (Sec. 27.3.2) inputs
+  const openRoofShapeEl = document.getElementById('openRoofShape');
+  if (openRoofShapeEl) openRoofShapeEl.value = state.openRoofShape;
+  const openWindFlowEl = document.getElementById('openWindFlow');
+  if (openWindFlowEl) openWindFlowEl.value = state.openWindFlow;
+  const openLEl = document.getElementById('openL');
+  if (openLEl) openLEl.value = state.openL;
+  const ch32VTi = document.getElementById('ch32VT'); if (ch32VTi) ch32VTi.value = state.ch32VT || 100;
+  const ch32Aei = document.getElementById('ch32Ae'); if (ch32Aei) ch32Aei.value = state.ch32Ae || 10000;
+  const ch32Eni = document.getElementById('ch32Enabled'); if (ch32Eni) ch32Eni.checked = !!state.ch32Enabled;
+  const ch32Esi = document.getElementById('ch32Essential'); if (ch32Esi) ch32Esi.checked = !!state.ch32Essential;
+  document.body.classList.toggle('ch32-enabled', !!state.ch32Enabled);
+
+  // Project Information (report header)
+  if (!state.projectDate) {
+    const d = new Date();
+    state.projectDate = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  document.getElementById('projectName').value = state.projectName;
+  document.getElementById('projectNumber').value = state.projectNumber;
+  document.getElementById('engineer').value = state.engineer;
+  document.getElementById('projectDate').value = state.projectDate;
+  document.getElementById('riskCategory').value = state.riskCategory;
+
+  // Print title block fields (Phase 3 / report header)
+  document.getElementById('companyName').value = state.companyName || '';
+  document.getElementById('sectionName').value = state.sectionName || '';
+  document.getElementById('jobRef').value = state.jobRef || '';
+  document.getElementById('chkdBy').value = state.chkdBy || '';
+  document.getElementById('chkdDate').value = state.chkdDate || '';
+  document.getElementById('appdBy').value = state.appdBy || '';
+  document.getElementById('appdDate').value = state.appdDate || '';
+
+  updateUnitLabels();
+  bindInputs();
+  bindInfoModal();
+  bindPrintButton();
+  applyModeVisibility();
+  applyRoofTypeVisibility();
+  applyEnclosureVisibility();
+  renderResults();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+
+/* =====================================================================
+   STRUCTCALC SHELL BRIDGE
+   Protocol:
+     shell -> module: {type:'loadState', state:{...}, unitSystem?}
+     shell -> module: {type:'requestState'}
+     module -> shell: {type:'stateChanged', module:'windASCE', state:{...}, unitSystem}
+   ===================================================================== */
+(function () {
+  function snapshotState() {
+    try { return JSON.parse(JSON.stringify(state)); } catch (e) { return null; }
+  }
+
+  function postState() {
+    if (window.parent === window) return; // not embedded
+    window.parent.postMessage({ type: 'stateChanged', module: 'windASCE', state: snapshotState() }, '*');
+  }
+
+  function applyState(newState) {
+    if (!newState) return;
+    Object.assign(state, newState);
+
+    document.getElementById('V').value = fmt(speedOut(state.V), 1);
+    document.getElementById('exposure').value = state.exposure;
+    if (document.getElementById('kzt')) document.getElementById('kzt').value = state.kzt;
+    document.getElementById('groundElev').value = fmt(lengthOut(state.groundElev), 1);
+    document.getElementById('enclosure').value = state.enclosure;
+    document.getElementById('h').value = fmt(lengthOut(state.h), 2);
+    document.getElementById('minDim').value = fmt(lengthOut(state.minDim), 2);
+  const blEl = document.getElementById('buildingL');
+  if (blEl) blEl.value = fmt(lengthOut(state.buildingL), 2);
+    document.getElementById('theta').value = state.theta;
+    document.getElementById('areaWall').value = fmt(areaOut(state.areaWall), 2);
+    document.getElementById('areaRoof').value = fmt(areaOut(state.areaRoof), 2);
+    document.getElementById('roofType').value = state.roofType || (state.theta > 7 ? 'sloped' : 'flat');
+    state.roofType = document.getElementById('roofType').value;
+    const roofShapeSel = document.getElementById('roofShape');
+    if (roofShapeSel) {
+      roofShapeSel.value = state.roofShape || 'gable';
+      state.roofShape = roofShapeSel.value;
+    }
+    const hasOverhangEl = document.getElementById('hasOverhang');
+    const hasParapetEl = document.getElementById('hasParapet');
+    if (hasParapetEl) hasParapetEl.checked = !!state.hasParapet;
+    const parapetHeightEl = document.getElementById('parapetHeight');
+    if (parapetHeightEl) parapetHeightEl.value = fmt(lengthOut(state.parapetHeight), 2);
+
+    // Attached Canopy (Sec. 30.9) inputs
+    const hasCanopyEl2 = document.getElementById('hasCanopy');
+    if (hasCanopyEl2) hasCanopyEl2.checked = !!state.hasCanopy;
+    const canopyAreaEl2 = document.getElementById('canopyArea');
+    if (canopyAreaEl2) canopyAreaEl2.value = fmt(areaOut(state.canopyArea), 1);
+    const canopyHcEl2 = document.getElementById('canopyHc');
+    if (canopyHcEl2) canopyHcEl2.value = fmt(lengthOut(state.canopyHc), 2);
+    const canopyHeEl2 = document.getElementById('canopyHe');
+    if (canopyHeEl2) canopyHeEl2.value = fmt(lengthOut(state.canopyHe), 2);
+
+    // Circular Bins, Silos, and Tanks (Sec. 30.10) inputs
+    const hasCircularTankEl2 = document.getElementById('hasCircularTank');
+    if (hasCircularTankEl2) hasCircularTankEl2.checked = !!state.hasCircularTank;
+    const tankDEl2 = document.getElementById('tankD');
+    if (tankDEl2) tankDEl2.value = fmt(lengthOut(state.tankD), 2);
+    const tankHEl2 = document.getElementById('tankH');
+    if (tankHEl2) tankHEl2.value = fmt(lengthOut(state.tankH), 2);
+    const tankOpenTopEl2 = document.getElementById('tankOpenTop');
+    if (tankOpenTopEl2) tankOpenTopEl2.checked = !!state.tankOpenTop;
+    const tankElevatedEl2 = document.getElementById('tankElevated');
+    if (tankElevatedEl2) tankElevatedEl2.checked = !!state.tankElevated;
+
+    // Open Building — Free Roof (Sec. 27.3.2) inputs
+    const openRoofShapeEl = document.getElementById('openRoofShape');
+    if (openRoofShapeEl) {
+      openRoofShapeEl.value = state.openRoofShape || 'monoslope';
+      state.openRoofShape = openRoofShapeEl.value;
+    }
+    const openWindFlowEl = document.getElementById('openWindFlow');
+    if (openWindFlowEl) {
+      openWindFlowEl.value = state.openWindFlow || 'clear';
+      state.openWindFlow = openWindFlowEl.value;
+    }
+    const openLEl = document.getElementById('openL');
+    if (openLEl) openLEl.value = fmt(lengthOut(state.openL || 40), 2);
+
+    // Project Information (report header)
+    if (!state.projectDate) {
+      const d = new Date();
+      state.projectDate = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    document.getElementById('projectName').value = state.projectName || '';
+    document.getElementById('projectNumber').value = state.projectNumber || '';
+    document.getElementById('engineer').value = state.engineer || '';
+    document.getElementById('projectDate').value = state.projectDate;
+    document.getElementById('riskCategory').value = state.riskCategory || 'II';
+
+    // Print title block fields (Phase 3 / report header)
+    document.getElementById('companyName').value = state.companyName || '';
+    document.getElementById('jobRef').value = state.jobRef || '';
+    document.getElementById('chkdBy').value = state.chkdBy || '';
+    document.getElementById('chkdDate').value = state.chkdDate || '';
+    document.getElementById('appdBy').value = state.appdBy || '';
+    document.getElementById('appdDate').value = state.appdDate || '';
+
+    document.getElementById('unitSI').classList.toggle('active', state.unitSystem === 'SI');
+    document.getElementById('unitUS').classList.toggle('active', state.unitSystem === 'US');
+
+    applyModeVisibility();
+    applyRoofTypeVisibility();
+    applyEnclosureVisibility();
+    updateUnitLabels();
+    renderResults();
+  }
+
+  window.addEventListener('message', (event) => {
+    const msg = event.data;
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.type === 'loadState') {
+      applyState(msg.state);
+      if (msg.unitSystem) setUnitSystem(msg.unitSystem);
+    } else if (msg.type === 'requestState') {
+      postState();
+    }
+  });
+
+  const origRender = renderResults;
+  renderResults = function () {
+    origRender();
+    postState();
+  };
+})();

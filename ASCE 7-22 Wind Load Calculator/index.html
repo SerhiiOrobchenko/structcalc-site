@@ -517,6 +517,29 @@
             <input type="number" id="canopyHe" step="any" min="0">
           </div>
         </div>
+        <div class="row2">
+          <div class="field checkbox-field">
+            <label for="hasCircularTank"><input type="checkbox" id="hasCircularTank"> Circular bin, silo, or tank <span class="ref">Sec. 30.10</span><button type="button" class="info-btn" data-info="circTank" aria-label="Learn more">i</button></label>
+          </div>
+        </div>
+        <div class="row2" id="circTankGeomRow">
+          <div class="field">
+            <label for="tankD">Diameter, D (<span id="lblTankD">ft</span>)<button type="button" class="info-btn" data-info="circTank" aria-label="Learn more">i</button></label>
+            <input type="number" id="tankD" step="any" min="0">
+          </div>
+          <div class="field">
+            <label for="tankH">Cylinder height, H (<span id="lblTankH">ft</span>)<button type="button" class="info-btn" data-info="circTank" aria-label="Learn more">i</button></label>
+            <input type="number" id="tankH" step="any" min="0">
+          </div>
+        </div>
+        <div class="row2" id="circTankOptRow">
+          <div class="field checkbox-field">
+            <label for="tankOpenTop"><input type="checkbox" id="tankOpenTop"> Open-topped <span class="ref">Sec. 30.10.3, Eq. 30.10-5</span><button type="button" class="info-btn" data-info="circTank" aria-label="Learn more">i</button></label>
+          </div>
+          <div class="field checkbox-field">
+            <label for="tankElevated"><input type="checkbox" id="tankElevated"> Elevated on columns <span class="ref">Sec. 30.10.5</span><button type="button" class="info-btn" data-info="circTank" aria-label="Learn more">i</button></label>
+          </div>
+        </div>
       </div>
       <div style="flex:1 1 460px; min-width:300px;">
         <p class="muted" style="margin:0 0 10px;">Schematic only, updates live with the inputs at left. The edge-zone width <strong>a</strong> shown is computed per the Notation under Figures 28.3-1/30.3-1/30.3-2A (<button type="button" class="info-btn" data-info="minDim" aria-label="Learn more">i</button> see "Least Horizontal Dimension"). For the exact pressure-zone layouts, see ASCE/SEI 7-22 Figure 28.3-1 (MWFRS) or Figures 30.3-1 / 30.3-2A (C&amp;C).</p>
@@ -1022,6 +1045,11 @@
   <div class="panel" id="canopySection" style="display:none;">
     <h2>Attached Canopy Wind Pressures <span class="ref">Sec. 30.9, Eq. 30.9-1</span><button type="button" class="info-btn" data-info="canopy" aria-label="Learn more">i</button></h2>
     <div id="canopyResults"></div>
+  </div>
+
+  <div class="panel" id="circTankSection" style="display:none;">
+    <h2>Circular Bins, Silos, and Tanks &mdash; C&amp;C Pressures <span class="ref">Sec. 30.10, Eq. 30.10-1</span><button type="button" class="info-btn" data-info="circTank" aria-label="Learn more">i</button></h2>
+    <div id="circTankResults"></div>
   </div>
 
   <div class="panel" id="openRoofSection" style="display:none;">
