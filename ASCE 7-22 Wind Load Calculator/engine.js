@@ -414,7 +414,7 @@ const state = {
   areaWall: 20,      // C&C effective wind area, walls, ft^2
   areaRoof: 50,      // C&C effective wind area, roof, ft^2
   hasOverhang: false, // Sec. 30.7 — building has roof overhangs requiring overhang C&C pressures
-  hasParapet: false, // Sec. 27.3.4 (MWFRS) / Sec. 30.9 (C&C) — building has a parapet
+  hasParapet: false, // Sec. 27.3.4 (MWFRS) / Sec. 30.6 (C&C) — building has a parapet
   parapetHeight: 3,  // height of parapet above the roof surface, ft (used to compute q<sub>p</sub> at top of parapet)
 
   // Open Building — Free Roof (Sec. 27.3.2), only used when enclosure === 'openFreeRoof'
@@ -682,10 +682,10 @@ function computeQp(s, kh_unused, ke, hp) {
   const kztP = computeKzt(s, zParapet); return { zParapet, khp, qp: 0.00256 * khp * kztP.kzt * ke * s.V * s.V };
 }
 
-// Parapets — C&C: Sec. 30.9 ("Parapets"), Eq. 30.9-1: p = qp[(GCp) - (GCpi)]. Per the
+// Parapets — C&C: Sec. 30.6 ("Parapets"), Eq. 30.6-1: p = qp[(GCp) - (GCpi)]. Per the
 // two-load-case approach described in Meca Enterprises' "Wind Load on Parapets"
 // article (citing the analogous ASCE 7-16 Ch. 30 Part 6 / Sec. 30.8, renumbered to
-// Sec. 30.9 in ASCE 7-22):
+// Sec. 30.6 in ASCE 7-22):
 //   Load A — positive wall (GCp) (Fig. 30.3-1) acts on the front face of the parapet
 //            while negative edge/corner roof (GCp) (Fig. 30.3-2A/2B-2G) acts on the
 //            back face; net (GCp)_A = wall.pos - roof.neg.
@@ -1490,7 +1490,7 @@ function compute(s) {
     })
     : [];
 
-  // --- Parapets (MWFRS Sec. 27.3.4/28.3.4 + C&C Sec. 30.9) ---
+  // --- Parapets (MWFRS Sec. 27.3.4/28.3.4 + C&C Sec. 30.6) ---
   // qp is the velocity pressure at the top of the parapet (z = h + parapet height),
   // using the same Table 26.10-1 Kh formula evaluated at the higher elevation
   // (computeQp / computeKh above). See the comment block above gcpParapet()/PARAPET_ROOF_ZONE
@@ -1504,7 +1504,7 @@ function compute(s) {
     const ppLeeward = qp * KD * (-1.0);
     const ppTotal = ppWindward - ppLeeward; // sum of magnitudes (windward + |leeward|)
 
-    // C&C — Eq. 30.9-1: p = qp[(GCp) - (GCpi)], GCpi = 0 (both faces exterior)
+    // C&C — Eq. 30.6-1: p = qp[(GCp) - (GCpi)], GCpi = 0 (both faces exterior)
     const ccParapet = ['4', '5'].map(z => {
       const gc = gcpParapet(z, s.areaWall, s.theta, s.roofShape);
       if (gc.capped) roofCapped = true;
@@ -2000,14 +2000,14 @@ const OVERHANG_ZONE_LABELS = {
   '3': '3 (corner, w/ wall Zone 5)'
 };
 
-// Zone labels for the parapet C&C table (Sec. 30.9) — these are wall zones 4/5; the
+// Zone labels for the parapet C&C table (Sec. 30.6) — these are wall zones 4/5; the
 // paired roof zone (per PARAPET_ROOF_ZONE) feeds Load A — see gcpParapet().
 const PARAPET_ZONE_LABELS = {
   '4': '4 (field, w/ roof Zone 2)',
   '5': '5 (corner, w/ roof Zone 3)'
 };
 
-// C&C parapet table (Sec. 30.9, Load A / Load B) — distinct from zoneTable() because
+// C&C parapet table (Sec. 30.6, Load A / Load B) — distinct from zoneTable() because
 // each zone carries two independent (GCp)/pressure pairs (Load A and Load B) rather
 // than a single neg/pos range.
 function ccParapetTableHTML(rows, labels) {
@@ -2231,7 +2231,7 @@ function renderResults() {
     zoneTable('ccOverhangTable', r.ccOverhang, true, OVERHANG_ZONE_LABELS);
   }
 
-  // Parapets (MWFRS Sec. 27.3.4/28.3.4 + C&C Sec. 30.9) — only shown when the
+  // Parapets (MWFRS Sec. 27.3.4/28.3.4 + C&C Sec. 30.6) — only shown when the
   // "has parapet" toggle is on
   const parapetSection = document.getElementById('parapetSection');
   if (parapetSection) parapetSection.style.display = state.hasParapet ? '' : 'none';
@@ -2376,7 +2376,7 @@ function reportInputDataHTML(r) {
   }
   rows += reportRow('Parapet', s.hasParapet
     ? ('Yes &mdash; height = ' + fmt(lengthOut(s.parapetHeight), 2) + ' ' + lenUnit)
-    : 'No', 'Sec. 27.3.4 / 28.3.4 (MWFRS); Sec. 30.9 (C&amp;C)');
+    : 'No', 'Sec. 27.3.4 / 28.3.4 (MWFRS); Sec. 30.6 (C&amp;C)');
   if (s.mode === 'cc') {
     rows += reportRow('Wall C&amp;C effective wind area', fmt(areaOut(s.areaWall), 1) + ' ' + areaUnit, 'Fig. 30.3-1');
     rows += reportRow('Roof C&amp;C effective wind area', fmt(areaOut(s.areaRoof), 1) + ' ' + areaUnit, 'Figs. 30.3-2A&ndash;2G');
@@ -3242,7 +3242,7 @@ function reportCCHTML(r) {
   return html;
 }
 
-// Parapet Wind Pressures section (Sec. 27.3.4/28.3.4 MWFRS + Sec. 30.9 C&C) —
+// Parapet Wind Pressures section (Sec. 27.3.4/28.3.4 MWFRS + Sec. 30.6 C&C) —
 // identical cards/tables/citations to the on-screen #parapetSection.
 function reportParapetHTML(r) {
   const s = state;
@@ -3258,7 +3258,7 @@ function reportParapetHTML(r) {
     '<tr><td>Total combined p<sub>p</sub></td><td>' + fmt(pVal(p.ppTotal), 2) + ' ' + pUnit() + '</td></tr>' +
     '</tbody></table>';
   html += '<p class="muted" style="margin:10px 0;">The Envelope Procedure (Ch. 28) parapet provision is applied here using the same (GC<sub>pn</sub>) values as Sec. 27.3.4, cited provisionally as Sec. 28.3.4 &mdash; this Ch.27&rarr;Ch.28 cross-reference is engineering judgment, unverified; see the on-screen "i" button for details.</p>';
-  html += '<h3>C&amp;C &mdash; Walls Zones 4 &amp; 5, Load A / Load B <span class="ref">Eq. 30.9-1</span></h3>' +
+  html += '<h3>C&amp;C &mdash; Walls Zones 4 &amp; 5, Load A / Load B <span class="ref">Eq. 30.6-1</span></h3>' +
     '<p class="muted" style="margin:0 0 10px;">Load A = front-face wall (GC<sub>p</sub>)<sub>pos</sub> + back-face roof (GC<sub>p</sub>)<sub>neg</sub> (paired zone). Load B = back-face wall (GC<sub>p</sub>)<sub>pos</sub> + front-face wall (GC<sub>p</sub>)<sub>neg</sub> (same zone). q<sub>p</sub> above is used for both.</p>' +
     ccParapetTableHTML(p.ccParapet, PARAPET_ZONE_LABELS);
   return html;
@@ -3452,7 +3452,7 @@ function buildReportHTML(r) {
   }
 
   if (s.hasParapet && r.parapet) {
-    html += section('Parapet Wind Pressures', 'Sec. 27.3.4/28.3.4 (MWFRS); Sec. 30.9 (C&amp;C)', reportParapetHTML(r));
+    html += section('Parapet Wind Pressures', 'Sec. 27.3.4/28.3.4 (MWFRS); Sec. 30.6 (C&amp;C)', reportParapetHTML(r));
   }
 
   if (r.openRoof) {
@@ -4273,7 +4273,7 @@ function bindInputs() {
     });
   }
 
-  // Parapets (Sec. 27.3.4/28.3.4 MWFRS + Sec. 30.9 C&C) toggle + height
+  // Parapets (Sec. 27.3.4/28.3.4 MWFRS + Sec. 30.6 C&C) toggle + height
   const hasParapetEl = document.getElementById('hasParapet');
   if (hasParapetEl) {
     hasParapetEl.addEventListener('change', e => {
@@ -4775,11 +4775,11 @@ const INFO_CONTENT = {
     <p>The exact roof-zone&harr;wall-zone pairing is not explicitly tabulated in the secondary sources reviewed for this calculator; the pairing used here is this calculator's engineering judgment based on the geometric correspondence of the "a"-dimension zones. Verify against ASCE/SEI 7-22 Sec. 30.7 and Fig. 30.7-1 directly for critical designs.</p>`
   },
   parapet: {
-    title: 'Parapets — Sec. 27.3.4 (MWFRS) / Sec. 30.9 (C&amp;C)',
+    title: 'Parapets — Sec. 27.3.4 (MWFRS) / Sec. 30.6 (C&amp;C)',
     html: `<p><span class="src-tag">ASCE/SEI 7-22, Sec. 27.3.4 ("Parapets")</span>, Eq. 27.3-3 &mdash; the design wind pressure on a solid parapet for the MWFRS is p<sub>p</sub> = q<sub>p</sub> K<sub>d</sub> (GC<sub>pn</sub>), where (GC<sub>pn</sub>) = <strong>+1.5</strong> for the windward parapet and <strong>&minus;1.0</strong> for the leeward parapet, and q<sub>p</sub> is the velocity pressure evaluated at the top of the parapet (using the same K<sub>z</sub> formula of Table 26.10-1, evaluated at z = h + parapet height). These (GC<sub>pn</sub>) values are corroborated by RISA's "Load Generation &mdash; Wind Loads" documentation and the ICC "Demystifying Loads for Building Officials" ASCE 7-22 guide.</p>
     <p>This calculator's MWFRS procedure is the Envelope Procedure (Ch. 28). Per Meca Enterprises' ASCE 7-16 comparison, the Ch. 27 Part 1 (then Sec. 27.3.4) and Ch. 28 Part 1 (then Sec. 28.3.2) parapet provisions were numerically identical (same (GC<sub>pn</sub>) = +1.5/&minus;1.0, same q<sub>p</sub>). This calculator assumes the same correspondence holds for ASCE 7-22 and applies these (GC<sub>pn</sub>) values to the Envelope Procedure as well, provisionally citing this as <strong>Sec. 28.3.4</strong> &mdash; <span class="src-tag">this exact section number has NOT been independently confirmed against the ASCE/SEI 7-22 text; verify directly.</span></p>
     <p>"Total parapet pressure" = windward p<sub>p</sub> &minus; leeward p<sub>p</sub> (sum of magnitudes), per the combined-pressure convention shown in worked examples (e.g., Meca's 47.1 psf + 31.4 psf = 78.5 psf for a representative case).</p>
-    <p><span class="src-tag">ASCE/SEI 7-22, Sec. 30.9 ("Parapets")</span>, Eq. 30.9-1 &mdash; C&amp;C pressure on a parapet is p = q<sub>p</sub>[(GC<sub>p</sub>) &minus; (GC<sub>pi</sub>)], with (GC<sub>pi</sub>) = 0 because both faces of the parapet are exterior surfaces (same reasoning as the roof-overhang calculation, Sec. 30.7). Following the two-load-case approach in Meca Enterprises' "Wind Load on Parapets" article (for the analogous ASCE 7-16 Sec. 30.8, renumbered to Sec. 30.9 in ASCE 7-22):</p>
+    <p><span class="src-tag">ASCE/SEI 7-22, Sec. 30.6 ("Parapets")</span>, Eq. 30.6-1 &mdash; C&amp;C pressure on a parapet is p = q<sub>p</sub>[(GC<sub>p</sub>) &minus; (GC<sub>pi</sub>)], with (GC<sub>pi</sub>) = 0 because both faces of the parapet are exterior surfaces (same reasoning as the roof-overhang calculation, Sec. 30.7). Following the two-load-case approach in Meca Enterprises' "Wind Load on Parapets" article (Load Case A/B terminology and pairing logic confirmed against ASCE 7-22 Sec. 30.6 text directly):</p>
     <p><strong>Load A</strong> &mdash; positive wall (GC<sub>p</sub>) (Fig. 30.3-1) on the front face combined with negative roof edge/corner (GC<sub>p</sub>) (Fig. 30.3-2A&ndash;G) on the back face: net (GC<sub>p</sub>)<sub>A</sub> = wall (GC<sub>p</sub>)<sub>pos</sub> &minus; roof (GC<sub>p</sub>)<sub>neg</sub>.<br>
     <strong>Load B</strong> &mdash; positive wall (GC<sub>p</sub>) on the back face combined with negative wall (GC<sub>p</sub>) (same zone) on the front face: net (GC<sub>p</sub>)<sub>B</sub> = wall (GC<sub>p</sub>)<sub>pos</sub> &minus; wall (GC<sub>p</sub>)<sub>neg</sub>.</p>
     <p>This calculator pairs wall Zone 4 (field) with roof Zone 2 (edge), and wall Zone 5 (corner) with roof Zone 3 (corner) for Load A &mdash; <span class="src-tag">this zone pairing is this calculator's engineering judgment</span> (the inverse of the roof-overhang pairing in Sec. 30.7, for the same geometric reason), not an explicit tabulated pairing found in the sources reviewed. It is numerically consistent with Meca's worked example, in which wall Zone 4 (GC<sub>p</sub>)<sub>pos</sub> = +1.0 and roof Zone 2 (GC<sub>p</sub>)<sub>neg</sub> = &minus;2.3 (A = 10 ft&sup2;) match this calculator's tables exactly.</p>
@@ -5189,7 +5189,7 @@ async function exportReportDOCX(r) {
     const p = r.parapet;
     const lenUnit = s.unitSystem === 'SI' ? 'm' : 'ft';
     children.push(new docx.Paragraph({ children: [], spacing: { before: 160, after: 0 } }));
-    children.push(docxHeading('5. Parapet Wind Pressures — Sec. 27.3.4/28.3.4 (MWFRS); Sec. 30.9 (C&C)'));
+    children.push(docxHeading('5. Parapet Wind Pressures — Sec. 27.3.4/28.3.4 (MWFRS); Sec. 30.6 (C&C)'));
     const parapetAoa = [
       ['Quantity', 'Value'],
       ['z (top of parapet), ' + lenUnit, fmt(lengthOut(p.zParapet), 1)],
@@ -5501,7 +5501,7 @@ function exportReportRTF(r) {
   if (s.hasParapet && r.parapet) {
     const p = r.parapet;
     const lenUnit = s.unitSystem === 'SI' ? 'm' : 'ft';
-    chunks.push(rtfH2('5. Parapet Wind Pressures — Sec. 27.3.4/28.3.4 (MWFRS); Sec. 30.9 (C&C)'));
+    chunks.push(rtfH2('5. Parapet Wind Pressures — Sec. 27.3.4/28.3.4 (MWFRS); Sec. 30.6 (C&C)'));
     // Plain-text labels (no sub/super needed here — matches Word export style)
     const parapetSumAoa = [
       ['Quantity', 'Value'],
@@ -5757,9 +5757,9 @@ async function exportReportXLSX(r) {
       ['p_p, leeward (GCpn=-1.0), ' + pUnit(), fmt(pVal(p.ppLeeward), 2)],
       ['Total combined p_p, ' + pUnit(), fmt(pVal(p.ppTotal), 2)],
       [],
-      ['C&C Walls — Zones 4 & 5, Load A / Load B — Eq. 30.9-1']
+      ['C&C Walls — Zones 4 & 5, Load A / Load B — Eq. 30.6-1']
     ];
-    appendAoaSheet(wb, 'Parapet', 'Parapet Wind Pressures — Sec. 27.3.4/28.3.4 (MWFRS), Sec. 30.9 (C&C)',
+    appendAoaSheet(wb, 'Parapet', 'Parapet Wind Pressures — Sec. 27.3.4/28.3.4 (MWFRS), Sec. 30.6 (C&C)',
       parapetSummary.concat(ccParapetAOA(p.ccParapet, PARAPET_ZONE_LABELS)));
   }
 
