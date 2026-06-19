@@ -3762,7 +3762,7 @@ function buildReportHTML(r) {
 
   let html = '';
 
-  html += section('Project &amp; Input Data', 'ASCE/SEI 7-22, Chapters 26&ndash;30', reportInputDataHTML(r));
+  html += section('Project &amp; Input Data', 'ASCE/SEI 7-22, Chapters 26&ndash;32', reportInputDataHTML(r));
   html += section('Design Summary', null, reportDesignSummaryHTML(r));
   html += section('Step-by-Step Calculation', 'ASCE/SEI 7-22 Ch. 26', stepsTableHTML(r.steps));
 
@@ -5583,7 +5583,7 @@ async function exportReportDOCX(r) {
   children.push(new docx.Paragraph({
     heading: docx.HeadingLevel.HEADING_1,
     children: [new docx.TextRun({
-      text: 'Wind Load Report — ASCE/SEI 7-22, Chapters 26–30',
+      text: 'Wind Load Report — ASCE/SEI 7-22, Chapters 26–32',
       bold: true, size: 28, font: 'Arial',
     })],
     spacing: { before: 0, after: 120 },
@@ -5605,7 +5605,7 @@ async function exportReportDOCX(r) {
   }));
 
   // 1. Input Data
-  children.push(docxHeading('1. Project & Input Data — ASCE/SEI 7-22, Chapters 26–30'));
+  children.push(docxHeading('1. Project & Input Data — ASCE/SEI 7-22, Chapters 26–32'));
   children.push(aoaToWordTable(inputDataAOA(r), [3400, 2900, 3060]));
   children.push(new docx.Paragraph({ children: [], spacing: { before: 160, after: 0 } }));
 
@@ -5945,7 +5945,7 @@ function exportReportRTF(r) {
   // --- Report title ---
   chunks.push(
     '\\pard\\sb120\\sa60{\\b\\fs32\\cf2 ' +
-    rtfEsc('Wind Load Report — ASCE/SEI 7-22, Chapters 26–30') +
+    rtfEsc('Wind Load Report — ASCE/SEI 7-22, Chapters 26–32') +
     '}\\cf1\\par'
   );
   const modeTxt = s.mode === 'mwfrs'
@@ -5959,7 +5959,7 @@ function exportReportRTF(r) {
   );
 
   // --- 1. Input Data ---
-  chunks.push(rtfH2('1. Project & Input Data — ASCE/SEI 7-22, Chapters 26–30'));
+  chunks.push(rtfH2('1. Project & Input Data — ASCE/SEI 7-22, Chapters 26–32'));
   chunks.push(aoaToRtfTable(inputDataAOA(r), [3400, 2900, 3060]));
 
   // --- 2. Design Summary ---
