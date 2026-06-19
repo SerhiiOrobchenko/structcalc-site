@@ -498,6 +498,25 @@
             <input type="number" id="parapetHeight" step="any" min="0">
           </div>
         </div>
+        <div class="row2">
+          <div class="field checkbox-field">
+            <label for="hasCanopy"><input type="checkbox" id="hasCanopy"> Building has an attached canopy <span class="ref">Sec. 30.9</span><button type="button" class="info-btn" data-info="canopy" aria-label="Learn more">i</button></label>
+          </div>
+          <div class="field">
+            <label for="canopyArea">Canopy effective wind area, A (<span id="lblCanopyArea">ft&sup2;</span>)<button type="button" class="info-btn" data-info="canopy" aria-label="Learn more">i</button></label>
+            <input type="number" id="canopyArea" step="any" min="0">
+          </div>
+        </div>
+        <div class="row2" id="canopyGeomRow">
+          <div class="field">
+            <label for="canopyHc">Canopy height, h<sub>c</sub> (<span id="lblCanopyHc">ft</span>)<button type="button" class="info-btn" data-info="canopy" aria-label="Learn more">i</button></label>
+            <input type="number" id="canopyHc" step="any" min="0">
+          </div>
+          <div class="field">
+            <label for="canopyHe">Building eave height, h<sub>e</sub> (<span id="lblCanopyHe">ft</span>)<button type="button" class="info-btn" data-info="canopy" aria-label="Learn more">i</button></label>
+            <input type="number" id="canopyHe" step="any" min="0">
+          </div>
+        </div>
       </div>
       <div style="flex:1 1 460px; min-width:300px;">
         <p class="muted" style="margin:0 0 10px;">Schematic only, updates live with the inputs at left. The edge-zone width <strong>a</strong> shown is computed per the Notation under Figures 28.3-1/30.3-1/30.3-2A (<button type="button" class="info-btn" data-info="minDim" aria-label="Learn more">i</button> see "Least Horizontal Dimension"). For the exact pressure-zone layouts, see ASCE/SEI 7-22 Figure 28.3-1 (MWFRS) or Figures 30.3-1 / 30.3-2A (C&amp;C).</p>
@@ -812,6 +831,17 @@
             <input type="number" id="ch29BL" step="any" min="1" value="3600">
           </div>
         </div>
+        <p class="muted" style="margin:10px 0 10px; font-size:.84rem;">Sec. 30.8 Components &amp; Cladding: p<sub>wall</sub> = F<sub>h</sub> / A<sub>wall</sub>&nbsp;|&nbsp;p<sub>roof</sub> = F<sub>v</sub> / A<sub>roof</sub></p>
+        <div class="row2">
+          <div class="field">
+            <label for="ch29CCAwall">C&amp;C wall tributary area A<sub>wall</sub> (<span class="ch29-area-lbl">ft&sup2;</span>)</label>
+            <input type="number" id="ch29CCAwall" step="any" min="0.1" value="80">
+          </div>
+          <div class="field">
+            <label for="ch29CCAroof">C&amp;C roof tributary area A<sub>roof</sub> (<span class="ch29-area-lbl">ft&sup2;</span>)</label>
+            <input type="number" id="ch29CCAroof" step="any" min="0.1" value="80">
+          </div>
+        </div>
       </div>
 
       <!-- Rooftop Solar Panels (Sec. 29.4.3) -->
@@ -989,6 +1019,11 @@
     <div id="ccParapetTable"></div>
   </div>
 
+  <div class="panel" id="canopySection" style="display:none;">
+    <h2>Attached Canopy Wind Pressures <span class="ref">Sec. 30.9, Eq. 30.9-1</span><button type="button" class="info-btn" data-info="canopy" aria-label="Learn more">i</button></h2>
+    <div id="canopyResults"></div>
+  </div>
+
   <div class="panel" id="openRoofSection" style="display:none;">
     <h2>Open Building &mdash; Free Roof Pressures <span class="ref">Sec. 27.3.2, Eq. 27.3-2: p = q<sub>h</sub>K<sub>d</sub>GC<sub>N</sub></span><button type="button" class="info-btn" data-info="openRoof" aria-label="Learn more">i</button></h2>
     <div class="summary-cards">
@@ -1102,28 +1137,4 @@
     </ul>
 
     <div class="alert info">
-      <strong>Applicability:</strong> this module implements the Envelope Procedure (Chapters 28 &amp; 30, Part 1) for enclosed or partially enclosed buildings with a flat, gable, or hip roof, mean roof height h &le; 60 ft, and h not exceeding the least horizontal dimension (Sec. 28.3.1 / 30.3.1 conditions). Open and partially open buildings with K<sub>zt</sub>&gt;1 inputs are computed arithmetically but the underlying figures (28.3-1/30.3-1/30.3-2A) are derived for enclosed/partially enclosed buildings &mdash; verify applicability for your specific case.
-    </div>
-
-    <h3>Not yet included (planned next)</h3>
-    <ul>
-      <li><strong>Roof corner downdraft / Zone 3&prime; high-suction corners</strong>, and <strong>rooftop equipment / appurtenances</strong> (Sec. 29.4&ndash;29.5) &mdash; not yet included.</li>
-      <li><strong>Directional Procedure</strong> (Chapter 27, Parts 1&ndash;2) for enclosed/partially enclosed buildings of any height, and <strong>Chapter 27/30 Parts 3&ndash;6</strong> (stepped/sawtooth roofs, attached canopies, rooftop solar) &mdash; future modules. Open buildings with monoslope, pitched, or troughed free roofs (Sec. 27.3.2, Figs. 27.3-4&ndash;27.3-7) are now implemented via the "Open Building &mdash; Free Roof" enclosure option above.</li>
-      <li><strong>Topographic factor K<sub>zt</sub></strong> from Figure 26.8-1 (currently entered directly by the user).</li>
-      <li>Automatic lookup of <strong>basic wind speed V</strong> from the ASCE Hazard Tool (currently entered manually, as with p<sub>g</sub> in the Snow module).</li>
-    </ul>
-
-    <p>Site and calculations by StructCalc (working title) &mdash; built for Serhii. This is a working engineering tool; always verify results against the applicable standard before use in design.</p>
-  </div>
-</footer>
-
-<div class="modal-overlay" id="infoModal">
-  <div class="modal-box">
-    <button type="button" class="modal-close" id="infoModalClose" aria-label="Close">&times;</button>
-    <div id="modalContent"></div>
-  </div>
-</div>
-
-<script src="engine.js"></script>
-</body>
-</html>
+      <strong>Applicability:</strong> this module implements the Envelope Procedure (Chapters 28 &amp; 30, Part 1) for enclosed or partially enclosed buildings with a flat, gable, or hip roof, mean roof height h &le; 60 ft, and h not exceeding the least horizontal dimension (Sec. 28.3.1 / 30.3.1 conditions). Open and partially open buildings with K<sub>zt</sub>&gt;1 inputs are computed arithmetically but the underlying figures (28.3

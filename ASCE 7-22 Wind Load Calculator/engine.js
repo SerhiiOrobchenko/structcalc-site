@@ -416,6 +416,10 @@ const state = {
   hasOverhang: false, // Sec. 30.7 — building has roof overhangs requiring overhang C&C pressures
   hasParapet: false, // Sec. 27.3.4 (MWFRS) / Sec. 30.6 (C&C) — building has a parapet
   parapetHeight: 3,  // height of parapet above the roof surface, ft (used to compute q<sub>p</sub> at top of parapet)
+  hasCanopy: false,  // Sec. 30.9 — building has an attached canopy requiring canopy C&C pressures
+  canopyArea: 50,    // effective wind (tributary) area for the canopy panel/fastener being designed, ft²
+  canopyHc: 10,      // canopy height above grade (or reference datum), ft — h_c in Figs. 30.9-1B/2B
+  canopyHe: 12,      // building eave height, ft — h_e in Figs. 30.9-1B/2B (h_c/h_e ratio governs net (GCp))
 
   // Open Building — Free Roof (Sec. 27.3.2), only used when enclosure === 'openFreeRoof'
   openRoofShape: 'monoslope', // 'monoslope' | 'pitched' | 'troughed' — Figs. 27.3-4/5/6
@@ -469,6 +473,11 @@ const state = {
   ch29Ar:   80,   // rooftop equip: projected area on horizontal plane Ar, ft²
   ch29Bh:   600,  // rooftop equip: B × h of supporting building, ft²
   ch29BL:   3600, // rooftop equip: B × L of building roof, ft²
+  // Sec. 30.8 C&C for Rooftop Structures/Equipment — tributary surface areas
+  // for the specific wall/roof panel being designed (default = Af/Ar, i.e. the
+  // full unit, but may be set smaller for an individual cladding panel/fastener)
+  ch29CCAwall: 80,  // rooftop equip C&C: wall tributary area, ft² (default = Af)
+  ch29CCAroof: 80,  // rooftop equip C&C: roof tributary area, ft² (default = Ar)
   // Sec. 29.4.3 Rooftop Solar Panels
   ch29SolarOmega: 10,   // panel tilt ω (°), 0–35
   ch29SolarLp:    6.0,  // panel chord length Lp (ft)
@@ -719,6 +728,87 @@ function gcpParapet(wallZone, A, theta, roofShape) {
     gcB: wallGc.pos - wallGc.neg, // Load B: back (wall, pos) + front (wall, neg)
     capped: roofGc.capped || false
   };
+}
+
+// Attached Canopies on Buildings — Sec. 30.9 (Eq. 30.9-1: p = qh Kd (GCp), no
+// (GCpi) term — both canopy faces are exterior surfaces). (GCp) is read from
+// Fig. 30.9-1A/1B (h <= 60 ft) or 30.9-2A/2B (h > 60 ft):
+//   Figs. -1A/-2A ("separate surfaces") — distinct upper-surface and
+//     lower-surface (GCp), each acting alone, used for fastener design.
+//   Figs. -1B/-2B ("net/combined") — a single net (GCp) combining both
+//     surfaces simultaneously, used for structural design of the canopy
+//     framing; depends on h_c/h_e (canopy height / building eave height).
+// Canopies are flat (roof slope <= 2%) per Sec. 30.9 — distinct from roof
+// overhangs (Sec. 30.7, gcpOverhang above) and open-building free roofs
+// (Sec. 27.3.2/30.5).
+//
+// Values below transcribe ASCE 7-22 Commentary Tables C30.9-1 through
+// C30.9-4 (verified directly against the Standard/Commentary text), each of
+// which gives (GCp) as a piecewise log-area formula anchored at A = 10 and
+// 100 ft² (h <= 60 ft tables) or 10, 100, and 1000 ft² (h > 60 ft tables).
+// For A < 10 ft², the A = 10 ft² anchor value governs; beyond the table's
+// upper bound the last tabulated value governs (flagged via `capped`).
+// NOTE: Table C30.9-3's negative upper-surface formula has a genuine
+// discontinuity at A = 100 ft² as published (confirmed against source text)
+// — this is intentionally NOT smoothed over.
+function gcpCanopySeparate(A, hGt60) {
+  const a = Math.max(A, 10);
+  const La = Math.log10(a);
+  let negUpper, negLower, pos, capped = false;
+  if (!hGt60) {
+    // Table C30.9-1 (Fig. 30.9-1A), h <= 60 ft
+    negUpper = a <= 10 ? -1.15 : (a <= 100 ? (-1.55 + 0.1737 * La) : -0.75);
+    negLower = a <= 10 ? -0.8 : (a <= 100 ? (-0.95 + 0.0651 * La) : -0.65);
+    pos = a <= 10 ? 0.8 : (a <= 100 ? (1.0 - 0.087 * La) : 0.6);
+    if (A > 100) capped = true;
+  } else {
+    // Table C30.9-3 (Fig. 30.9-2A), h > 60 ft
+    const ac = Math.min(a, 1000);
+    const Lac = Math.log10(ac);
+    negUpper = a <= 10 ? -1.9 : (a <= 100 ? (-2.1 + 0.0869 * La) : (-3.1 + 0.304 * Lac));
+    negLower = a <= 10 ? -1.0 : (a <= 100 ? (-1.2 + 0.0869 * La) : (-1.4 + 0.1303 * Lac));
+    pos = a <= 10 ? 0.8 : (a <= 100 ? (1.0 - 0.087 * La) : 0.6);
+    if (A > 1000) capped = true;
+  }
+  return { negUpper, negLower, pos, capped };
+}
+
+function gcpCanopyNet(A, hcRatio, hGt60) {
+  const a = Math.max(A, 10);
+  const La = Math.log10(a);
+  let neg, pos, band, capped = false;
+  if (!hGt60) {
+    // Table C30.9-2 (Fig. 30.9-1B), h <= 60 ft
+    if (hcRatio >= 0.9) {
+      band = '0.9 ≤ h_c/h_e ≤ 1';
+      neg = a <= 10 ? -1.4 : (a <= 100 ? (-1.7 + 0.1303 * La) : -1.1);
+    } else if (hcRatio > 0.5) {
+      band = '0.5 < h_c/h_e < 0.9';
+      neg = a <= 10 ? -0.9 : (a <= 100 ? (-1.15 + 0.1086 * La) : -0.65);
+    } else {
+      band = 'h_c/h_e ≤ 0.5';
+      neg = a <= 10 ? -0.6 : (a <= 100 ? (-0.7 + 0.0434 * La) : -0.5);
+    }
+    pos = a <= 10 ? 0.9 : (a <= 100 ? (1.15 - 0.109 * La) : 0.65);
+    if (A > 100) capped = true;
+  } else {
+    // Table C30.9-4 (Fig. 30.9-2B), h > 60 ft
+    const ac = Math.min(a, 1000);
+    const Lac = Math.log10(ac);
+    if (hcRatio >= 0.9) {
+      band = '0.9 ≤ h_c/h_e ≤ 1';
+      neg = a <= 10 ? -2.3 : (a <= 100 ? (-2.5 + 0.0869 * La) : (-3.9 + 0.3909 * Lac));
+    } else {
+      band = (hcRatio > 0.1)
+        ? '0.1 < h_c/h_e < 0.9'
+        : 'h_c/h_e ≤ 0.1 (below tabulated range — lowest tabulated band used)';
+      if (hcRatio <= 0.1) capped = true;
+      neg = a <= 10 ? -1.3 : (a <= 100 ? (-1.85 + 0.2389 * La) : -0.75);
+    }
+    pos = a <= 10 ? 0.9 : (a <= 100 ? (1.15 - 0.109 * La) : 0.65);
+    if (A > 1000) capped = true;
+  }
+  return { neg, pos, band, capped };
 }
 
 // Open buildings — Fig. 27.3-4 (monoslope): theta < 7.5 deg uses the flat
@@ -1520,6 +1610,32 @@ function compute(s) {
     parapet = { hp: s.parapetHeight, zParapet, khp, qp, ppWindward, ppLeeward, ppTotal, ccParapet };
   }
 
+  // --- Attached Canopies on Buildings (Sec. 30.9, Eq. 30.9-1: p = qh Kd (GCp)) ---
+  // qh is evaluated at the building's mean roof height h (already computed above for
+  // the main C&C/MWFRS procedure) — Sec. 30.9 does not use a separate canopy-height qh.
+  // See gcpCanopySeparate()/gcpCanopyNet() above for the table citations and the h<=60
+  // vs h>60 ft figure split.
+  let canopy = null;
+  if (s.hasCanopy) {
+    const hGt60 = s.h > 60;
+    const A = Math.max(s.canopyArea, 0.1);
+    const hcRatio = s.canopyHe > 0 ? (s.canopyHc / s.canopyHe) : 0;
+    const sep = gcpCanopySeparate(A, hGt60);
+    const net = gcpCanopyNet(A, hcRatio, hGt60);
+    canopy = {
+      hGt60, A, hcRatio,
+      sepNegUpper: sep.negUpper, sepNegLower: sep.negLower, sepPos: sep.pos, sepCapped: sep.capped,
+      netNeg: net.neg, netPos: net.pos, netBand: net.band, netCapped: net.capped,
+      pSepUpperNeg: qh * KD * sep.negUpper,
+      pSepLowerNeg: qh * KD * sep.negLower,
+      pSepPos:      qh * KD * sep.pos,
+      pNetNeg:      qh * KD * net.neg,
+      pNetPos:      qh * KD * net.pos,
+      figRefSep: hGt60 ? 'Fig. 30.9-2A' : 'Fig. 30.9-1A',
+      figRefNet: hGt60 ? 'Fig. 30.9-2B' : 'Fig. 30.9-1B'
+    };
+  }
+
   // --- Open Buildings with Free Roofs (Sec. 27.3.2, Eq. 27.3-2: p = qh Kd G CN) ---
   let openRoof = null;
   if (s.enclosure === 'openFreeRoof') {
@@ -1683,7 +1799,7 @@ function compute(s) {
   return {
     kh, ke, kd: KD, qh, gcpi, a,
     steps, mwfrsLC1, mwfrsLC2, mwfrsLC3, mwfrsLC4, torsionApplies,
-    ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, openRoof,
+    ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, canopy, openRoof,
     mwfrsMinCheck, mwfrsMinGoverns, ccMinCheck, ccMinGoverns,
     ch27, cc30p2, ch29, cc30s305,
     ch32: (s.ch32Enabled ? computeCh32(s) : null), s: s
@@ -2243,6 +2359,15 @@ function renderResults() {
     setCard('parapetPleeward', fmt(pVal(r.parapet.ppLeeward), 2) + ' ' + pUnit());
     setCard('parapetPtotal', fmt(pVal(r.parapet.ppTotal), 2) + ' ' + pUnit());
     ccParapetTable('ccParapetTable', r.parapet.ccParapet, PARAPET_ZONE_LABELS);
+  }
+
+  // Attached Canopies on Buildings (Sec. 30.9) — only shown when the
+  // "has canopy" toggle is on
+  const canopySection = document.getElementById('canopySection');
+  if (canopySection) canopySection.style.display = state.hasCanopy ? '' : 'none';
+  if (state.hasCanopy && r.canopy) {
+    const canopyEl = document.getElementById('canopyResults');
+    if (canopyEl) canopyEl.innerHTML = reportCanopyHTML(r);
   }
 
   renderOpenRoof(r);
@@ -2967,8 +3092,16 @@ function computeCh29(s) {
     const GCrV = (Ar <= 0.1 * BL) ? 1.5 : Math.max(1.0, 1.5 * (0.1 * BL / Ar));
     const Fh = qh * KD * GCrH * Af;
     const Fv = qh * KD * GCrV * Ar;
+    // Sec. 30.8 Components & Cladding: C&C pressure on each wall of the
+    // rooftop structure = Fh divided by that wall's tributary surface area
+    // (acts inward or outward); C&C pressure on the roof = Fv (uplift)
+    // divided by the roof's horizontal projected tributary area.
+    const CCAwall = s.ch29CCAwall, CCAroof = s.ch29CCAroof;
+    const pWall = Fh / CCAwall;       // ±, psf
+    const pRoof = Fv / CCAroof;       // uplift, psf (acts upward → negative)
     return { type, KD, ke, kh, qh, Af, Ar, Bh, BL, GCrH, GCrV, Fh, Fv,
-             eqRef: 'Eqs. 29.4-2/3', cfRef: 'Sec. 29.4.1' };
+             CCAwall, CCAroof, pWall, pRoof,
+             eqRef: 'Eqs. 29.4-2/3', cfRef: 'Sec. 29.4.1', ccRef: 'Sec. 30.8' };
 
   } else if (type === 'solarPanel') {
     // Sec. 29.4.3 Rooftop Solar Panels — flat/gable/hip roof θ ≤ 7°
@@ -3164,6 +3297,21 @@ function reportCh29HTML(r) {
       '<tr><td>F<sub>v</sub> (vertical uplift)</td>' +
         '<td>q<sub>h</sub>&middot;K<sub>d</sub>&middot;(GC<sub>r</sub>)&middot;A<sub>r</sub></td>' +
         '<td class="val-neg">' + f2(c.Fv) + ' ' + fU + '</td></tr>' +
+      '</tbody></table>' +
+      '<h4>Components &amp; Cladding <span class="ref">Sec. 30.8</span></h4>' +
+      '<p class="muted">C&amp;C pressure on each wall of the rooftop structure = F<sub>h</sub> divided by the wall&rsquo;s tributary surface area (acts inward or outward); C&amp;C pressure on the roof = F<sub>v</sub> divided by the roof&rsquo;s horizontal projected tributary area (acts upward).</p>' +
+      '<table class="report-input-table"><tbody>' +
+      '<tr><td>Wall tributary area, A<sub>wall</sub></td><td>' + fmt(areaOut(c.CCAwall), 1) + ' ' + aU + '</td></tr>' +
+      '<tr><td>Roof tributary area, A<sub>roof</sub></td><td>' + fmt(areaOut(c.CCAroof), 1) + ' ' + aU + '</td></tr>' +
+      '</tbody></table>' +
+      '<table class="report-table"><thead><tr>' +
+      '<th>Pressure</th><th>Formula</th><th>Value</th></tr></thead><tbody>' +
+      '<tr><td>p<sub>wall</sub> (&plusmn;, inward/outward)</td>' +
+        '<td>F<sub>h</sub> / A<sub>wall</sub></td>' +
+        '<td class="val-pos">&plusmn;' + p2(Math.abs(c.pWall)) + ' ' + pU + '</td></tr>' +
+      '<tr><td>p<sub>roof</sub> (uplift)</td>' +
+        '<td>F<sub>v</sub> / A<sub>roof</sub></td>' +
+        '<td class="val-neg">&minus;' + p2(Math.abs(c.pRoof)) + ' ' + pU + '</td></tr>' +
       '</tbody></table>';
 
   } else if (c.type === 'solarPanel') {
@@ -3261,6 +3409,43 @@ function reportParapetHTML(r) {
   html += '<h3>C&amp;C &mdash; Walls Zones 4 &amp; 5, Load A / Load B <span class="ref">Eq. 30.6-1</span></h3>' +
     '<p class="muted" style="margin:0 0 10px;">Load A = front-face wall (GC<sub>p</sub>)<sub>pos</sub> + back-face roof (GC<sub>p</sub>)<sub>neg</sub> (paired zone). Load B = back-face wall (GC<sub>p</sub>)<sub>pos</sub> + front-face wall (GC<sub>p</sub>)<sub>neg</sub> (same zone). q<sub>p</sub> above is used for both.</p>' +
     ccParapetTableHTML(p.ccParapet, PARAPET_ZONE_LABELS);
+  return html;
+}
+
+// Attached Canopy Wind Pressures section (Sec. 30.9, Eq. 30.9-1) — identical
+// content for the on-screen #canopyResults and the print/export report.
+function reportCanopyHTML(r) {
+  const s = state;
+  const c = r.canopy;
+  if (!c) return '<p class="muted">Canopy data unavailable.</p>';
+  const pU = pUnit();
+  const aU = s.unitSystem === 'SI' ? 'm²' : 'ft²';
+  const p2 = v => fmt(pVal(v), 2);
+
+  let html = '<p class="muted" style="margin:0 0 10px;">p = q<sub>h</sub>&middot;K<sub>d</sub>&middot;(GC<sub>p</sub>) <span class="ref">Eq. 30.9-1</span> &mdash; q<sub>h</sub> at mean roof height h (Sec. 26.7.3); no (GC<sub>pi</sub>) term (both canopy faces exterior). h ' +
+    (c.hGt60 ? '&gt; 60 ft &rarr; ' + c.figRefSep + ' / ' + c.figRefNet : '&le; 60 ft &rarr; ' + c.figRefSep + ' / ' + c.figRefNet) + '.</p>';
+  html += '<table class="report-input-table"><tbody>' +
+    '<tr><td>Effective wind area, A</td><td>' + fmt(areaOut(c.A), 1) + ' ' + aU + '</td></tr>' +
+    '<tr><td>h<sub>c</sub> / h<sub>e</sub> (canopy ht. / eave ht.)</td><td>' + fmt(c.hcRatio, 2) + '</td></tr>' +
+    '<tr><td>q<sub>h</sub></td><td>' + p2(r.qh) + ' ' + pU + '</td></tr>' +
+    '</tbody></table>';
+
+  html += '<h3>Separate Surfaces (Fastener Design) <span class="ref">' + c.figRefSep + '</span></h3>' +
+    '<p class="muted" style="margin:0 0 8px;">Upper and lower canopy surfaces, each (GC<sub>p</sub>) acting alone.</p>' +
+    '<table class="report-table"><thead><tr><th>Surface</th><th>(GC<sub>p</sub>)</th><th>Pressure</th></tr></thead><tbody>' +
+    '<tr><td>Upper surface, negative (uplift)</td><td>' + fmt(c.sepNegUpper, 3) + '</td><td class="val-neg">' + p2(c.pSepUpperNeg) + ' ' + pU + '</td></tr>' +
+    '<tr><td>Lower surface, negative (uplift)</td><td>' + fmt(c.sepNegLower, 3) + '</td><td class="val-neg">' + p2(c.pSepLowerNeg) + ' ' + pU + '</td></tr>' +
+    '<tr><td>Either surface, positive (downward)</td><td>' + fmt(c.sepPos, 3) + '</td><td class="val-pos">' + p2(c.pSepPos) + ' ' + pU + '</td></tr>' +
+    '</tbody></table>';
+  if (c.sepCapped) html += '<div class="alert warn">Effective wind area A is outside the tabulated range &mdash; the boundary (GC<sub>p</sub>) value is used as a capped approximation.</div>';
+
+  html += '<h3>Net/Combined (Structural Design) <span class="ref">' + c.figRefNet + '</span></h3>' +
+    '<p class="muted" style="margin:0 0 8px;">Single net (GC<sub>p</sub>) combining both surfaces simultaneously; band selected by h<sub>c</sub>/h<sub>e</sub> = ' + c.netBand + '.</p>' +
+    '<table class="report-table"><thead><tr><th>Case</th><th>(GC<sub>p</sub>)</th><th>Pressure</th></tr></thead><tbody>' +
+    '<tr><td>Negative (net uplift)</td><td>' + fmt(c.netNeg, 3) + '</td><td class="val-neg">' + p2(c.pNetNeg) + ' ' + pU + '</td></tr>' +
+    '<tr><td>Positive (net downward)</td><td>' + fmt(c.netPos, 3) + '</td><td class="val-pos">' + p2(c.pNetPos) + ' ' + pU + '</td></tr>' +
+    '</tbody></table>';
+  if (c.netCapped) html += '<div class="alert warn">A or h<sub>c</sub>/h<sub>e</sub> is outside the tabulated range &mdash; the boundary (GC<sub>p</sub>) value is used as a capped approximation.</div>';
   return html;
 }
 
@@ -3453,6 +3638,10 @@ function buildReportHTML(r) {
 
   if (s.hasParapet && r.parapet) {
     html += section('Parapet Wind Pressures', 'Sec. 27.3.4/28.3.4 (MWFRS); Sec. 30.6 (C&amp;C)', reportParapetHTML(r));
+  }
+
+  if (s.hasCanopy && r.canopy) {
+    html += section('Attached Canopy Wind Pressures', 'Sec. 30.9', reportCanopyHTML(r));
   }
 
   if (r.openRoof) {
@@ -4290,6 +4479,39 @@ function bindInputs() {
     });
   }
 
+  // Attached Canopies (Sec. 30.9) toggle + geometry
+  const hasCanopyEl = document.getElementById('hasCanopy');
+  if (hasCanopyEl) {
+    hasCanopyEl.addEventListener('change', e => {
+      state.hasCanopy = e.target.checked;
+      renderResults();
+    });
+  }
+  const canopyAreaEl = document.getElementById('canopyArea');
+  if (canopyAreaEl) {
+    canopyAreaEl.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      state.canopyArea = toUSArea(isNaN(v) ? 0 : v, state.unitSystem);
+      renderResults();
+    });
+  }
+  const canopyHcEl = document.getElementById('canopyHc');
+  if (canopyHcEl) {
+    canopyHcEl.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      state.canopyHc = toUSLength(isNaN(v) ? 0 : v, state.unitSystem);
+      renderResults();
+    });
+  }
+  const canopyHeEl = document.getElementById('canopyHe');
+  if (canopyHeEl) {
+    canopyHeEl.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      state.canopyHe = toUSLength(isNaN(v) ? 0 : v, state.unitSystem);
+      renderResults();
+    });
+  }
+
   // Torsional T-zone reference toggle (progressive disclosure when h <= 30 ft)
   const torsionToggle = document.getElementById('torsionToggle');
   if (torsionToggle) {
@@ -4433,6 +4655,8 @@ function bindInputs() {
   bindCh29Area('ch29Ar',    'ch29Ar');
   bindCh29Area('ch29Bh',    'ch29Bh');
   bindCh29Area('ch29BL',    'ch29BL');
+  bindCh29Area('ch29CCAwall','ch29CCAwall');
+  bindCh29Area('ch29CCAroof','ch29CCAroof');
 
   // Sec. 29.4.3 Solar Panel bindings
   var bindSolar = function(id, key, parser) {
@@ -4589,6 +4813,9 @@ function updateUnitLabels() {
   set('lblAreaRoof', sys === 'SI' ? 'm²' : 'ft²');
   set('lblParapetHeight', sys === 'SI' ? 'm' : 'ft');
   set('lblOpenL', sys === 'SI' ? 'm' : 'ft');
+  set('lblCanopyArea', sys === 'SI' ? 'm²' : 'ft²');
+  set('lblCanopyHc', sys === 'SI' ? 'm' : 'ft');
+  set('lblCanopyHe', sys === 'SI' ? 'm' : 'ft');
 }
 
 function setUnitSystem(sys) {
@@ -4608,6 +4835,12 @@ function setUnitSystem(sys) {
   document.getElementById('areaRoof').value = fmt(areaOut(state.areaRoof), 2);
   const parapetHeightEl = document.getElementById('parapetHeight');
   if (parapetHeightEl) parapetHeightEl.value = fmt(lengthOut(state.parapetHeight), 2);
+  const canopyAreaEl = document.getElementById('canopyArea');
+  if (canopyAreaEl) canopyAreaEl.value = fmt(areaOut(state.canopyArea), 1);
+  const canopyHcEl = document.getElementById('canopyHc');
+  if (canopyHcEl) canopyHcEl.value = fmt(lengthOut(state.canopyHc), 2);
+  const canopyHeEl = document.getElementById('canopyHe');
+  if (canopyHeEl) canopyHeEl.value = fmt(lengthOut(state.canopyHe), 2);
   const openLEl = document.getElementById('openL');
   if (openLEl) openLEl.value = fmt(lengthOut(state.openL), 2);
 
@@ -4784,6 +5017,16 @@ const INFO_CONTENT = {
     <strong>Load B</strong> &mdash; positive wall (GC<sub>p</sub>) on the back face combined with negative wall (GC<sub>p</sub>) (same zone) on the front face: net (GC<sub>p</sub>)<sub>B</sub> = wall (GC<sub>p</sub>)<sub>pos</sub> &minus; wall (GC<sub>p</sub>)<sub>neg</sub>.</p>
     <p>This calculator pairs wall Zone 4 (field) with roof Zone 2 (edge), and wall Zone 5 (corner) with roof Zone 3 (corner) for Load A &mdash; <span class="src-tag">this zone pairing is this calculator's engineering judgment</span> (the inverse of the roof-overhang pairing in Sec. 30.7, for the same geometric reason), not an explicit tabulated pairing found in the sources reviewed. It is numerically consistent with Meca's worked example, in which wall Zone 4 (GC<sub>p</sub>)<sub>pos</sub> = +1.0 and roof Zone 2 (GC<sub>p</sub>)<sub>neg</sub> = &minus;2.3 (A = 10 ft&sup2;) match this calculator's tables exactly.</p>
     <p><span class="src-tag">Not implemented &mdash; verify directly for these conditions:</span> (1) Fig. 30.3-1 Note 5, an additional reduction to the wall (GC<sub>p</sub>) used in Meca's parapet example for low-slope roofs; and (2) the Fig. 30.3-2A note permitting roof Zone 3 (GC<sub>p</sub>) to be taken equal to Zone 2 (GC<sub>p</sub>) when a parapet &ge; 3 ft tall is present. Either could change the governing pressure for some geometries and is not accounted for in the tables above.</p>`
+  },
+  canopy: {
+    title: 'Attached Canopies on Buildings — Sec. 30.9',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, Sec. 30.9 ("Attached Canopies on Buildings, h &le; 60 ft and h &gt; 60 ft")</span>, Eq. 30.9-1 &mdash; p = q<sub>h</sub> K<sub>d</sub> (GC<sub>p</sub>), where q<sub>h</sub> is the velocity pressure at mean roof height h (Sec. 26.7.3, the same q<sub>h</sub> used elsewhere in this calculator) and K<sub>d</sub> = 0.85. <span class="src-tag">No (GC<sub>pi</sub>) term</span> &mdash; both the upper and lower canopy surfaces are exterior surfaces, so there is no enclosed internal volume to apply internal pressure to (same reasoning as roof overhangs, Sec. 30.7, and parapets, Sec. 30.6).</p>
+    <p>Canopies covered by this section are attached to the building wall, project horizontally outward, and are limited to a maximum roof slope of about 2&deg; (essentially flat) &mdash; distinct from a roof overhang (Sec. 30.7, an extension of the main roof surface itself) and from an open building's free roof (Sec. 27.3.2 / 30.5, a free-standing unenclosed roof with no attached wall).</p>
+    <p>(GC<sub>p</sub>) is read from two pairs of figures depending on h: <strong>Figs. 30.9-1A/1B</strong> for h &le; 60 ft, or <strong>Figs. 30.9-2A/2B</strong> for h &gt; 60 ft. Within each pair:</p>
+    <p><strong>Figs. -1A / -2A ("separate surfaces")</strong> &mdash; distinct upper- and lower-surface (GC<sub>p</sub>) values, intended for fastener design where each surface may see its own pressure acting alone (per ASCE/SEI 7-22 Commentary Tables C30.9-1 and C30.9-3).</p>
+    <p><strong>Figs. -1B / -2B ("net/combined")</strong> &mdash; a single net (GC<sub>p</sub>) combining both surfaces acting simultaneously, intended for structural design of the canopy framing; the value depends on the ratio h<sub>c</sub>/h<sub>e</sub> (canopy height to building eave height) per ASCE/SEI 7-22 Commentary Tables C30.9-2 and C30.9-4.</p>
+    <p>All four Commentary tables are piecewise functions of the effective wind area A: a constant below A = 10 ft&sup2;, a log-linear segment between A = 10 and 100 ft&sup2;, and either a constant or a further log-linear segment (to A = 1,000 ft&sup2;) above A = 100 ft&sup2; depending on the table. <span class="src-tag">Table C30.9-3's negative-upper-surface formula (h &gt; 60 ft, separate surfaces) has a genuine discontinuity at A = 100 ft&sup2;</span> in the published Commentary text itself (the two piecewise branches do not meet at the boundary) &mdash; this calculator reproduces that discontinuity exactly rather than smoothing it, since it reflects the standard's literal tabulated/plotted curve rather than a transcription error.</p>
+    <p>A and h<sub>c</sub>/h<sub>e</sub> values outside the tabulated range are capped to the nearest tabulated boundary value (flagged in the report as a capped approximation) rather than extrapolated.</p>`
   },
   stepsInfo: {
     title: 'Velocity Pressure — Step by Step',
@@ -5204,11 +5447,27 @@ async function exportReportDOCX(r) {
     const ccpAoa = ccParapetAOA(p.ccParapet, PARAPET_ZONE_LABELS);
     children.push(aoaToWordTable(ccpAoa, distributeWidth(ccpAoa[0] ? ccpAoa[0].length : 3, TBLW)));
   }
+  let extraSecNum = 5 + (s.hasParapet && r.parapet ? 1 : 0);
 
-  // 6. Open Building — Free Roof (conditional)
+  // Attached Canopy (conditional) — Sec. 30.9
+  if (s.hasCanopy && r.canopy) {
+    extraSecNum++;
+    const c = r.canopy;
+    children.push(new docx.Paragraph({ children: [], spacing: { before: 160, after: 0 } }));
+    children.push(docxHeading(extraSecNum + '. Attached Canopy Wind Pressures — Sec. 30.9, Eq. 30.9-1'));
+    children.push(aoaToWordTable(canopySummaryAOA(c, r.qh), [6000, 3360]));
+    children.push(new docx.Paragraph({ children: [new docx.TextRun({ text: 'Separate Surfaces (Fastener Design) — ' + c.figRefSep, bold: true, size: 18, font: 'Arial' })], spacing: { before: 120, after: 40 } }));
+    const sepAoa = canopySeparateAOA(c);
+    children.push(aoaToWordTable(sepAoa, distributeWidth(sepAoa[0].length, TBLW)));
+    children.push(new docx.Paragraph({ children: [new docx.TextRun({ text: 'Net/Combined (Structural Design) — ' + c.figRefNet, bold: true, size: 18, font: 'Arial' })], spacing: { before: 120, after: 40 } }));
+    const netAoa = canopyNetAOA(c);
+    children.push(aoaToWordTable(netAoa, distributeWidth(netAoa[0].length, TBLW)));
+  }
+
+  // 6+. Open Building — Free Roof (conditional)
   if (r.openRoof) {
     const o = r.openRoof;
-    const secNum = (s.hasParapet && r.parapet) ? 6 : 5;
+    const secNum = extraSecNum + 1;
     children.push(new docx.Paragraph({ children: [], spacing: { before: 160, after: 0 } }));
     children.push(docxHeading(secNum + '. Open Building — Free Roof — Sec. 27.3.2, Eq. 27.3-2'));
     const openSummaryAoa = [
@@ -5516,11 +5775,26 @@ function exportReportRTF(r) {
     const ccpAoa = ccParapetAOA(p.ccParapet, PARAPET_ZONE_LABELS);
     chunks.push(aoaToRtfTable(ccpAoa, distributeWidth(ccpAoa[0] ? ccpAoa[0].length : 3, 9360)));
   }
+  let extraSecNumR = 5 + (s.hasParapet && r.parapet ? 1 : 0);
 
-  // --- 6. Open Building — Free Roof (conditional) ---
+  // --- Attached Canopy (conditional) — Sec. 30.9 ---
+  if (s.hasCanopy && r.canopy) {
+    extraSecNumR++;
+    const c = r.canopy;
+    chunks.push(rtfH2(extraSecNumR + '. Attached Canopy Wind Pressures — Sec. 30.9, Eq. 30.9-1'));
+    chunks.push(aoaToRtfTable(canopySummaryAOA(c, r.qh), [6000, 3360]));
+    chunks.push('\\pard\\sb80\\sa40{\\b ' + rtfEsc('Separate Surfaces (Fastener Design) — ' + c.figRefSep) + '}\\par\n');
+    const sepAoa = canopySeparateAOA(c);
+    chunks.push(aoaToRtfTable(sepAoa, distributeWidth(sepAoa[0].length, 9360)));
+    chunks.push('\\pard\\sb80\\sa40{\\b ' + rtfEsc('Net/Combined (Structural Design) — ' + c.figRefNet) + '}\\par\n');
+    const netAoa = canopyNetAOA(c);
+    chunks.push(aoaToRtfTable(netAoa, distributeWidth(netAoa[0].length, 9360)));
+  }
+
+  // --- N. Open Building — Free Roof (conditional) ---
   if (r.openRoof) {
     const o = r.openRoof;
-    const secNum = (s.hasParapet && r.parapet) ? 6 : 5;
+    const secNum = extraSecNumR + 1;
     chunks.push(rtfH2(secNum + '. Open Building — Free Roof — Sec. 27.3.2, Eq. 27.3-2'));
     const openSumAoa = [
       ['Quantity', 'Value'],
@@ -5592,6 +5866,36 @@ function ccParapetAOA(rows, labels) {
     aoa.push([lbl[r.zone] || r.zone, fmt(r.gcA, 2), fmt(pVal(r.pA), 2), fmt(r.gcB, 2), fmt(pVal(r.pB), 2)]);
   });
   return aoa;
+}
+
+// AOA mirror of reportCanopyHTML's summary table (Sec. 30.9).
+function canopySummaryAOA(c, qh) {
+  const aU = state.unitSystem === 'SI' ? 'm²' : 'ft²';
+  return [
+    ['Quantity', 'Value'],
+    ['Effective wind area A, ' + aU, fmt(areaOut(c.A), 1)],
+    ['hc / he (canopy ht. / eave ht.)', fmt(c.hcRatio, 2)],
+    ['qh, ' + pUnit(), fmt(pVal(qh), 2)],
+  ];
+}
+
+// AOA mirror of reportCanopyHTML's separate-surfaces table (Figs. 30.9-1A/2A).
+function canopySeparateAOA(c) {
+  return [
+    ['Surface', '(GCp)', 'Pressure, ' + pUnit()],
+    ['Upper surface, negative (uplift)', fmt(c.sepNegUpper, 3), fmt(pVal(c.pSepUpperNeg), 2)],
+    ['Lower surface, negative (uplift)', fmt(c.sepNegLower, 3), fmt(pVal(c.pSepLowerNeg), 2)],
+    ['Either surface, positive (downward)', fmt(c.sepPos, 3), fmt(pVal(c.pSepPos), 2)],
+  ];
+}
+
+// AOA mirror of reportCanopyHTML's net/combined table (Figs. 30.9-1B/2B).
+function canopyNetAOA(c) {
+  return [
+    ['Case (band: ' + c.netBand + ')', '(GCp)', 'Pressure, ' + pUnit()],
+    ['Negative (net uplift)', fmt(c.netNeg, 3), fmt(pVal(c.pNetNeg), 2)],
+    ['Positive (net downward)', fmt(c.netPos, 3), fmt(pVal(c.pNetPos), 2)],
+  ];
 }
 
 // AOA mirror of openRoofGammaTableHTML(gamma0180).
@@ -5667,340 +5971,4 @@ function referencesAOA() {
   return aoa;
 }
 
-// Appends an AOA as a new sheet, with a leading title row and a blank
-// separator row before the header row (for readability in Excel).
-function appendAoaSheet(wb, sheetName, title, aoa) {
-  const full = [[title], [], ...aoa];
-  const ws = XLSX.utils.aoa_to_sheet(full);
-  ws['!cols'] = [{ wch: 42 }, { wch: 28 }, { wch: 40 }, { wch: 40 }, { wch: 14 }];
-  XLSX.utils.book_append_sheet(wb, ws, sheetName.substring(0, 31));
-}
-
-// Builds and downloads a workbook containing data tables only (Phase 4
-// rescope): Project Info header, Input Data, Design Summary, and the
-// applicable pressure-zone tables. The step-by-step Calc Steps and
-// standalone References sheets are intentionally omitted — the PDF/print
-// report carries those; Excel is for tabular data exchange only.
-// r should be lastResult (the most recent compute() output).
-async function exportReportXLSX(r) {
-  if (typeof XLSX === 'undefined') {
-    try { await loadScript(CDN_XLSX); } catch(e) {
-      alert('Excel export library failed to load (requires internet access to cdnjs.cloudflare.com). Please check your connection and try again.');
-      return;
-    }
-  }
-  if (typeof XLSX === 'undefined') {
-    alert('Excel export library failed to load. Please check your connection and try again.');
-    return;
-  }
-  if (!r) {
-    alert('No results to export yet — please check the inputs above.');
-    return;
-  }
-  const s = state;
-  const wb = XLSX.utils.book_new();
-
-  // --- Project Information cover sheet (Phase 3 title-block fields) --------
-  // All values are user-entered metadata — nothing here is computed.
-  const fmtDate = (iso) => iso
-    ? new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-    : '';
-  const infoAOA = [
-    ['Field', 'Value'],
-    ['Company', s.companyName || ''],
-    ['Project', s.projectName || ''],
-    ['Project No. / Location', s.projectNumber || ''],
-    ['Section', s.sectionName || ''],
-    ['Job Ref.', s.jobRef || ''],
-    ['Risk Category', s.riskCategory || ''],
-    ['Calculation Procedure', s.mode === 'mwfrs'
-      ? 'Main Wind Force Resisting System (MWFRS) — Envelope Procedure (Ch. 28)'
-      : 'Components & Cladding (C&C) (Ch. 30)'],
-    [],
-    ['Calc. by', s.engineer || ''],
-    ['Date', fmtDate(s.projectDate)],
-    ['Chk\'d by', s.chkdBy || ''],
-    ['Chk\'d date', fmtDate(s.chkdDate)],
-    ['App\'d by', s.appdBy || ''],
-    ['App\'d date', fmtDate(s.appdDate)],
-  ];
-  appendAoaSheet(wb, 'Project Info', 'ASCE/SEI 7-22 Wind Load Calculation — Project Information', infoAOA);
-
-  // --- Data tables ----------------------------------------------------------
-  appendAoaSheet(wb, 'Input Data', 'ASCE/SEI 7-22 Wind Load Calculation — Input Data', inputDataAOA(r));
-  appendAoaSheet(wb, 'Design Summary', 'Design Summary', designSummaryAOA(r));
-  // Calc Steps sheet intentionally omitted (step-by-step derivation belongs
-  // in the PDF/print report, not in a data-table workbook).
-
-  if (s.mode === 'mwfrs') {
-    appendAoaSheet(wb, 'MWFRS LC1', 'MWFRS Load Case 1 (Zones 1-4, 1E-4E) — Fig. 28.3-1', zoneTableAOA(r.mwfrsLC1, false));
-    appendAoaSheet(wb, 'MWFRS LC2', 'MWFRS Load Case 2 (Zones 1-6, 1E-6E) — Fig. 28.3-1', zoneTableAOA(r.mwfrsLC2, false));
-    appendAoaSheet(wb, 'MWFRS LC3 (T-zones)', 'MWFRS Load Case 3 T-zones — Fig. 28.3-2' + (r.torsionApplies ? '' : ' (h <= 30 ft: not required, shown for reference)'), zoneTableAOA(r.mwfrsLC3, false));
-    appendAoaSheet(wb, 'MWFRS LC4 (T-zones)', 'MWFRS Load Case 4 T-zones — Fig. 28.3-2' + (r.torsionApplies ? '' : ' (h <= 30 ft: not required, shown for reference)'), zoneTableAOA(r.mwfrsLC4, false));
-  } else {
-    appendAoaSheet(wb, 'C&C Walls', 'C&C Walls — Zones 4 & 5 — Fig. 30.3-1', zoneTableAOA(r.ccWall, true));
-    appendAoaSheet(wb, 'C&C Roof', 'C&C Roof — Fig. 30.3-2' + (s.theta <= 7 ? 'A (theta <= 7 deg)' : (s.roofShape === 'hip' ? 'D-G equiv. (hip)' : 'B/C (gable), theta > 7 deg')), zoneTableAOA(r.ccRoof, true));
-    if (s.hasOverhang) {
-      appendAoaSheet(wb, 'C&C Overhangs', 'Roof Overhangs — Net (Top + Bottom) — Sec. 30.7', zoneTableAOA(r.ccOverhang, true, OVERHANG_ZONE_LABELS));
-    }
-  }
-
-  if (s.hasParapet && r.parapet) {
-    const p = r.parapet;
-    const lenUnit = s.unitSystem === 'SI' ? 'm' : 'ft';
-    const parapetSummary = [
-      ['Quantity', 'Value'],
-      ['z (top of parapet), ' + lenUnit, fmt(lengthOut(p.zParapet), 1)],
-      ['Kh at parapet', fmt(p.khp, 3)],
-      ['qp, ' + pUnit(), fmt(pVal(p.qp), 2)],
-      ['p_p, windward (GCpn=+1.5), ' + pUnit(), fmt(pVal(p.ppWindward), 2)],
-      ['p_p, leeward (GCpn=-1.0), ' + pUnit(), fmt(pVal(p.ppLeeward), 2)],
-      ['Total combined p_p, ' + pUnit(), fmt(pVal(p.ppTotal), 2)],
-      [],
-      ['C&C Walls — Zones 4 & 5, Load A / Load B — Eq. 30.6-1']
-    ];
-    appendAoaSheet(wb, 'Parapet', 'Parapet Wind Pressures — Sec. 27.3.4/28.3.4 (MWFRS), Sec. 30.6 (C&C)',
-      parapetSummary.concat(ccParapetAOA(p.ccParapet, PARAPET_ZONE_LABELS)));
-  }
-
-  if (r.openRoof) {
-    const o = r.openRoof;
-    const summary = [
-      ['Quantity', 'Value'],
-      ['Gust factor, G', fmt(o.G, 2)],
-      ['h / L', fmt(o.hL, 3)],
-      [],
-      ['Wind Normal to Ridge/Span — gamma = 0/180 deg' + (o.note4Applies ? ' (per Fig. 27.3-4 Note 4, uses Fig. 27.3-7 table)' : ' — Fig. ' + (o.shape === 'monoslope' ? '27.3-4' : (o.shape === 'pitched' ? '27.3-5' : '27.3-6')))]
-    ];
-    let aoa = summary.concat(o.note4Applies ? [] : openRoofGammaAOA(o.gamma0180));
-    aoa = aoa.concat([[], ['Wind Parallel to Ridge/Span — gamma = 90/270 deg — Fig. 27.3-7']]).concat(openRoofZoneAOA(o.fig277));
-    appendAoaSheet(wb, 'Open Roof', 'Open Building — Free Roof Pressures — Sec. 27.3.2, Eq. 27.3-2', aoa);
-  }
-
-  // References sheet intentionally omitted (Phase 4): every table row
-  // already carries an inline ASCE 7-22 clause/figure/equation citation
-  // in its "Reference" column — a standalone sheet would only duplicate
-  // what the reader already sees in context. Consistent with Phase 2
-  // removal of the same section from the PDF/print report.
-
-  const nameBase = (s.projectName || 'Wind_Load_Report').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'Wind_Load_Report';
-  XLSX.writeFile(wb, nameBase + '_ASCE7-22_Wind.xlsx');
-}
-
-/* =====================================================================
-   INIT
-   ===================================================================== */
-function init() {
-  const expSel = document.getElementById('exposure');
-  Object.keys(EXPOSURE).forEach(k => {
-    const o = document.createElement('option');
-    o.value = k; o.textContent = 'Exposure ' + EXPOSURE[k].label;
-    if (k === state.exposure) o.selected = true;
-    expSel.appendChild(o);
-  });
-
-  const encSel = document.getElementById('enclosure');
-  Object.keys(GCPI).forEach(k => {
-    const o = document.createElement('option');
-    // Open Building — Free Roof (Sec. 27.3.2) has no (GC<sub>pi</sub>) — omit the suffix for it.
-    o.value = k; o.textContent = GCPI[k].noGcpi ? GCPI[k].label : GCPI[k].label + ' (GCpi = ±' + fmt(GCPI[k].pos, 2) + ')';
-    if (k === state.enclosure) o.selected = true;
-    encSel.appendChild(o);
-  });
-
-  document.getElementById('V').value = state.V;
-  // K_zt mode init
-  const kztModeSeg = document.getElementById('kztModeSeg');
-  if (kztModeSeg) {
-    kztModeSeg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.val === state.kztMode));
-    document.getElementById('kztAutoInputs').style.display = state.kztMode === 'auto' ? '' : 'none';
-    document.getElementById('kztManualInput').style.display = state.kztMode === 'manual' ? '' : 'none';
-  }
-  const kztValEl = document.getElementById('kzt');
-  if (kztValEl) kztValEl.value = state.kzt;
-  const topoFeatEl = document.getElementById('topoFeature');
-  if (topoFeatEl) topoFeatEl.value = state.topoFeature;
-  const topoHEl = document.getElementById('topoH');
-  if (topoHEl) topoHEl.value = state.topoH;
-  const topoLhEl = document.getElementById('topoLh');
-  if (topoLhEl) topoLhEl.value = state.topoLh;
-  const topoXEl2 = document.getElementById('topoX');
-  document.getElementById('groundElev').value = state.groundElev;
-  document.getElementById('h').value = state.h;
-  document.getElementById('minDim').value = state.minDim;
-  const buildingLInit = document.getElementById('buildingL');
-  if (buildingLInit) buildingLInit.value = state.buildingL;
-  const ccProcSegInit = document.getElementById('ccProcedureSeg');
-  if (ccProcSegInit) {
-    ccProcSegInit.querySelectorAll('button').forEach(b =>
-      b.classList.toggle('active', b.dataset.val === state.ccProcedure));
-  }
-  const mwfrsProcSegInit = document.getElementById('mwfrsProcedureSeg');
-  if (mwfrsProcSegInit) {
-    mwfrsProcSegInit.querySelectorAll('button').forEach(b =>
-      b.classList.toggle('active', b.dataset.val === state.mwfrsProcedure));
-  }
-  document.getElementById('theta').value = state.theta;
-  document.getElementById('areaWall').value = state.areaWall;
-  document.getElementById('areaRoof').value = state.areaRoof;
-  document.getElementById('roofType').value = state.roofType;
-  const roofShapeSel = document.getElementById('roofShape');
-  if (roofShapeSel) roofShapeSel.value = state.roofShape;
-  const hasOverhangEl = document.getElementById('hasOverhang');
-  if (hasOverhangEl) hasOverhangEl.checked = !!state.hasOverhang;
-  const hasParapetEl = document.getElementById('hasParapet');
-  if (hasParapetEl) hasParapetEl.checked = !!state.hasParapet;
-  const parapetHeightEl = document.getElementById('parapetHeight');
-  if (parapetHeightEl) parapetHeightEl.value = state.parapetHeight;
-
-  // Open Building — Free Roof (Sec. 27.3.2) inputs
-  const openRoofShapeEl = document.getElementById('openRoofShape');
-  if (openRoofShapeEl) openRoofShapeEl.value = state.openRoofShape;
-  const openWindFlowEl = document.getElementById('openWindFlow');
-  if (openWindFlowEl) openWindFlowEl.value = state.openWindFlow;
-  const openLEl = document.getElementById('openL');
-  if (openLEl) openLEl.value = state.openL;
-  const ch32VTi = document.getElementById('ch32VT'); if (ch32VTi) ch32VTi.value = state.ch32VT || 100;
-  const ch32Aei = document.getElementById('ch32Ae'); if (ch32Aei) ch32Aei.value = state.ch32Ae || 10000;
-  const ch32Eni = document.getElementById('ch32Enabled'); if (ch32Eni) ch32Eni.checked = !!state.ch32Enabled;
-  const ch32Esi = document.getElementById('ch32Essential'); if (ch32Esi) ch32Esi.checked = !!state.ch32Essential;
-  document.body.classList.toggle('ch32-enabled', !!state.ch32Enabled);
-
-  // Project Information (report header)
-  if (!state.projectDate) {
-    const d = new Date();
-    state.projectDate = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-  }
-  document.getElementById('projectName').value = state.projectName;
-  document.getElementById('projectNumber').value = state.projectNumber;
-  document.getElementById('engineer').value = state.engineer;
-  document.getElementById('projectDate').value = state.projectDate;
-  document.getElementById('riskCategory').value = state.riskCategory;
-
-  // Print title block fields (Phase 3 / report header)
-  document.getElementById('companyName').value = state.companyName || '';
-  document.getElementById('sectionName').value = state.sectionName || '';
-  document.getElementById('jobRef').value = state.jobRef || '';
-  document.getElementById('chkdBy').value = state.chkdBy || '';
-  document.getElementById('chkdDate').value = state.chkdDate || '';
-  document.getElementById('appdBy').value = state.appdBy || '';
-  document.getElementById('appdDate').value = state.appdDate || '';
-
-  updateUnitLabels();
-  bindInputs();
-  bindInfoModal();
-  bindPrintButton();
-  applyModeVisibility();
-  applyRoofTypeVisibility();
-  applyEnclosureVisibility();
-  renderResults();
-}
-
-document.addEventListener('DOMContentLoaded', init);
-
-/* =====================================================================
-   STRUCTCALC SHELL BRIDGE
-   Protocol:
-     shell -> module: {type:'loadState', state:{...}, unitSystem?}
-     shell -> module: {type:'requestState'}
-     module -> shell: {type:'stateChanged', module:'windASCE', state:{...}, unitSystem}
-   ===================================================================== */
-(function () {
-  function snapshotState() {
-    try { return JSON.parse(JSON.stringify(state)); } catch (e) { return null; }
-  }
-
-  function postState() {
-    if (window.parent === window) return; // not embedded
-    window.parent.postMessage({ type: 'stateChanged', module: 'windASCE', state: snapshotState() }, '*');
-  }
-
-  function applyState(newState) {
-    if (!newState) return;
-    Object.assign(state, newState);
-
-    document.getElementById('V').value = fmt(speedOut(state.V), 1);
-    document.getElementById('exposure').value = state.exposure;
-    if (document.getElementById('kzt')) document.getElementById('kzt').value = state.kzt;
-    document.getElementById('groundElev').value = fmt(lengthOut(state.groundElev), 1);
-    document.getElementById('enclosure').value = state.enclosure;
-    document.getElementById('h').value = fmt(lengthOut(state.h), 2);
-    document.getElementById('minDim').value = fmt(lengthOut(state.minDim), 2);
-  const blEl = document.getElementById('buildingL');
-  if (blEl) blEl.value = fmt(lengthOut(state.buildingL), 2);
-    document.getElementById('theta').value = state.theta;
-    document.getElementById('areaWall').value = fmt(areaOut(state.areaWall), 2);
-    document.getElementById('areaRoof').value = fmt(areaOut(state.areaRoof), 2);
-    document.getElementById('roofType').value = state.roofType || (state.theta > 7 ? 'sloped' : 'flat');
-    state.roofType = document.getElementById('roofType').value;
-    const roofShapeSel = document.getElementById('roofShape');
-    if (roofShapeSel) {
-      roofShapeSel.value = state.roofShape || 'gable';
-      state.roofShape = roofShapeSel.value;
-    }
-    const hasOverhangEl = document.getElementById('hasOverhang');
-    const hasParapetEl = document.getElementById('hasParapet');
-    if (hasParapetEl) hasParapetEl.checked = !!state.hasParapet;
-    const parapetHeightEl = document.getElementById('parapetHeight');
-    if (parapetHeightEl) parapetHeightEl.value = fmt(lengthOut(state.parapetHeight), 2);
-
-    // Open Building — Free Roof (Sec. 27.3.2) inputs
-    const openRoofShapeEl = document.getElementById('openRoofShape');
-    if (openRoofShapeEl) {
-      openRoofShapeEl.value = state.openRoofShape || 'monoslope';
-      state.openRoofShape = openRoofShapeEl.value;
-    }
-    const openWindFlowEl = document.getElementById('openWindFlow');
-    if (openWindFlowEl) {
-      openWindFlowEl.value = state.openWindFlow || 'clear';
-      state.openWindFlow = openWindFlowEl.value;
-    }
-    const openLEl = document.getElementById('openL');
-    if (openLEl) openLEl.value = fmt(lengthOut(state.openL || 40), 2);
-
-    // Project Information (report header)
-    if (!state.projectDate) {
-      const d = new Date();
-      state.projectDate = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-    }
-    document.getElementById('projectName').value = state.projectName || '';
-    document.getElementById('projectNumber').value = state.projectNumber || '';
-    document.getElementById('engineer').value = state.engineer || '';
-    document.getElementById('projectDate').value = state.projectDate;
-    document.getElementById('riskCategory').value = state.riskCategory || 'II';
-
-    // Print title block fields (Phase 3 / report header)
-    document.getElementById('companyName').value = state.companyName || '';
-    document.getElementById('jobRef').value = state.jobRef || '';
-    document.getElementById('chkdBy').value = state.chkdBy || '';
-    document.getElementById('chkdDate').value = state.chkdDate || '';
-    document.getElementById('appdBy').value = state.appdBy || '';
-    document.getElementById('appdDate').value = state.appdDate || '';
-
-    document.getElementById('unitSI').classList.toggle('active', state.unitSystem === 'SI');
-    document.getElementById('unitUS').classList.toggle('active', state.unitSystem === 'US');
-
-    applyModeVisibility();
-    applyRoofTypeVisibility();
-    applyEnclosureVisibility();
-    updateUnitLabels();
-    renderResults();
-  }
-
-  window.addEventListener('message', (event) => {
-    const msg = event.data;
-    if (!msg || typeof msg !== 'object') return;
-    if (msg.type === 'loadState') {
-      applyState(msg.state);
-      if (msg.unitSystem) setUnitSystem(msg.unitSystem);
-    } else if (msg.type === 'requestState') {
-      postState();
-    }
-  });
-
-  const origRender = renderResults;
-  renderResults = function () {
-    origRender();
-    postState();
-  };
-})();
+// Appends an AOA as a new sheet, with a leadi
