@@ -426,6 +426,10 @@ const state = {
   tankOpenTop: false, // open-topped tank → use Eq. 30.10-5 (GCpi) instead of the page's enclosure-based (GCpi)
   tankElevated: false, // tank is elevated on columns → also compute underside pressures, Sec. 30.10.5
 
+  hasSteppedRoof: false, // Fig. 30.3-3 — building has a stepped (multi-level flat) roof, θ ≤ 7°
+  steppedLowerH: 12,  // mean roof height of the LOWER roof level, ft (the page's main "h" field above is the TALLER level)
+  steppedLowerW: 30,  // plan width of the lower roof level, measured perpendicular to the step (in the along-wind direction), ft
+
   // Open Building — Free Roof (Sec. 27.3.2), only used when enclosure === 'openFreeRoof'
   openRoofShape: 'monoslope', // 'monoslope' | 'pitched' | 'troughed' — Figs. 27.3-4/5/6
   openWindFlow: 'clear',      // 'clear' | 'obstructed' — Figs. 27.3-4/5/6/7 Note 2
@@ -1825,6 +1829,43 @@ function compute(s) {
     };
   }
 
+  // --- Stepped Roofs (Sec. 30.3.2.1, Fig. 30.3-3, Eq. 30.3-1) ---
+  // Fig. 30.3-3's own note: "On the lower level of flat, stepped roofs shown
+  // here, the zone designations and pressure coefficients shown in Figure
+  // 30.3-2A shall apply" — so this reuses the existing flat-roof (GCp) table
+  // (gcpRoof) and only computes new zone GEOMETRY for the lower roof level.
+  // SCOPE: only the common two-level (single-step) case is implemented. The
+  // figure illustrates cascading multi-step buildings (h_s1, h_s2, ...) but
+  // the Standard defines that geometry only on the diagram, not in words —
+  // implementing additional steps would require guessing at the pattern, so
+  // multi-step buildings are NOT implemented here; consult Fig. 30.3-3 directly.
+  let steppedRoof = null;
+  if (s.hasSteppedRoof) {
+    const hTall = s.h;
+    const hLow = Math.max(s.steppedLowerH, 0.01);
+    const Wlow = Math.max(s.steppedLowerW, 0.01);
+    const hs = hTall - hLow; // step height differential
+    if (hs > 0) {
+      const aMain = computeZoneA(hTall, s.minDim, 0); // standard edge-zone width, flat roof (theta=0)
+      const aStepRaw = 1.5 * hs;
+      const aStep = Math.min(aStepRaw, Wlow); // can't exceed the lower roof's own width
+      const aStepCapped = aStepRaw > Wlow;
+      const A = Math.max(s.areaRoof, 0.1);
+      const z1 = gcpRoof('1', A);
+      const z2 = gcpRoof('2', A);
+      const z3 = gcpRoof('3', A);
+      const withP = (gc) => ({
+        gc,
+        pMin: qh * KD * (gc.neg - gcpi.pos),
+        pMax: qh * KD * (gc.pos - gcpi.neg)
+      });
+      steppedRoof = {
+        hTall, hLow, hs, Wlow, aMain, aStep, aStepCapped, A,
+        zone1: withP(z1), zone2: withP(z2), zone3: withP(z3)
+      };
+    }
+  }
+
   // ── Minimum Design Wind Load Check ──────────────────────────────────────
   // ASCE/SEI 7-22 Sec. 27.1.5 (MWFRS) and Sec. 30.2.2 (C&C) require
   // computed net pressures to be not less than the tabulated minimums,
@@ -1907,7 +1948,7 @@ function compute(s) {
   return {
     kh, ke, kd: KD, qh, gcpi, a,
     steps, mwfrsLC1, mwfrsLC2, mwfrsLC3, mwfrsLC4, torsionApplies,
-    ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, canopy, circTank, openRoof,
+    ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, canopy, circTank, steppedRoof, openRoof,
     mwfrsMinCheck, mwfrsMinGoverns, ccMinCheck, ccMinGoverns,
     ch27, cc30p2, ch29, cc30s305,
     ch32: (s.ch32Enabled ? computeCh32(s) : null), s: s
@@ -2485,6 +2526,18 @@ function renderResults() {
   if (state.hasCircularTank && r.circTank) {
     const circTankEl = document.getElementById('circTankResults');
     if (circTankEl) circTankEl.innerHTML = reportCircTankHTML(r);
+  }
+
+  // Stepped Roofs (Sec. 30.3.2.1, Fig. 30.3-3) — only shown when the
+  // "has stepped roof" toggle is on
+  const steppedRoofSection = document.getElementById('steppedRoofSection');
+  if (steppedRoofSection) steppedRoofSection.style.display = state.hasSteppedRoof ? '' : 'none';
+  if (state.hasSteppedRoof) {
+    const steppedRoofEl = document.getElementById('steppedRoofResults');
+    if (steppedRoofEl) {
+      steppedRoofEl.innerHTML = r.steppedRoof ? reportSteppedRoofHTML(r) :
+        '<div class="alert warn">Enter a lower-roof height that is less than the main roof height h to define a step.</div>';
+    }
   }
 
   renderOpenRoof(r);
@@ -3613,6 +3666,77 @@ function reportCircTankHTML(r) {
   return html;
 }
 
+// Stepped roof elevation diagram — side-profile SVG showing the taller and
+// lower roof levels, the step, and the widened step-adjacent zone band.
+function steppedRoofSvg(t) {
+  const W = 420, H = 230, pad = 40;
+  const scale = (W - 2 * pad) / (t.Wlow * 2.4); // fit lower roof + some of the tall roof in view
+  const baseY = H - 40;
+  const hTallPx = t.hTall * scale, hLowPx = t.hLow * scale;
+  const wLowPx = t.Wlow * scale;
+  const stepX = pad + wLowPx;
+  const tallTopY = baseY - hTallPx, lowTopY = baseY - hLowPx;
+  const aMainPx = Math.min(t.aMain * scale, wLowPx * 0.4);
+  const aStepPx = Math.min(t.aStep * scale, wLowPx);
+  let s = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">`;
+  // ground
+  s += `<line x1="${pad - 10}" y1="${baseY}" x2="${W - pad + 60}" y2="${baseY}" stroke="#888" stroke-width="1"/>`;
+  // lower roof block outline
+  s += `<rect x="${pad}" y="${lowTopY}" width="${wLowPx}" height="${hLowPx}" fill="none" stroke="#1c2733" stroke-width="1.5"/>`;
+  // tall roof block outline (extends right of the step)
+  s += `<rect x="${stepX}" y="${tallTopY}" width="${wLowPx * 1.1}" height="${hTallPx}" fill="none" stroke="#1c2733" stroke-width="1.5"/>`;
+  // zone-2 (outer edge) band on lower roof, at its far (left) edge
+  s += `<rect x="${pad}" y="${lowTopY}" width="${aMainPx}" height="4" fill="#1f4e79"/>`;
+  // step-adjacent widened zone band on lower roof, measured inward from the step
+  s += `<rect x="${stepX - aStepPx}" y="${lowTopY}" width="${aStepPx}" height="4" fill="#c0571f"/>`;
+  // dimension callouts
+  s += `<text x="${pad + aMainPx / 2}" y="${lowTopY - 6}" font-size="9" fill="#1f4e79" text-anchor="middle">a</text>`;
+  s += `<text x="${stepX - aStepPx / 2}" y="${lowTopY - 6}" font-size="9" fill="#c0571f" text-anchor="middle">1.5h&#8347;</text>`;
+  s += `<text x="${pad + wLowPx / 2}" y="${baseY + 16}" font-size="9" fill="var(--muted)" text-anchor="middle">W&#8327; (lower roof)</text>`;
+  // height labels
+  s += `<text x="${pad - 14}" y="${(baseY + lowTopY) / 2}" font-size="9" fill="var(--muted)" text-anchor="end">h&#8327;</text>`;
+  s += `<text x="${stepX + wLowPx * 1.1 + 14}" y="${(baseY + tallTopY) / 2}" font-size="9" fill="var(--muted)" text-anchor="start">h</text>`;
+  s += `<text x="${(stepX + pad + wLowPx) / 2}" y="${tallTopY - 10}" font-size="9" fill="var(--accent)" text-anchor="middle">step, h&#8347; = ${fmt(t.hs, 1)} ${state.unitSystem === 'SI' ? 'm' : 'ft'}</text>`;
+  s += `<g font-size="8" fill="#fff">` +
+    `<rect x="${pad + aMainPx / 2 - 6}" y="${lowTopY + 8}" width="12" height="12" fill="#1f4e79"/><text x="${pad + aMainPx / 2}" y="${lowTopY + 17}" text-anchor="middle">2</text>` +
+    `<rect x="${stepX - aStepPx / 2 - 6}" y="${lowTopY + 8}" width="12" height="12" fill="#c0571f"/><text x="${stepX - aStepPx / 2}" y="${lowTopY + 17}" text-anchor="middle">2</text>` +
+    `<rect x="${(pad + stepX - aStepPx) / 2 - 6}" y="${lowTopY + 8}" width="12" height="12" fill="#5b6b7c"/><text x="${(pad + stepX - aStepPx) / 2}" y="${lowTopY + 17}" text-anchor="middle">1</text>` +
+    `</g>`;
+  s += `</svg>`;
+  return s;
+}
+
+// Stepped Roofs section (Sec. 30.3.2.1, Fig. 30.3-3) — identical content for
+// the on-screen #steppedRoofResults and the print/export report.
+function reportSteppedRoofHTML(r) {
+  const t = r.steppedRoof;
+  if (!t) return '<p class="muted">Stepped roof data unavailable.</p>';
+  const pU = pUnit();
+  const lU = state.unitSystem === 'SI' ? 'm' : 'ft';
+  const p2 = v => fmt(pVal(v), 2);
+
+  let html = '<p class="muted" style="margin:0 0 10px;">p = q<sub>h</sub>&middot;K<sub>d</sub>&middot;[(GC<sub>p</sub>) &minus; (GC<sub>pi</sub>)] <span class="ref">Eq. 30.3-1</span> &mdash; per Fig. 30.3-3\'s own note, the lower roof level reuses the same Zone 1/2/3 (GC<sub>p</sub>) values as Fig. 30.3-2A (flat roof, &theta; &le; 7&deg;); only the zone <em>geometry</em> changes near the step.</p>';
+  html += '<div class="zone-row"><div class="zone-tbl">' +
+    '<table class="report-input-table"><tbody>' +
+    '<tr><td>Taller roof height, h</td><td>' + fmt(lengthOut(t.hTall), 2) + ' ' + lU + '</td></tr>' +
+    '<tr><td>Lower roof height</td><td>' + fmt(lengthOut(t.hLow), 2) + ' ' + lU + '</td></tr>' +
+    '<tr><td>Step height differential, h<sub>s</sub></td><td>' + fmt(lengthOut(t.hs), 2) + ' ' + lU + '</td></tr>' +
+    '<tr><td>Lower roof width, W<sub>L</sub></td><td>' + fmt(lengthOut(t.Wlow), 2) + ' ' + lU + '</td></tr>' +
+    '<tr><td>Outer edge-zone width, a</td><td>' + fmt(lengthOut(t.aMain), 2) + ' ' + lU + '</td></tr>' +
+    '<tr><td>Step-adjacent zone width, 1.5h<sub>s</sub></td><td>' + fmt(lengthOut(t.aStep), 2) + ' ' + lU + (t.aStepCapped ? ' (capped at W<sub>L</sub>)' : '') + '</td></tr>' +
+    '</tbody></table></div><div class="zone-diag">' + steppedRoofSvg(t) + '</div></div>';
+
+  html += '<table class="report-table"><thead><tr><th>Zone</th><th>(GC<sub>p</sub>)<sub>neg</sub></th><th>(GC<sub>p</sub>)<sub>pos</sub></th><th>p<sub>min</sub></th><th>p<sub>max</sub></th></tr></thead><tbody>' +
+    ['1', '2', '3'].map(z => {
+      const zz = t['zone' + z];
+      return '<tr><td>Zone ' + z + '</td><td>' + fmt(zz.gc.neg, 3) + '</td><td>' + fmt(zz.gc.pos, 3) + '</td><td class="val-neg">' + p2(zz.pMin) + ' ' + pU + '</td><td class="val-pos">' + p2(zz.pMax) + ' ' + pU + '</td></tr>';
+    }).join('') +
+    '</tbody></table>';
+
+  html += '<div class="alert info">Zone 1 = interior of the lower roof (away from both the step and the outer perimeter); Zone 2 = the standard outer-perimeter edge strip (width a, per Fig. 30.3-1/30.3-2A Notation) AND the widened step-adjacent band (width 1.5h<sub>s</sub>, read from Fig. 30.3-3\'s diagram); Zone 3 = corners. This calculator covers the common two-level (single-step) stepped roof; buildings with more than one step (cascading roofs) are <strong>not implemented</strong> &mdash; consult Fig. 30.3-3 directly, which gives multiplier dimensions (1.5h<sub>s1</sub>, 0.6h<sub>s2</sub>, ...) for each successive step. The Standard does not state these multipliers in words, only on the figure\'s diagram.</div>';
+  return html;
+}
+
 // Open Building — Free Roof Pressures section (Sec. 27.3.2, Eq. 27.3-2) —
 // identical cards/notes/tables/citations to the on-screen #openRoofSection.
 function reportOpenRoofHTML(r) {
@@ -3810,6 +3934,10 @@ function buildReportHTML(r) {
 
   if (s.hasCircularTank && r.circTank) {
     html += section('Circular Bins, Silos, and Tanks &mdash; C&amp;C Pressures', 'Sec. 30.10, Eq. 30.10-1', reportCircTankHTML(r));
+  }
+
+  if (s.hasSteppedRoof && r.steppedRoof) {
+    html += section('Stepped Roof &mdash; C&amp;C Pressures', 'Sec. 30.3.2.1, Fig. 30.3-3, Eq. 30.3-1', reportSteppedRoofHTML(r));
   }
 
   if (r.openRoof) {
@@ -4719,6 +4847,31 @@ function bindInputs() {
     });
   }
 
+  // Stepped Roofs (Sec. 30.3.2.1, Fig. 30.3-3) toggle + lower-level geometry
+  const hasSteppedRoofEl = document.getElementById('hasSteppedRoof');
+  if (hasSteppedRoofEl) {
+    hasSteppedRoofEl.addEventListener('change', e => {
+      state.hasSteppedRoof = e.target.checked;
+      renderResults();
+    });
+  }
+  const steppedLowerHEl = document.getElementById('steppedLowerH');
+  if (steppedLowerHEl) {
+    steppedLowerHEl.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      state.steppedLowerH = toUSLength(isNaN(v) ? 0 : v, state.unitSystem);
+      renderResults();
+    });
+  }
+  const steppedLowerWEl = document.getElementById('steppedLowerW');
+  if (steppedLowerWEl) {
+    steppedLowerWEl.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      state.steppedLowerW = toUSLength(isNaN(v) ? 0 : v, state.unitSystem);
+      renderResults();
+    });
+  }
+
   // Torsional T-zone reference toggle (progressive disclosure when h <= 30 ft)
   const torsionToggle = document.getElementById('torsionToggle');
   if (torsionToggle) {
@@ -5025,6 +5178,8 @@ function updateUnitLabels() {
   set('lblCanopyHe', sys === 'SI' ? 'm' : 'ft');
   set('lblTankD', sys === 'SI' ? 'm' : 'ft');
   set('lblTankH', sys === 'SI' ? 'm' : 'ft');
+  set('lblSteppedLowerH', sys === 'SI' ? 'm' : 'ft');
+  set('lblSteppedLowerW', sys === 'SI' ? 'm' : 'ft');
 }
 
 function setUnitSystem(sys) {
@@ -5248,6 +5403,13 @@ const INFO_CONTENT = {
     <p><strong>Internal pressure (implemented)</strong> &mdash; for closed-top tanks, the page's normal enclosure classification and (GC<sub>pi</sub>) (Table 26.13-1) apply via Eq. 30.10-1 directly. For <strong>open-topped</strong> tanks, <span class="src-tag">Sec. 30.10.3, Eq. 30.10-5</span> gives a single combined internal pressure coefficient (GC<sub>pi</sub>) = &minus;0.9 &minus; 0.35log<sub>10</sub>(H/D), used in place of the Table 26.13-1 values.</p>
     <p><strong>Underside of elevated bins (implemented)</strong> &mdash; <span class="src-tag">Sec. 30.10.5</span> gives explicit numeric (GC<sub>p</sub>) values for the underside of isolated circular bins elevated on columns: Zones 1 &amp; 2: +0.8/&minus;0.6; Zone 3: +1.2/&minus;0.9.</p>
     <p><span class="src-tag">NOT implemented &mdash; verify directly against the Standard:</span> roof pressures for isolated circular bins (<span class="src-tag">Sec. 30.10.4, Fig. 30.10-2</span>, Zones 1&ndash;4, dependent on roof slope Class 1/2a/2b) and roof/wall pressures for grouped circular bins spaced closer than 1.25D center-to-center (<span class="src-tag">Sec. 30.10.6, Figs. 30.10-3/30.10-4</span>). Both provisions exist <em>only</em> as graphical figures in ASCE/SEI 7-22 &mdash; confirmed by direct text search of the standard and its Commentary &mdash; with no numeric (GC<sub>p</sub>) values recoverable from the text. The Commentary narrative for these figures is qualitative only (citing wind-tunnel studies) and does not reproduce the plotted coefficients, so this calculator does not invent numbers for them.</p>`
+  },
+  steppedRoof: {
+    title: 'Stepped Roofs — Sec. 30.3.2.1, Fig. 30.3-3',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, Sec. 30.3.2.1, Fig. 30.3-3</span> &mdash; applies to buildings with a flat, stepped roof (each level &theta; &le; 7&deg;), i.e. a taller main roof (mean height h, entered above in Building Geometry) adjoining a lower roof level at a different height. Per the figure's own note: <em>"On the lower level of flat, stepped roofs shown here, the zone designations and pressure coefficients shown in Figure 30.3-2A shall apply."</em> So the (GC<sub>p</sub>) values for Zones 1/2/3 are identical to the ordinary flat-roof table already used elsewhere on this page &mdash; only the <strong>zone geometry</strong> on the lower roof changes near the step.</p>
+    <p>The lower roof's outer perimeter keeps the standard edge-zone width <strong>a</strong> (per the Fig. 30.3-1/30.3-2A Notation, computed from h, least horizontal dimension, and &theta; = 0). Immediately adjacent to the step itself, the figure widens this zone to <strong>1.5h<sub>s</sub></strong>, where h<sub>s</sub> is the step's height differential (h<sub>s</sub> = h &minus; h<sub>lower</sub>) &mdash; entered above as the lower roof's own mean height.</p>
+    <p><span class="src-tag">Scope limitation (disclosed, not invented):</span> Figure 30.3-3 illustrates a cascading multi-level building with successive steps (labeled h<sub>s1</sub>, h<sub>s2</sub>, ... on the figure, each with its own 1.5h<sub>s</sub>-type zone width) but the Standard's text does <em>not</em> define this multi-step geometry in words anywhere &mdash; only the diagram itself shows the pattern, and reading additional steps off the figure introduces real ambiguity. This calculator therefore implements only the common <strong>two-level (single-step)</strong> case. Buildings with two or more steps are <strong>not implemented</strong> &mdash; consult Fig. 30.3-3 directly.</p>
+    <p>The lower roof's width perpendicular to the step, W<sub>L</sub>, caps the step-adjacent zone (it cannot exceed the lower roof's own width); this is flagged in the report when it occurs.</p>`
   },
   stepsInfo: {
     title: 'Velocity Pressure — Step by Step',
@@ -6490,6 +6652,14 @@ function init() {
   const tankElevatedElInit = document.getElementById('tankElevated');
   if (tankElevatedElInit) tankElevatedElInit.checked = !!state.tankElevated;
 
+  // Stepped Roofs (Sec. 30.3.2.1, Fig. 30.3-3) inputs
+  const hasSteppedRoofElInit = document.getElementById('hasSteppedRoof');
+  if (hasSteppedRoofElInit) hasSteppedRoofElInit.checked = !!state.hasSteppedRoof;
+  const steppedLowerHElInit = document.getElementById('steppedLowerH');
+  if (steppedLowerHElInit) steppedLowerHElInit.value = state.steppedLowerH;
+  const steppedLowerWElInit = document.getElementById('steppedLowerW');
+  if (steppedLowerWElInit) steppedLowerWElInit.value = state.steppedLowerW;
+
   // Open Building — Free Roof (Sec. 27.3.2) inputs
   const openRoofShapeEl = document.getElementById('openRoofShape');
   if (openRoofShapeEl) openRoofShapeEl.value = state.openRoofShape;
@@ -6602,6 +6772,14 @@ document.addEventListener('DOMContentLoaded', init);
     if (tankOpenTopEl2) tankOpenTopEl2.checked = !!state.tankOpenTop;
     const tankElevatedEl2 = document.getElementById('tankElevated');
     if (tankElevatedEl2) tankElevatedEl2.checked = !!state.tankElevated;
+
+    // Stepped Roofs (Sec. 30.3.2.1, Fig. 30.3-3) inputs
+    const hasSteppedRoofEl2 = document.getElementById('hasSteppedRoof');
+    if (hasSteppedRoofEl2) hasSteppedRoofEl2.checked = !!state.hasSteppedRoof;
+    const steppedLowerHEl2 = document.getElementById('steppedLowerH');
+    if (steppedLowerHEl2) steppedLowerHEl2.value = fmt(lengthOut(state.steppedLowerH), 2);
+    const steppedLowerWEl2 = document.getElementById('steppedLowerW');
+    if (steppedLowerWEl2) steppedLowerWEl2.value = fmt(lengthOut(state.steppedLowerW), 2);
 
     // Open Building — Free Roof (Sec. 27.3.2) inputs
     const openRoofShapeEl = document.getElementById('openRoofShape');

@@ -540,6 +540,21 @@
             <label for="tankElevated"><input type="checkbox" id="tankElevated"> Elevated on columns <span class="ref">Sec. 30.10.5</span><button type="button" class="info-btn" data-info="circTank" aria-label="Learn more">i</button></label>
           </div>
         </div>
+        <div class="row2">
+          <div class="field checkbox-field">
+            <label for="hasSteppedRoof"><input type="checkbox" id="hasSteppedRoof"> Stepped (multi-level flat) roof <span class="ref">Fig. 30.3-3</span><button type="button" class="info-btn" data-info="steppedRoof" aria-label="Learn more">i</button></label>
+          </div>
+        </div>
+        <div class="row2" id="steppedRoofGeomRow">
+          <div class="field">
+            <label for="steppedLowerH">Lower roof mean height (<span id="lblSteppedLowerH">ft</span>)<button type="button" class="info-btn" data-info="steppedRoof" aria-label="Learn more">i</button></label>
+            <input type="number" id="steppedLowerH" step="any" min="0">
+          </div>
+          <div class="field">
+            <label for="steppedLowerW">Lower roof width, W<sub>L</sub> (<span id="lblSteppedLowerW">ft</span>)<button type="button" class="info-btn" data-info="steppedRoof" aria-label="Learn more">i</button></label>
+            <input type="number" id="steppedLowerW" step="any" min="0">
+          </div>
+        </div>
       </div>
       <div style="flex:1 1 460px; min-width:300px;">
         <p class="muted" style="margin:0 0 10px;">Schematic only, updates live with the inputs at left. The edge-zone width <strong>a</strong> shown is computed per the Notation under Figures 28.3-1/30.3-1/30.3-2A (<button type="button" class="info-btn" data-info="minDim" aria-label="Learn more">i</button> see "Least Horizontal Dimension"). For the exact pressure-zone layouts, see ASCE/SEI 7-22 Figure 28.3-1 (MWFRS) or Figures 30.3-1 / 30.3-2A (C&amp;C).</p>
@@ -1052,6 +1067,11 @@
     <div id="circTankResults"></div>
   </div>
 
+  <div class="panel" id="steppedRoofSection" style="display:none;">
+    <h2>Stepped Roof &mdash; C&amp;C Pressures <span class="ref">Sec. 30.3.2.1, Fig. 30.3-3, Eq. 30.3-1</span><button type="button" class="info-btn" data-info="steppedRoof" aria-label="Learn more">i</button></h2>
+    <div id="steppedRoofResults"></div>
+  </div>
+
   <div class="panel" id="openRoofSection" style="display:none;">
     <h2>Open Building &mdash; Free Roof Pressures <span class="ref">Sec. 27.3.2, Eq. 27.3-2: p = q<sub>h</sub>K<sub>d</sub>GC<sub>N</sub></span><button type="button" class="info-btn" data-info="openRoof" aria-label="Learn more">i</button></h2>
     <div class="summary-cards">
@@ -1176,7 +1196,7 @@
       <li><strong>Roof pressures for isolated and grouped circular bins/tanks</strong> (Secs. 30.10.4 &amp; 30.10.6) &mdash; not implemented; these provisions exist only as graphical figures in ASCE/SEI 7-22, with no numeric (GC<sub>p</sub>) values recoverable from the Standard's text or Commentary.</li>
       <li><strong>Flexible / dynamically sensitive structures</strong> &mdash; the G<sub>f</sub> gust-effect factor procedure (Secs. 26.11.3&ndash;26.11.5, requires the fundamental natural frequency) is not implemented; this calculator uses G = 0.85 for rigid structures throughout (Sec. 26.11.1).</li>
       <li><strong>Two parapet C&amp;C refinements</strong>: the Fig. 30.3-1 Note 5 wall (GC<sub>p</sub>) reduction, and the Fig. 30.3-2A note permitting roof Zone 3 (GC<sub>p</sub>) = Zone 2 (GC<sub>p</sub>) for parapets &ge; 3 ft &mdash; not implemented; see the parapet "i" button for details.</li>
-      <li><strong>Stepped, sawtooth, and multi-span roofs, and domes</strong> &mdash; not implemented; possible future modules.</li>
+      <li><strong>Sawtooth and multi-span gable roofs, and domes</strong> (Figs. 30.3-4/30.3-6/30.3-7) &mdash; not yet implemented; possible future modules. <strong>Stepped roofs</strong> (Fig. 30.3-3) are implemented above.</li>
       <li><strong>Chapter 31 Wind Tunnel Procedure</strong> &mdash; out of scope for a code-formula calculator; requires physical or CFD testing.</li>
       <li>Automatic lookup of <strong>basic wind speed V</strong> from the ASCE Hazard Tool (currently entered manually, as with p<sub>g</sub> in the Snow module). The topographic factor K<sub>zt</sub> (Fig. 26.8-1), by contrast, now has an automatic computation option (2D ridge/escarpment or 3D hill) alongside manual entry.</li>
     </ul>
