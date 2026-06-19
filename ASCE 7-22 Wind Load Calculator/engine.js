@@ -430,6 +430,9 @@ const state = {
   steppedLowerH: 12,  // mean roof height of the LOWER roof level, ft (the page's main "h" field above is the TALLER level)
   steppedLowerW: 30,  // plan width of the lower roof level, measured perpendicular to the step (in the along-wind direction), ft
 
+  hasMultispanRoof: false, // Fig. 30.3-4 — building has a multispan gable roof (2+ repeating gable spans)
+  msModuleW: 30, // single-span module width W', ft (Fig. 30.3-4 Notation) — reuses the page's theta/h/buildingL/areaRoof fields
+
   // Open Building — Free Roof (Sec. 27.3.2), only used when enclosure === 'openFreeRoof'
   openRoofShape: 'monoslope', // 'monoslope' | 'pitched' | 'troughed' — Figs. 27.3-4/5/6
   openWindFlow: 'clear',      // 'clear' | 'obstructed' — Figs. 27.3-4/5/6/7 Note 2
@@ -1866,6 +1869,47 @@ function compute(s) {
     }
   }
 
+  // --- Multispan Gable Roofs (Fig. 30.3-4) ---
+  // Fig. 30.3-4 Note 5: "For theta <= 10 deg, values of (GCp) from Fig. 30.3-2A
+  // shall be used" -- so for the common low-slope case this reuses the exact
+  // same Zone 1/2/3 flat-roof (GCp) table already coded (gcpRoof), with only a
+  // new edge-zone-width formula "a" (per this figure's own Notation, based on
+  // the single-span module width rather than the whole building's minDim) and
+  // a tiled zone pattern (every ridge/valley line between spans gets the same
+  // zone-2/3 treatment as the building's outer eaves).
+  // SCOPE: for theta > 10 deg, Fig. 30.3-4 gives its own numeric (GCp) vs.
+  // effective-area graphs (10 < theta <= 30 deg, and 30 < theta <= 45 deg) with
+  // three overlapping curves (Zones 1/2/3) each having its own breakpoint --
+  // digitizing these reliably from the rendered figure (multiple crossing
+  // lines, no printed coordinate table) is not done here to avoid guessing at
+  // breakpoints; that range is flagged NOT IMPLEMENTED in the report.
+  let multispanRoof = null;
+  if (s.hasMultispanRoof) {
+    const theta = s.theta;
+    if (theta <= 10.0001) {
+      const Wp = Math.max(s.msModuleW, 0.01);
+      const Lmod = Math.min(Wp, Math.max(s.buildingL, 0.01)); // least horiz. dim. of a single-span module
+      const aRaw = Math.min(0.10 * Lmod, 0.4 * s.h);
+      const aMin = Math.max(0.04 * Lmod, 3.0);
+      const a = Math.max(aRaw, aMin);
+      const A = Math.max(s.areaRoof, 0.1);
+      const z1 = gcpRoof('1', A);
+      const z2 = gcpRoof('2', A);
+      const z3 = gcpRoof('3', A);
+      const withP = (gc) => ({
+        gc,
+        pMin: qh * KD * (gc.neg - gcpi.pos),
+        pMax: qh * KD * (gc.pos - gcpi.neg)
+      });
+      multispanRoof = {
+        thetaLE10: true, theta, Wp, Lmod, a, A,
+        zone1: withP(z1), zone2: withP(z2), zone3: withP(z3)
+      };
+    } else {
+      multispanRoof = { thetaLE10: false, theta };
+    }
+  }
+
   // ── Minimum Design Wind Load Check ──────────────────────────────────────
   // ASCE/SEI 7-22 Sec. 27.1.5 (MWFRS) and Sec. 30.2.2 (C&C) require
   // computed net pressures to be not less than the tabulated minimums,
@@ -1948,7 +1992,7 @@ function compute(s) {
   return {
     kh, ke, kd: KD, qh, gcpi, a,
     steps, mwfrsLC1, mwfrsLC2, mwfrsLC3, mwfrsLC4, torsionApplies,
-    ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, canopy, circTank, steppedRoof, openRoof,
+    ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, canopy, circTank, steppedRoof, multispanRoof, openRoof,
     mwfrsMinCheck, mwfrsMinGoverns, ccMinCheck, ccMinGoverns,
     ch27, cc30p2, ch29, cc30s305,
     ch32: (s.ch32Enabled ? computeCh32(s) : null), s: s
@@ -2538,6 +2582,15 @@ function renderResults() {
       steppedRoofEl.innerHTML = r.steppedRoof ? reportSteppedRoofHTML(r) :
         '<div class="alert warn">Enter a lower-roof height that is less than the main roof height h to define a step.</div>';
     }
+  }
+
+  // Multispan Gable Roofs (Fig. 30.3-4) — only shown when the
+  // "has multispan roof" toggle is on
+  const multispanRoofSection = document.getElementById('multispanRoofSection');
+  if (multispanRoofSection) multispanRoofSection.style.display = state.hasMultispanRoof ? '' : 'none';
+  if (state.hasMultispanRoof && r.multispanRoof) {
+    const multispanRoofEl = document.getElementById('multispanRoofResults');
+    if (multispanRoofEl) multispanRoofEl.innerHTML = reportMultispanRoofHTML(r);
   }
 
   renderOpenRoof(r);
@@ -3737,6 +3790,71 @@ function reportSteppedRoofHTML(r) {
   return html;
 }
 
+// Multispan gable roof plan diagram — tiled zone pattern across 2 modules,
+// showing the eave edges and the repeating ridge/valley lines.
+function multispanRoofSvg(t) {
+  const W = 420, H = 230, pad = 36;
+  const modPx = (W - 2 * pad) / 2.4; // width of one module on screen (show ~2.4 modules)
+  const Lpx = H - 2 * pad;
+  const aPx = Math.min(t.a / t.Wp * modPx, modPx * 0.35);
+  let s = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">`;
+  s += `<rect x="${pad}" y="${pad}" width="${modPx * 2}" height="${Lpx}" fill="none" stroke="#1c2733" stroke-width="1.5"/>`;
+  // ridge/valley line between the two modules (dashed)
+  s += `<line x1="${pad + modPx}" y1="${pad}" x2="${pad + modPx}" y2="${pad + Lpx}" stroke="#888" stroke-width="1" stroke-dasharray="4,3"/>`;
+  // eave edge bands (top and bottom, full width) — zone 2 field
+  [pad, pad + Lpx - 4].forEach(y => {
+    s += `<rect x="${pad}" y="${y}" width="${modPx * 2}" height="4" fill="#1f4e79"/>`;
+  });
+  // corner squares at the 4 module-boundary x-positions along both eaves
+  const xs = [pad, pad + modPx, pad + modPx * 2];
+  [pad + 2, pad + Lpx - 6].forEach(y => {
+    xs.forEach(cx => {
+      s += `<rect x="${cx - aPx / 2}" y="${y}" width="${aPx}" height="6" fill="#c0571f"/>`;
+    });
+  });
+  // edge band along the ridge/valley line in the interior (zone 2), and zone 1 field
+  s += `<rect x="${pad + modPx - aPx / 2}" y="${pad}" width="${aPx}" height="${Lpx}" fill="#3a6a94" opacity="0.5"/>`;
+  s += `<text x="${pad + modPx / 2}" y="${pad + Lpx / 2}" font-size="11" fill="var(--muted)" text-anchor="middle">1</text>`;
+  s += `<text x="${pad + modPx}" y="${pad + Lpx / 2 - 8}" font-size="10" fill="#1f4e79" text-anchor="middle">2 (ridge/valley)</text>`;
+  s += `<text x="${pad + modPx / 2}" y="${pad - 8}" font-size="10" fill="var(--muted)" text-anchor="middle">eave &mdash; zone 2 / 3 at corners</text>`;
+  s += `<text x="${pad + modPx}" y="${pad + Lpx + 16}" font-size="9" fill="var(--muted)" text-anchor="middle">W&prime; = ${fmt(lengthOut(t.Wp), 1)} ${state.unitSystem === 'SI' ? 'm' : 'ft'} per module</text>`;
+  s += `</svg>`;
+  return s;
+}
+
+// Multispan Gable Roofs section (Fig. 30.3-4) — identical content for the
+// on-screen #multispanRoofResults and the print/export report.
+function reportMultispanRoofHTML(r) {
+  const t = r.multispanRoof;
+  if (!t) return '<p class="muted">Multispan roof data unavailable.</p>';
+  const pU = pUnit();
+  const lU = state.unitSystem === 'SI' ? 'm' : 'ft';
+  const p2 = v => fmt(pVal(v), 2);
+
+  if (!t.thetaLE10) {
+    return '<div class="alert warn">NOT IMPLEMENTED for &theta; = ' + fmt(t.theta, 1) + '&deg; &gt; 10&deg;. Fig. 30.3-4 gives its own (GC<sub>p</sub>) vs. effective-wind-area graphs for 10&deg; &lt; &theta; &le; 30&deg; and 30&deg; &lt; &theta; &le; 45&deg; (three overlapping curves for Zones 1/2/3 each, with their own breakpoints and no printed coordinate table) &mdash; digitizing these reliably from the rendered figure was not done here to avoid guessing at unlabeled breakpoints. Reduce the roof angle &theta; to &le; 10&deg; to use this calculator\'s implementation (which reuses Fig. 30.3-2A per Fig. 30.3-4 Note 5), or consult Fig. 30.3-4 directly for steeper multispan gable roofs.</div>';
+  }
+
+  let html = '<p class="muted" style="margin:0 0 10px;">p = q<sub>h</sub>&middot;K<sub>d</sub>&middot;[(GC<sub>p</sub>) &minus; (GC<sub>pi</sub>)] <span class="ref">Eq. 30.3-1</span> &mdash; per Fig. 30.3-4 Note 5, for &theta; &le; 10&deg; the (GC<sub>p</sub>) values from Fig. 30.3-2A (flat roof) apply directly; only the edge-zone width <strong>a</strong> uses this figure\'s own formula (based on the single-span module width, not the whole building). Fig. 30.3-4\'s Notation calls for <em>eave</em> height in this h &le; 10&deg; case &mdash; approximated here by the page\'s mean roof height h.</p>';
+  html += '<div class="zone-row"><div class="zone-tbl">' +
+    '<table class="report-input-table"><tbody>' +
+    '<tr><td>Roof angle, &theta;</td><td>' + fmt(t.theta, 1) + '&deg;</td></tr>' +
+    '<tr><td>Single-span module width, W&prime;</td><td>' + fmt(lengthOut(t.Wp), 2) + ' ' + lU + '</td></tr>' +
+    '<tr><td>Least horiz. dim. of module</td><td>' + fmt(lengthOut(t.Lmod), 2) + ' ' + lU + '</td></tr>' +
+    '<tr><td>Edge-zone width, a</td><td>' + fmt(lengthOut(t.a), 2) + ' ' + lU + '</td></tr>' +
+    '</tbody></table></div><div class="zone-diag">' + multispanRoofSvg(t) + '</div></div>';
+
+  html += '<table class="report-table"><thead><tr><th>Zone</th><th>(GC<sub>p</sub>)<sub>neg</sub></th><th>(GC<sub>p</sub>)<sub>pos</sub></th><th>p<sub>min</sub></th><th>p<sub>max</sub></th></tr></thead><tbody>' +
+    ['1', '2', '3'].map(z => {
+      const zz = t['zone' + z];
+      return '<tr><td>Zone ' + z + '</td><td>' + fmt(zz.gc.neg, 3) + '</td><td>' + fmt(zz.gc.pos, 3) + '</td><td class="val-neg">' + p2(zz.pMin) + ' ' + pU + '</td><td class="val-pos">' + p2(zz.pMax) + ' ' + pU + '</td></tr>';
+    }).join('') +
+    '</tbody></table>';
+
+  html += '<div class="alert info">Zone 1 = roof interior, away from both the eaves and any ridge/valley line; Zone 2 = the edge strip (width a) along the two long eave edges AND along every ridge/valley line between adjacent spans; Zone 3 = corners, where an eave edge meets a ridge/valley line (i.e. at every module boundary along both eaves). This tiles the standard flat-roof corner/edge/interior pattern across all spans rather than just the building\'s outer perimeter.</div>';
+  return html;
+}
+
 // Open Building — Free Roof Pressures section (Sec. 27.3.2, Eq. 27.3-2) —
 // identical cards/notes/tables/citations to the on-screen #openRoofSection.
 function reportOpenRoofHTML(r) {
@@ -3938,6 +4056,10 @@ function buildReportHTML(r) {
 
   if (s.hasSteppedRoof && r.steppedRoof) {
     html += section('Stepped Roof &mdash; C&amp;C Pressures', 'Sec. 30.3.2.1, Fig. 30.3-3, Eq. 30.3-1', reportSteppedRoofHTML(r));
+  }
+
+  if (s.hasMultispanRoof && r.multispanRoof) {
+    html += section('Multispan Gable Roof &mdash; C&amp;C Pressures', 'Fig. 30.3-4, Eq. 30.3-1', reportMultispanRoofHTML(r));
   }
 
   if (r.openRoof) {
@@ -4872,6 +4994,23 @@ function bindInputs() {
     });
   }
 
+  // Multispan Gable Roofs (Fig. 30.3-4) toggle + module width
+  const hasMultispanRoofEl = document.getElementById('hasMultispanRoof');
+  if (hasMultispanRoofEl) {
+    hasMultispanRoofEl.addEventListener('change', e => {
+      state.hasMultispanRoof = e.target.checked;
+      renderResults();
+    });
+  }
+  const msModuleWEl = document.getElementById('msModuleW');
+  if (msModuleWEl) {
+    msModuleWEl.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      state.msModuleW = toUSLength(isNaN(v) ? 0 : v, state.unitSystem);
+      renderResults();
+    });
+  }
+
   // Torsional T-zone reference toggle (progressive disclosure when h <= 30 ft)
   const torsionToggle = document.getElementById('torsionToggle');
   if (torsionToggle) {
@@ -5180,6 +5319,7 @@ function updateUnitLabels() {
   set('lblTankH', sys === 'SI' ? 'm' : 'ft');
   set('lblSteppedLowerH', sys === 'SI' ? 'm' : 'ft');
   set('lblSteppedLowerW', sys === 'SI' ? 'm' : 'ft');
+  set('lblMsModuleW', sys === 'SI' ? 'm' : 'ft');
 }
 
 function setUnitSystem(sys) {
@@ -5410,6 +5550,13 @@ const INFO_CONTENT = {
     <p>The lower roof's outer perimeter keeps the standard edge-zone width <strong>a</strong> (per the Fig. 30.3-1/30.3-2A Notation, computed from h, least horizontal dimension, and &theta; = 0). Immediately adjacent to the step itself, the figure widens this zone to <strong>1.5h<sub>s</sub></strong>, where h<sub>s</sub> is the step's height differential (h<sub>s</sub> = h &minus; h<sub>lower</sub>) &mdash; entered above as the lower roof's own mean height.</p>
     <p><span class="src-tag">Scope limitation (disclosed, not invented):</span> Figure 30.3-3 illustrates a cascading multi-level building with successive steps (labeled h<sub>s1</sub>, h<sub>s2</sub>, ... on the figure, each with its own 1.5h<sub>s</sub>-type zone width) but the Standard's text does <em>not</em> define this multi-step geometry in words anywhere &mdash; only the diagram itself shows the pattern, and reading additional steps off the figure introduces real ambiguity. This calculator therefore implements only the common <strong>two-level (single-step)</strong> case. Buildings with two or more steps are <strong>not implemented</strong> &mdash; consult Fig. 30.3-3 directly.</p>
     <p>The lower roof's width perpendicular to the step, W<sub>L</sub>, caps the step-adjacent zone (it cannot exceed the lower roof's own width); this is flagged in the report when it occurs.</p>`
+  },
+  multispanRoof: {
+    title: 'Multispan Gable Roofs — Fig. 30.3-4',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, Fig. 30.3-4</span> &mdash; applies to buildings with two or more repeating gable spans sharing valley/ridge lines (the page's roof angle &theta; and mean roof height h are reused for this feature). Per the figure's own Note 5: <em>"For &theta; &le; 10&deg;, values of (GC<sub>p</sub>) from Fig. 30.3-2A shall be used."</em> So for the common low-slope case, this calculator reuses the exact same Zone 1/2/3 flat-roof (GC<sub>p</sub>) table already used elsewhere on this page; only the edge-zone width <strong>a</strong> uses Fig. 30.3-4's own formula: a = the smaller of 10% of the single-span module's least horizontal dimension or 0.4h, but not less than the larger of 4% of that dimension or 3 ft.</p>
+    <p><strong>Zone pattern (tiled):</strong> unlike a single gable roof, every ridge AND every valley line between adjacent spans gets the same edge-zone (2) and corner-zone (3) treatment that a single building's perimeter eaves and ridge would get &mdash; Zone 3 sits at every point where an eave meets a ridge/valley line (i.e. at each module boundary along both long eaves), Zone 2 runs along the eaves and along every ridge/valley line, and Zone 1 is the remaining interior.</p>
+    <p><span class="src-tag">Scope limitation (disclosed, not invented):</span> for &theta; &gt; 10&deg;, Fig. 30.3-4 gives its own (GC<sub>p</sub>) vs. effective-wind-area graphs for two ranges (10&deg; &lt; &theta; &le; 30&deg;, and 30&deg; &lt; &theta; &le; 45&deg;), each with three overlapping curves (Zones 1, 2, and 3) and no printed coordinate table &mdash; only a plotted graph. Digitizing the exact breakpoints from the rendered figure image was not done here, since misreading an unlabeled bend point would mean inventing a number rather than reading one. That range is flagged NOT IMPLEMENTED in the report; consult Fig. 30.3-4 directly for steeper multispan gable roofs.</p>
+    <p>Fig. 30.3-4's Notation specifies <em>eave</em> height (not mean roof height) for the &theta; &le; 10&deg; case &mdash; this calculator approximates that with the page's mean roof height h, which is very close for a nearly flat roof.</p>`
   },
   stepsInfo: {
     title: 'Velocity Pressure — Step by Step',
@@ -6660,6 +6807,12 @@ function init() {
   const steppedLowerWElInit = document.getElementById('steppedLowerW');
   if (steppedLowerWElInit) steppedLowerWElInit.value = state.steppedLowerW;
 
+  // Multispan Gable Roofs (Fig. 30.3-4) inputs
+  const hasMultispanRoofElInit = document.getElementById('hasMultispanRoof');
+  if (hasMultispanRoofElInit) hasMultispanRoofElInit.checked = !!state.hasMultispanRoof;
+  const msModuleWElInit = document.getElementById('msModuleW');
+  if (msModuleWElInit) msModuleWElInit.value = state.msModuleW;
+
   // Open Building — Free Roof (Sec. 27.3.2) inputs
   const openRoofShapeEl = document.getElementById('openRoofShape');
   if (openRoofShapeEl) openRoofShapeEl.value = state.openRoofShape;
@@ -6780,6 +6933,12 @@ document.addEventListener('DOMContentLoaded', init);
     if (steppedLowerHEl2) steppedLowerHEl2.value = fmt(lengthOut(state.steppedLowerH), 2);
     const steppedLowerWEl2 = document.getElementById('steppedLowerW');
     if (steppedLowerWEl2) steppedLowerWEl2.value = fmt(lengthOut(state.steppedLowerW), 2);
+
+    // Multispan Gable Roofs (Fig. 30.3-4) inputs
+    const hasMultispanRoofEl2 = document.getElementById('hasMultispanRoof');
+    if (hasMultispanRoofEl2) hasMultispanRoofEl2.checked = !!state.hasMultispanRoof;
+    const msModuleWEl2 = document.getElementById('msModuleW');
+    if (msModuleWEl2) msModuleWEl2.value = fmt(lengthOut(state.msModuleW), 2);
 
     // Open Building — Free Roof (Sec. 27.3.2) inputs
     const openRoofShapeEl = document.getElementById('openRoofShape');
