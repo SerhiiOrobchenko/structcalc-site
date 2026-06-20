@@ -536,7 +536,20 @@ const state = {
   ch29SolarD2:    3,    // d₂ to next row of panels (ft)
   ch29SolarZone:  1,    // roof zone: 1=interior, 2=edge, 3=corner
   ch29SolarWL:    120,  // building longer side WL (ft)
-  ch29SolarWs:    60    // building shorter side Ws (ft)
+  ch29SolarWs:    60,   // building shorter side Ws (ft)
+  // Sec. 29.4.5 Ground-Mounted Fixed-Tilt Solar Panel Systems
+  // (h is shared with ch29H — bound from its own UI field like every other Ch.29 type)
+  ch29GsOmega:    25,   // tilt angle ω (°), 0–60
+  ch29GsLc:       10,   // panel chord length Lc (ft), 6–14
+  ch29GsWg:       100,  // shortest row length Wg (ft)
+  ch29GsS:        20,   // row spacing S (ft, center-to-center)
+  ch29GsSp:       0.1,  // gap between adjacent panels sp (ft)
+  ch29GsSL:       1.0,  // horiz. longitudinal open-area distance within a row SL (ft)
+  ch29GsST:       10,   // horiz. transverse open-area distance between rows ST (ft)
+  ch29GsRows:     5,    // number of rows in the array
+  ch29GsBlockage: 5,    // support-framing blockage ratio (%) over any 4·Lc length
+  ch29GsA:        50,   // effective wind area A (ft²) for GCgn/GCgm interpolation
+  ch29GsZone:     1     // user-selected zone: 1=interior shielded, 2=exterior perimeter
 };
 
 /* =====================================================================
@@ -3539,6 +3552,49 @@ function gcrnNom(An, zone, omega) {
 }
 
 // ------------------------------------------------------------------
+// Figure 29.4-10, ASCE 7-22 Sec. 29.4.5 — STATIC net-pressure and moment
+// coefficients for ground-mounted fixed-tilt solar panel systems.
+// Source: exact [Effective Wind Area A (sq ft), coefficient] breakpoints
+// digitized directly from Fig. 29.4-10 by the user (Figure 29.4-10.txt) —
+// not estimated. Two tilt bands are plotted, 0°<ω≤5° and 15°≤ω≤60°, with a
+// gap 5°<ω<15° that the figure itself does not cover.
+// NOTE: this is the STATIC term only (GCgn_static / GCgm_static). Eq. 29.4-10
+// and Eq. 29.4-11 define the full coefficient as
+//   (GCgn) = (GCgn_static) ± (GCgn_dynamic),  (GCgm) = (GCgm_static) ± (GCgm_dynamic)
+// and the DYNAMIC term (Fig. 29.4-11) has not been supplied/digitized, so it
+// is omitted here — disclosed explicitly in the report. Omitting it can
+// UNDERESTIMATE the governing force/moment; do not use for final design.
+// ------------------------------------------------------------------
+const GS_GCGN_STATIC = {
+  lo: { zone1: [[1, 1.5], [10, 1.5], [5000, 0.8], [10000, 0.8]],
+        zone2: [[1, 2.5], [10, 2.5], [5000, 1.5], [10000, 1.5]] }, // 0°<ω≤5°
+  hi: { zone1: [[1, 3.0], [10, 3.0], [5000, 1.0], [10000, 1.0]],
+        zone2: [[1, 5.0], [10, 5.0], [5000, 1.5], [10000, 1.5]] }  // 15°≤ω≤60°
+};
+const GS_GCGM_STATIC = {
+  lo: { zone1: [[1, 0.2], [10, 0.2], [5000, 0.1], [10000, 0.1]],
+        zone2: [[1, 0.3], [10, 0.3], [5000, 0.2], [10000, 0.2]] }, // 0°<ω≤5°
+  hi: { zone1: [[1, 0.45], [10, 0.45], [5000, 0.2], [10000, 0.2]],
+        zone2: [[1, 0.7], [10, 0.7], [5000, 0.2], [10000, 0.2]] }  // 15°≤ω≤60°
+};
+// Interpolate a Fig. 29.4-10 static coefficient at given effective wind
+// area A, zone (1|2) and tilt ω (deg). Within each band: log-linear vs. A
+// (logLerpPts). Between the two bands (5°<ω<15°, where the figure has no
+// data): linear in ω, applying the SAME convention already coded for the
+// analogous two-band gap in Fig. 29.4-7 (see gcrnNom() above, "Note 2") —
+// a disclosed engineering judgment by analogy, not a value taken from the
+// Standard itself.
+function gsStatic(table, A, zone, omega) {
+  const key = (zone === 2) ? 'zone2' : 'zone1';
+  const lo = logLerpPts(A, table.lo[key]);
+  const hi = logLerpPts(A, table.hi[key]);
+  if (omega <= 5)  return lo;
+  if (omega >= 15) return hi;
+  const t = (omega - 5) / 10;
+  return lo * (1 - t) + hi * t;
+}
+
+// ------------------------------------------------------------------
 // computeCh29(s): main Ch.29 computation
 // ------------------------------------------------------------------
 function computeCh29(s) {
@@ -3669,6 +3725,68 @@ function computeCh29(s) {
              exposed, setbackOK, minSetback,
              warnings,
              eqRef: 'Eq. 29.4-5', cfRef: 'Fig. 29.4-7' };
+
+  } else if (type === 'groundSolar') {
+    // Sec. 29.4.5 Ground-Mounted Fixed-Tilt Solar Panel Systems
+    // Eq. 29.4-8: Fn = qh·Kd·(GCgn)·A   (h = mean panel height, bound to shared ch29H)
+    // Eq. 29.4-9: Mc = qh·Kd·(GCgm)·A·Lc
+    // (GCgn)/(GCgm) — STATIC term only (Fig. 29.4-10); dynamic term (Fig. 29.4-11) not
+    // available — see gsStatic()/GS_GCGN_STATIC comments above for full disclosure.
+    const KD = 0.85; // Table 26.6-1 has no dedicated "solar panel" line item found in the
+                      // extracted text; 0.85 applied by the same category fallback already
+                      // used for rooftop solar panels (most structure types default to 0.85)
+    const h    = s.ch29H;           // mean panel height, ft (this type's own "h", Sec. 29.4.5.1)
+    const omega = s.ch29GsOmega;
+    const Lc   = s.ch29GsLc;
+    const Wg   = s.ch29GsWg;
+    const Srow = s.ch29GsS;
+    const sp   = s.ch29GsSp;
+    const SL   = s.ch29GsSL;
+    const ST   = s.ch29GsST;
+    const rows = s.ch29GsRows;
+    const blockage = s.ch29GsBlockage;
+    const A    = s.ch29GsA;
+    const zoneSel = s.ch29GsZone;
+
+    // Sec. 29.4.5.1 Scope — applicability checks (all disclosed, none invented)
+    var warnings = [];
+    if (Lc < 6 || Lc > 14)        warnings.push('Lc = ' + fmt(Lc,1) + ' ft outside scope 6 ≤ Lc ≤ 14 ft');
+    const WgLc = Lc > 0 ? Wg / Lc : 0;
+    if (WgLc < 7)                 warnings.push('Wg/Lc = ' + fmt(WgLc,2) + ' < 7 (outside scope)');
+    if (omega < 0 || omega > 60)  warnings.push('ω = ' + fmt(omega,1) + '° outside scope 0° ≤ ω ≤ 60°');
+    const hLc = Lc > 0 ? h / Lc : 0;
+    if (hLc < 0.5 || hLc > 0.8)   warnings.push('h/Lc = ' + fmt(hLc,3) + ' outside scope 0.5–0.8');
+    const LcS = Srow > 0 ? Lc / Srow : 0;
+    if (LcS < 0.20 || LcS > 0.60) warnings.push('Lc/S = ' + fmt(LcS,3) + ' outside scope 0.20–0.60');
+    if (sp > 0.014 * Lc)          warnings.push('sp = ' + fmt(sp,3) + ' ft exceeds 0.014·Lc = ' + fmt(0.014*Lc,3) + ' ft');
+    if (SL > 0.25 * Lc)           warnings.push('SL = ' + fmt(SL,2) + ' ft exceeds 0.25·Lc = ' + fmt(0.25*Lc,2) + ' ft');
+    if (ST > 2 * Srow)            warnings.push('ST = ' + fmt(ST,2) + ' ft exceeds 2·S = ' + fmt(2*Srow,2) + ' ft');
+    if (rows < 3)                 warnings.push('Number of rows = ' + rows + ' < 3 (min. per Sec. 29.4.5.1)');
+    if (blockage > 8)             warnings.push('Support-framing blockage ratio = ' + fmt(blockage,1) + '% exceeds 8% (over any 4·Lc length)');
+
+    // Forced-Zone-2 overrides, per Sec. 29.4.5.1 notes:
+    const forceZone2_LcS = (LcS >= 0.20 && LcS < 0.25);
+    const forceZone2_Kzt = KZT > 1.0;
+    const zone = (forceZone2_LcS || forceZone2_Kzt) ? 2 : zoneSel;
+
+    const GCgn = gsStatic(GS_GCGN_STATIC, A, zone, omega);
+    const GCgm = gsStatic(GS_GCGM_STATIC, A, zone, omega);
+    // Static term applied with both signs (±), mirroring how the existing
+    // rooftop solar-panel feature reports its analogous (GCrn) — see
+    // reportCh29HTML 'solarPanel' branch — since the omitted dynamic term is
+    // the only piece that would otherwise fix the combined sign per Eq. 29.4-10/11.
+    const Fn = qh * KD * GCgn * A;     // lbf (Eq. 29.4-8 magnitude)
+    const Mc = qh * KD * GCgm * A * Lc; // lbf·ft (Eq. 29.4-9 magnitude)
+    // Sec. 29.4.5.3: horizontal component of Fn shall be ≥ 0.1× the vertical component
+    const FnH_min = 0.1 * Fn;
+
+    return { type, KD, ke, kh, qh,
+             h, omega, Lc, Wg, S: Srow, sp, SL, ST, rows, blockage, A,
+             zoneSel, zone, forceZone2_LcS, forceZone2_Kzt,
+             WgLc, hLc, LcS, KZT,
+             GCgn, GCgm, Fn, Mc, FnH_min,
+             warnings,
+             eqRef: 'Eqs. 29.4-8/29.4-9', cfRef: 'Fig. 29.4-10 (static only)' };
   }
 
   return null;
@@ -3696,7 +3814,8 @@ function reportCh29HTML(r) {
     openSign:     'Open Sign / Single-Plane Open Frame &mdash; Sec. 29.4',
     trussedTower: 'Trussed Tower &mdash; Sec. 29.4',
     rooftopEquip: 'Rooftop Structure / Equipment &mdash; Sec. 29.4.1',
-    solarPanel:   'Rooftop Solar Panels &mdash; Sec. 29.4.3'
+    solarPanel:   'Rooftop Solar Panels &mdash; Sec. 29.4.3',
+    groundSolar:  'Ground-Mounted Fixed-Tilt Solar Panels &mdash; Sec. 29.4.5'
   };
 
   let html = '<h3>Ch.29 Other Structures &mdash; Design Wind Force' +
@@ -3708,7 +3827,7 @@ function reportCh29HTML(r) {
     '<tr><td>K<sub>h</sub> (at structure top)</td><td>' + fmt(c.kh, 3) + '</td></tr>' +
     '<tr><td>q<sub>h</sub></td><td>' + p2(c.qh) + ' ' + pU + '</td></tr>' +
     '<tr><td>K<sub>d</sub></td><td>' + fmt(c.KD, 2) + ' &mdash; Table 26.6-1</td></tr>';
-  if (c.type !== 'rooftopEquip') {
+  if (c.type === 'solidSign' || c.type === 'chimney' || c.type === 'openSign' || c.type === 'trussedTower') {
     html += '<tr><td>G</td><td>' + fmt(c.G, 2) + ' &mdash; Sec. 26.11.1 (rigid)</td></tr>' +
             '<tr><td>C<sub>f</sub></td><td>' + fmt(c.Cf, 2) + ' &mdash; ' + c.cfRef + '</td></tr>';
   }
@@ -3876,6 +3995,65 @@ function reportCh29HTML(r) {
       html += '<div class="alert warn">Minimum edge setback d<sub>1</sub> ≥ max(2(h<sub>2</sub>−h<sub>pt</sub>), 4 ft) = '
             + fmt(lengthOut(c.minSetback),1) + ' ' + lU + ' not met.</div>';
     }
+
+  } else if (c.type === 'groundSolar') {
+    var ZONE_NAMES_GS = ['', 'Zone 1 — Interior (shielded)', 'Zone 2 — Exterior perimeter'];
+    html += '<h3>Ground-Mounted Fixed-Tilt Solar Panels <span class="ref">Sec. 29.4.5, Eqs. 29.4-8/29.4-9</span></h3>';
+    html += '<div class="alert warn" style="font-size:0.82em;margin-bottom:8px;">'
+          + '<strong>Dynamic term omitted:</strong> Eq. 29.4-10/29.4-11 define '
+          + '(GC<sub>gn</sub>) = (GC<sub>gn</sub>)<sub>static</sub> &plusmn; (GC<sub>gn</sub>)<sub>dynamic</sub> '
+          + '(and likewise for (GC<sub>gm</sub>)). Only the <strong>static</strong> term (Fig. 29.4-10, '
+          + 'digitized directly from the figure) is implemented below &mdash; the dynamic term '
+          + '(Fig. 29.4-11, which requires the array&rsquo;s reduced frequency N<sub>s</sub> per '
+          + 'Eq. 29.4-12) has not been supplied and is <strong>not</strong> included. '
+          + 'Omitting it may <strong>underestimate</strong> the governing force/moment &mdash; '
+          + 'do not use for final design until Fig. 29.4-11 data is added.</div>';
+    if (c.warnings && c.warnings.length) {
+      html += '<div class="alert warn"><strong>Applicability (Sec. 29.4.5.1 Scope):</strong> ' +
+        c.warnings.map(function(w){return '<br>&bull; '+w;}).join('') + '</div>';
+    }
+    html += '<div class="alert info" style="font-size:0.82em;margin-bottom:8px;">'
+          + '<strong>Note:</strong> all rows in the array must have the same chord length '
+          + '(Sec. 29.4.5.1) &mdash; not numerically checkable here; verify directly. '
+          + 'The 5°&ndash;15° tilt gap in Fig. 29.4-10 is bridged by linear interpolation in '
+          + '&omega;, the same convention already used for the analogous gap in Fig. 29.4-7 '
+          + '(rooftop solar panels) &mdash; an engineering judgment by analogy, not a Standard value.</div>';
+    html += '<table class="report-input-table"><tbody>'
+          + '<tr><td>Tilt angle &omega;</td><td>' + fmt(c.omega,1) + '&deg;</td></tr>'
+          + '<tr><td>Chord length L<sub>c</sub></td><td>' + fmt(lengthOut(c.Lc),2) + ' ' + lU + '</td></tr>'
+          + '<tr><td>Mean panel height h</td><td>' + fmt(lengthOut(c.h),2) + ' ' + lU + '</td></tr>'
+          + '<tr><td>Row length W<sub>g</sub></td><td>' + fmt(lengthOut(c.Wg),1) + ' ' + lU + '</td></tr>'
+          + '<tr><td>Row spacing S</td><td>' + fmt(lengthOut(c.S),2) + ' ' + lU + '</td></tr>'
+          + '<tr><td>Panel gap s<sub>p</sub></td><td>' + fmt(lengthOut(c.sp),3) + ' ' + lU + '</td></tr>'
+          + '<tr><td>S<sub>L</sub> (open dist. within row)</td><td>' + fmt(lengthOut(c.SL),2) + ' ' + lU + '</td></tr>'
+          + '<tr><td>S<sub>T</sub> (open dist. between rows)</td><td>' + fmt(lengthOut(c.ST),2) + ' ' + lU + '</td></tr>'
+          + '<tr><td>Number of rows</td><td>' + c.rows + '</td></tr>'
+          + '<tr><td>Support blockage ratio</td><td>' + fmt(c.blockage,1) + '%</td></tr>'
+          + '<tr><td>Effective wind area A</td><td>' + fmt(areaOut(c.A),1) + ' ' + aU + '</td></tr>'
+          + '<tr><td>W<sub>g</sub>/L<sub>c</sub></td><td>' + fmt(c.WgLc,2) + '</td></tr>'
+          + '<tr><td>h/L<sub>c</sub></td><td>' + fmt(c.hLc,3) + '</td></tr>'
+          + '<tr><td>L<sub>c</sub>/S</td><td>' + fmt(c.LcS,3) + '</td></tr>'
+          + '<tr><td>K<sub>zt</sub></td><td>' + fmt(c.KZT,3) + '</td></tr>'
+          + '</tbody></table>'
+          + '<table class="report-input-table"><tbody>'
+          + '<tr><td>Selected zone</td><td>' + (ZONE_NAMES_GS[c.zoneSel]||'Zone '+c.zoneSel) + '</td></tr>'
+          + '<tr><td>Effective zone used</td><td>' + (ZONE_NAMES_GS[c.zone]||'Zone '+c.zone) +
+          (c.forceZone2_LcS ? ' (forced: 0.20&le;L<sub>c</sub>/S&lt;0.25)' : '') +
+          (c.forceZone2_Kzt ? ' (forced: K<sub>zt</sub>&gt;1.0)' : '') + '</td></tr>'
+          + '<tr><td>(GC<sub>gn</sub>)<sub>static</sub> &mdash; Fig. 29.4-10</td><td><strong>' + fmt(c.GCgn,3) + '</strong></td></tr>'
+          + '<tr><td>(GC<sub>gm</sub>)<sub>static</sub> &mdash; Fig. 29.4-10</td><td><strong>' + fmt(c.GCgm,3) + '</strong></td></tr>'
+          + '</tbody></table>'
+          + '<table class="report-table"><thead><tr>'
+          + '<th>Quantity</th><th>Formula</th><th>Value (&plusmn;)</th></tr></thead><tbody>'
+          + '<tr><td>F<sub>n</sub> (normal force)</td>'
+          + '<td>q<sub>h</sub>&middot;K<sub>d</sub>&middot;(GC<sub>gn</sub>)<sub>static</sub>&middot;A</td>'
+          + '<td class="val-pos">&plusmn;' + f2(c.Fn) + ' ' + fU + '</td></tr>'
+          + '<tr><td>M<sub>c</sub> (moment, per unit length)</td>'
+          + '<td>q<sub>h</sub>&middot;K<sub>d</sub>&middot;(GC<sub>gm</sub>)<sub>static</sub>&middot;A&middot;L<sub>c</sub></td>'
+          + '<td class="val-pos">&plusmn;' + f2(c.Mc) + ' ' + fU + '&middot;' + lenU + '</td></tr>'
+          + '</tbody></table>'
+          + '<p class="muted" style="font-size:0.82em;">Sec. 29.4.5.3: horizontal component of F<sub>n</sub> shall be &ge; 0.1&times; '
+          + 'the vertical component of F<sub>n</sub> (= ' + f2(c.FnH_min) + ' ' + fU + ' here) for support-post/foundation design.</p>';
   }
 
   return html;
@@ -5798,6 +5976,21 @@ function bindInputs() {
   bindSolar('ch29SolarD1',    'ch29SolarD1',    parseFloat);
   bindSolar('ch29SolarD2',    'ch29SolarD2',    parseFloat);
   bindSolar('ch29SolarZone',  'ch29SolarZone',  parseInt);
+
+  // Sec. 29.4.5 Ground-Mounted Fixed-Tilt Solar Panel bindings (use the
+  // proven bindCh29* helpers above — not the broken requestUpdate() pattern)
+  bindCh29Num('ch29GsOmega',    'ch29GsOmega');
+  bindCh29Len('ch29GsLc',       'ch29GsLc');
+  bindCh29Len('ch29H_gs',       'ch29H');
+  bindCh29Len('ch29GsWg',       'ch29GsWg');
+  bindCh29Len('ch29GsS',        'ch29GsS');
+  bindCh29Len('ch29GsSp',       'ch29GsSp');
+  bindCh29Len('ch29GsSL',       'ch29GsSL');
+  bindCh29Len('ch29GsST',       'ch29GsST');
+  bindCh29Num('ch29GsRows',     'ch29GsRows');
+  bindCh29Num('ch29GsBlockage', 'ch29GsBlockage');
+  bindCh29Area('ch29GsA',       'ch29GsA');
+  bindCh29Sel('ch29GsZone',     'ch29GsZone');
 
   // Sec. 30.5 Open Building C&C bindings
   var bind305 = function(id, key, parser) {
