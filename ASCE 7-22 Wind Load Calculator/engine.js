@@ -1933,22 +1933,62 @@ function compute(s) {
   // the low (upwind) eave of each monoslope span -- where the roof drops down
   // to the next span, the defining "sawtooth" step -- gets a DOUBLED edge-zone
   // width (2a) instead of the standard "a" used on the other three edges.
-  // SCOPE: for theta > 10 deg, Fig. 30.3-6 gives a single (GCp) vs. effective-
-  // area graph but with FOUR overlapping curves (Zone 1, Zone 2, Zone 3 for
-  // "Span A" specifically, and a separate Zone 3 curve for "Spans B, C, & D")
-  // and no printed coordinate table -- not digitized here for the same reason
-  // as multispan gable (avoiding guessed breakpoints); flagged NOT IMPLEMENTED.
+  //
+  // theta > 10 deg: digitized directly from Fig. 30.3-6's own (GCp) vs.
+  // effective-wind-area graph (piecewise-linear breakpoints read off the
+  // figure by the user from their own copy and supplied as exact coordinate
+  // pairs -- not estimated from a rendered image). Per the figure, the
+  // negative (uplift) curves split Zone 3 into "Span A" (the first,
+  // windward span) and "Spans B, C, & D" (the repeating downstream spans);
+  // Zones 1 and 2 do not split. The positive curves do not split by span at
+  // all (single Zone 1/2/3 curve each, shared by all spans). Interpolation
+  // is linear in log10(effective wind area), matching the same convention
+  // already used elsewhere on this page for GCp-vs-area graphs (logLerpA /
+  // gcpRoof / gcpWall).
+  const SAWTOOTH_GT10 = {
+    zone1: {
+      neg: [[1, -2.2], [10, -2.2], [500, -1.1], [1000, -1.1]],
+      pos: [[1, 0.7], [10, 0.7], [500, 0.4], [1000, 0.4]]
+    },
+    zone2: {
+      neg: [[1, -3.2], [10, -3.2], [500, -1.6], [1000, -1.6]],
+      pos: [[1, 1.1], [10, 1.1], [100, 0.8], [1000, 0.8]]
+    },
+    zone3: {
+      // negative splits by span; positive is shared by all spans
+      negSpanA: [[1, -4.1], [10, -4.1], [100, -3.7], [500, -2.1], [1000, -2.1]],
+      negSpansBCD: [[1, -2.6], [100, -2.6], [500, -1.9], [1000, -1.9]],
+      pos: [[1, 0.8], [10, 0.8], [100, 0.7], [1000, 0.7]]
+    }
+  };
+  // Piecewise-linear interpolation of GCp across an arbitrary list of
+  // [area, GCp] breakpoints, linear in log10(area) between consecutive
+  // points and clamped flat outside the table's range -- the general form
+  // of logLerpA() above for tables with more than two breakpoints.
+  function logLerpPts(A, pts) {
+    const n = pts.length;
+    const a = Math.min(Math.max(A, pts[0][0]), pts[n - 1][0]);
+    for (let i = 0; i < n - 1; i++) {
+      const a0 = pts[i][0], v0 = pts[i][1], a1 = pts[i + 1][0], v1 = pts[i + 1][1];
+      if (a <= a1 || i === n - 2) {
+        if (a1 === a0) return v0;
+        const t = (Math.log10(a) - Math.log10(a0)) / (Math.log10(a1) - Math.log10(a0));
+        return v0 + t * (v1 - v0);
+      }
+    }
+    return pts[n - 1][1];
+  }
   let sawtoothRoof = null;
   if (s.hasSawtoothRoof) {
     const theta = s.theta;
+    const Wsp = Math.max(s.swModuleW, 0.01);
+    const Lmod = Math.min(Wsp, Math.max(s.buildingL, 0.01)); // least horiz. dim. of a single-span module
+    const aRaw = Math.min(0.10 * Lmod, 0.4 * s.h);
+    const aMin = Math.max(0.04 * Lmod, 3.0);
+    const a = Math.max(aRaw, aMin);
+    const aLow = 2 * a; // doubled zone width at the low eave of each span
+    const A = Math.max(s.areaRoof, 0.1);
     if (theta <= 10.0001) {
-      const Wsp = Math.max(s.swModuleW, 0.01);
-      const Lmod = Math.min(Wsp, Math.max(s.buildingL, 0.01)); // least horiz. dim. of a single-span module
-      const aRaw = Math.min(0.10 * Lmod, 0.4 * s.h);
-      const aMin = Math.max(0.04 * Lmod, 3.0);
-      const a = Math.max(aRaw, aMin);
-      const aLow = 2 * a; // doubled zone width at the low eave of each span
-      const A = Math.max(s.areaRoof, 0.1);
       const z1 = gcpRoof('1', A);
       const z2 = gcpRoof('2', A);
       const z3 = gcpRoof('3', A);
@@ -1962,7 +2002,19 @@ function compute(s) {
         zone1: withP(z1), zone2: withP(z2), zone3: withP(z3)
       };
     } else {
-      sawtoothRoof = { thetaLE10: false, theta };
+      const withP = (neg, pos) => ({
+        gc: { neg, pos },
+        pMin: qh * KD * (neg - gcpi.pos),
+        pMax: qh * KD * (pos - gcpi.neg)
+      });
+      const t = SAWTOOTH_GT10;
+      sawtoothRoof = {
+        thetaLE10: false, theta, Wsp, Lmod, a, aLow, A,
+        zone1: withP(logLerpPts(A, t.zone1.neg), logLerpPts(A, t.zone1.pos)),
+        zone2: withP(logLerpPts(A, t.zone2.neg), logLerpPts(A, t.zone2.pos)),
+        zone3SpanA: withP(logLerpPts(A, t.zone3.negSpanA), logLerpPts(A, t.zone3.pos)),
+        zone3SpansBCD: withP(logLerpPts(A, t.zone3.negSpansBCD), logLerpPts(A, t.zone3.pos))
+      };
     }
   }
 
@@ -4005,11 +4057,11 @@ function reportSawtoothRoofHTML(r) {
   const lU = state.unitSystem === 'SI' ? 'm' : 'ft';
   const p2 = v => fmt(pVal(v), 2);
 
-  if (!t.thetaLE10) {
-    return '<div class="alert warn">NOT IMPLEMENTED for &theta; = ' + fmt(t.theta, 1) + '&deg; &gt; 10&deg;. Fig. 30.3-6 gives a single (GC<sub>p</sub>) vs. effective-wind-area graph for &theta; &gt; 10&deg;, but with <em>four</em> overlapping curves (Zone 1, Zone 2, Zone 3 for "Span A" specifically, and a separate Zone 3 curve for "Spans B, C, &amp; D") and no printed coordinate table &mdash; digitizing these reliably was not done here to avoid guessing at unlabeled breakpoints. Reduce the roof angle &theta; to &le; 10&deg; to use this calculator\'s implementation (which reuses Fig. 30.3-2A per Fig. 30.3-6 Note 5), or consult Fig. 30.3-6 directly for steeper sawtooth roofs.</div>';
-  }
-
-  let html = '<p class="muted" style="margin:0 0 10px;">p = q<sub>h</sub>&middot;K<sub>d</sub>&middot;[(GC<sub>p</sub>) &minus; (GC<sub>pi</sub>)] <span class="ref">Eq. 30.3-1</span> &mdash; per Fig. 30.3-6 Note 5, for &theta; &le; 10&deg; the (GC<sub>p</sub>) values from Fig. 30.3-2A (flat roof) apply directly; only the edge-zone widths use this figure\'s own formula. Fig. 30.3-6\'s Notation calls for <em>eave</em> height in this &theta; &le; 10&deg; case &mdash; approximated here by the page\'s mean roof height h.</p>';
+  let html = '<p class="muted" style="margin:0 0 10px;">p = q<sub>h</sub>&middot;K<sub>d</sub>&middot;[(GC<sub>p</sub>) &minus; (GC<sub>pi</sub>)] <span class="ref">Eq. 30.3-1</span> &mdash; ' +
+    (t.thetaLE10
+      ? 'per Fig. 30.3-6 Note 5, for &theta; &le; 10&deg; the (GC<sub>p</sub>) values from Fig. 30.3-2A (flat roof) apply directly; only the edge-zone widths use this figure\'s own formula. Fig. 30.3-6\'s Notation calls for <em>eave</em> height in this &theta; &le; 10&deg; case &mdash; approximated here by the page\'s mean roof height h.'
+      : 'for &theta; &gt; 10&deg;, (GC<sub>p</sub>) is read from Fig. 30.3-6\'s own effective-wind-area graph, digitized at the breakpoints below and interpolated linearly in log<sub>10</sub>(effective wind area), the same convention used for the other GC<sub>p</sub>-vs-area graphs on this page.') +
+    '</p>';
   html += '<div class="zone-row"><div class="zone-tbl">' +
     '<table class="report-input-table"><tbody>' +
     '<tr><td>Roof angle, &theta;</td><td>' + fmt(t.theta, 1) + '&deg;</td></tr>' +
@@ -4017,16 +4069,26 @@ function reportSawtoothRoofHTML(r) {
     '<tr><td>Least horiz. dim. of module</td><td>' + fmt(lengthOut(t.Lmod), 2) + ' ' + lU + '</td></tr>' +
     '<tr><td>Standard edge-zone width, a</td><td>' + fmt(lengthOut(t.a), 2) + ' ' + lU + '</td></tr>' +
     '<tr><td>Low-eave zone width, 2a</td><td>' + fmt(lengthOut(t.aLow), 2) + ' ' + lU + '</td></tr>' +
+    (t.thetaLE10 ? '' : '<tr><td>Effective wind area, A</td><td>' + fmt(t.A, 1) + ' ft&sup2;</td></tr>') +
     '</tbody></table></div><div class="zone-diag">' + sawtoothRoofSvg(t) + '</div></div>';
 
-  html += '<table class="report-table"><thead><tr><th>Zone</th><th>(GC<sub>p</sub>)<sub>neg</sub></th><th>(GC<sub>p</sub>)<sub>pos</sub></th><th>p<sub>min</sub></th><th>p<sub>max</sub></th></tr></thead><tbody>' +
-    ['1', '2', '3'].map(z => {
-      const zz = t['zone' + z];
-      return '<tr><td>Zone ' + z + '</td><td>' + fmt(zz.gc.neg, 3) + '</td><td>' + fmt(zz.gc.pos, 3) + '</td><td class="val-neg">' + p2(zz.pMin) + ' ' + pU + '</td><td class="val-pos">' + p2(zz.pMax) + ' ' + pU + '</td></tr>';
-    }).join('') +
-    '</tbody></table>';
-
-  html += '<div class="alert info">Zone 1 = roof interior; Zone 2 = the edge strip along the top, bottom, and right (high) eaves at the standard width a, AND a <strong>doubled</strong> width 2a along the left (low) eave of each span, where the monoslope roof drops down to the next span (the sawtooth\'s defining step); Zone 3 = corners. The doubled low-eave width is read directly from Fig. 30.3-6\'s own diagram dimensions.</div>';
+  if (t.thetaLE10) {
+    html += '<table class="report-table"><thead><tr><th>Zone</th><th>(GC<sub>p</sub>)<sub>neg</sub></th><th>(GC<sub>p</sub>)<sub>pos</sub></th><th>p<sub>min</sub></th><th>p<sub>max</sub></th></tr></thead><tbody>' +
+      ['1', '2', '3'].map(z => {
+        const zz = t['zone' + z];
+        return '<tr><td>Zone ' + z + '</td><td>' + fmt(zz.gc.neg, 3) + '</td><td>' + fmt(zz.gc.pos, 3) + '</td><td class="val-neg">' + p2(zz.pMin) + ' ' + pU + '</td><td class="val-pos">' + p2(zz.pMax) + ' ' + pU + '</td></tr>';
+      }).join('') +
+      '</tbody></table>';
+    html += '<div class="alert info">Zone 1 = roof interior; Zone 2 = the edge strip along the top, bottom, and right (high) eaves at the standard width a, AND a <strong>doubled</strong> width 2a along the left (low) eave of each span, where the monoslope roof drops down to the next span (the sawtooth\'s defining step); Zone 3 = corners. The doubled low-eave width is read directly from Fig. 30.3-6\'s own diagram dimensions.</div>';
+  } else {
+    html += '<table class="report-table"><thead><tr><th>Zone</th><th>(GC<sub>p</sub>)<sub>neg</sub></th><th>(GC<sub>p</sub>)<sub>pos</sub></th><th>p<sub>min</sub></th><th>p<sub>max</sub></th></tr></thead><tbody>' +
+      [['zone1', 'Zone 1'], ['zone2', 'Zone 2'], ['zone3SpanA', 'Zone 3 (Span A)'], ['zone3SpansBCD', 'Zone 3 (Spans B, C, &amp; D)']].map(([key, label]) => {
+        const zz = t[key];
+        return '<tr><td>' + label + '</td><td>' + fmt(zz.gc.neg, 3) + '</td><td>' + fmt(zz.gc.pos, 3) + '</td><td class="val-neg">' + p2(zz.pMin) + ' ' + pU + '</td><td class="val-pos">' + p2(zz.pMax) + ' ' + pU + '</td></tr>';
+      }).join('') +
+      '</tbody></table>';
+    html += '<div class="alert info">For &theta; &gt; 10&deg;, Fig. 30.3-6\'s negative (uplift) curves split Zone 3 into <strong>Span A</strong> (the first, windward span) and <strong>Spans B, C, &amp; D</strong> (the repeating downstream spans) &mdash; Zones 1 and 2 do not split. The positive curves are shared by all spans (no Span A / B,C&amp;D distinction). Zone 1 = roof interior; Zone 2 = the edge strip at width a (doubled to 2a at each span\'s low eave); Zone 3 = corners. (GC<sub>p</sub>) values above were digitized directly from Fig. 30.3-6\'s graph at its own plotted breakpoints, not estimated &mdash; verify against the figure directly for critical designs.</div>';
+  }
   return html;
 }
 
@@ -5879,8 +5941,8 @@ const INFO_CONTENT = {
     title: 'Sawtooth Roofs — Fig. 30.3-6',
     html: `<p><span class="src-tag">ASCE/SEI 7-22, Fig. 30.3-6</span> &mdash; applies to buildings with two or more repeating monoslope spans arranged "sawtooth"-style (each span's low eave stepping down to the next span, the building's roof angle &theta; and mean roof height h are reused for this feature). Per the figure's own Note 5: <em>"For &theta; &le; 10&deg;, values of (GC<sub>p</sub>) from Figure 30.3-2A shall be used."</em> So for the common low-slope case, this calculator reuses the exact same Zone 1/2/3 flat-roof (GC<sub>p</sub>) table already used elsewhere on this page; only the edge-zone widths use Fig. 30.3-6's own formula: a = the smaller of 10% of the single-span module's least horizontal dimension or 0.4h, but not less than the larger of 4% of that dimension or 3 ft.</p>
     <p><strong>Doubled low-eave zone:</strong> unlike a plain single-slope roof, Fig. 30.3-6's own diagram shows the edge-zone width <em>doubled</em> to 2a along the low (upwind) eave of each span &mdash; the step where the monoslope roof drops down to the next span, the sawtooth's defining feature. The other three edges (top, bottom, and the high/right eave) keep the standard width a.</p>
-    <p><span class="src-tag">Scope limitation (disclosed, not invented):</span> for &theta; &gt; 10&deg;, Fig. 30.3-6 gives a single (GC<sub>p</sub>) vs. effective-wind-area graph, but with <em>four</em> overlapping curves (Zone 1, Zone 2, a Zone 3 curve specifically for "Span A," and a separate Zone 3 curve for "Spans B, C, &amp; D") and no printed coordinate table &mdash; only a plotted graph. As with multispan gable roofs, digitizing the exact breakpoints from the rendered figure image was not done here to avoid inventing a number where one would have to be guessed. That range is flagged NOT IMPLEMENTED in the report; consult Fig. 30.3-6 directly for steeper sawtooth roofs.</p>
-    <p>Fig. 30.3-6's Notation specifies <em>eave</em> height (not mean roof height) for the &theta; &le; 10&deg; case &mdash; this calculator approximates that with the page's mean roof height h, which is very close for a nearly flat roof.</p>`
+    <p><span class="src-tag">&theta; &gt; 10&deg;:</span> Fig. 30.3-6 gives a single (GC<sub>p</sub>) vs. effective-wind-area graph for this range, with <em>four</em> overlapping curves on the negative (uplift) side (Zone 1, Zone 2, a Zone 3 curve for "Span A," and a separate Zone 3 curve for "Spans B, C, &amp; D") plus three curves on the positive side (Zone 1, Zone 2, Zone 3 &mdash; not split by span). This calculator uses exact coordinate breakpoints digitized directly from the figure (read off the source document, not estimated from a low-resolution scan) and interpolates linearly in log<sub>10</sub>(effective wind area) between them, the same method used for every other GC<sub>p</sub>-vs-area graph on this page. See the report table for the breakpoint-derived values at your entered effective wind area.</p>
+    <p>Fig. 30.3-6's Notation specifies <em>eave</em> height (not mean roof height) for the &theta; &le; 10&deg; case &mdash; this calculator approximates that with the page's mean roof height h, which is very close for a nearly flat roof. For &theta; &gt; 10&deg;, the Notation's default (mean roof height) applies directly, no approximation needed.</p>`
   },
   domeRoof: {
     title: 'Domed Roofs — Fig. 30.3-7',
