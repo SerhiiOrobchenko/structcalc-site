@@ -465,6 +465,9 @@ const state = {
   domeF: 12,  // dome rise, f, ft (Fig. 30.3-7 Notation) — applicability per Note 4: 0.2 <= f/D <= 0.5
   domeHD: 20, // height to base of dome, h_D, ft (Fig. 30.3-7 Notation) — applicability per Note 4: 0 <= h_D/D <= 0.5
 
+  hasMonoslopeRoof: false, // Fig. 30.3-5A/5B — building has a monoslope roof, h <= 60 ft, 3 deg < theta <= 30 deg
+  // reuses the page's theta/h/minDim/areaRoof fields — no dedicated geometry inputs needed
+
   // Open Building — Free Roof (Sec. 27.3.2), only used when enclosure === 'openFreeRoof'
   openRoofShape: 'monoslope', // 'monoslope' | 'pitched' | 'troughed' — Figs. 27.3-4/5/6
   openWindFlow: 'clear',      // 'clear' | 'obstructed' — Figs. 27.3-4/5/6/7 Note 2
@@ -2098,6 +2101,81 @@ function compute(s) {
     };
   }
 
+  // --- Monoslope Roofs (Fig. 30.3-5A/5B) ---
+  // Source: ASCE/SEI 7-22, Sec. 30.3 Part 1 (h <= 60 ft), Fig. 30.3-5A
+  // (3 deg < theta <= 10 deg) and Fig. 30.3-5B (10 deg < theta <= 30 deg).
+  // (GCp) breakpoints digitized directly from the user's own copy of each
+  // figure (exact coordinate pairs, not estimated from a rendered scan).
+  // Zone GEOMETRY (which this calculator could not get from the Standard's
+  // extractable text -- the shared Notation/Notes block for Figs. 30.3-1
+  // through 30.3-7 is diagram-only and did not survive PDF text extraction)
+  // was confirmed directly from the user's own CAD tracing of each figure's
+  // plan diagram (DXF, with literal "a"/"2a"/"4a" dimension callouts), not
+  // estimated or assumed by analogy with the other roof-shape figures:
+  //   - The HIGH-EAVE edge (and, for Fig. 30.3-5A only, the two side eaves
+  //     parallel to the slope direction as well) gets an ENHANCED edge zone
+  //     of width 2a (instead of the standard a), with corner sub-zones
+  //     extending 4a along that edge from each end.
+  //   - The LOW-EAVE edge keeps the standard width a, with corner sub-zones
+  //     extending only 2a along that edge (and widening to 2a perpendicular
+  //     depth at the corner, same depth as the high-eave corners).
+  //   - Fig. 30.3-5A (3-10 deg) labels the high-eave/side-eave enhanced
+  //     zones with PRIMES (2', 3') -- distinct (GCp) from the low-eave's
+  //     plain Zone 2/3. Fig. 30.3-5B (10-30 deg) drops the primes (the two
+  //     side eaves revert to plain Zone 2 at standard width a, only the
+  //     high eave keeps the enhanced 2a/4a treatment) and uses only Zones
+  //     1/2/3, no 2'/3'.
+  // Applicability is taken strictly as each figure's own plotted theta
+  // range (3-10 deg and 10-30 deg); theta <= 3 deg or theta > 30 deg is
+  // outside both figures' range with no source-confirmed substitution
+  // found, so it is flagged rather than approximated.
+  // "a" reuses computeZoneA() with the page's global h and minDim, per the
+  // same "approximate eave height with mean roof height h" convention
+  // already disclosed for the other roof-shape extras (stepped/multispan/
+  // sawtooth) on this page, since this calculator does not separately
+  // track a monoslope roof's high-eave vs low-eave height.
+  const MONOSLOPE_5A = { // 3 deg < theta <= 10 deg
+    zone1:  [[1, -1.1], [1000, -1.1]],
+    zone2:  [[1, -1.3], [10, -1.3], [100, -1.2], [1000, -1.2]],
+    zone2p: [[1, -1.6], [10, -1.6], [100, -1.5], [1000, -1.5]],
+    zone3:  [[1, -1.8], [10, -1.8], [100, -1.2], [1000, -1.2]],
+    zone3p: [[1, -2.6], [10, -2.6], [100, -1.6], [1000, -1.6]],
+    pos:    [[1, 0.3], [10, 0.3], [100, 0.2], [1000, 0.2]]
+  };
+  const MONOSLOPE_5B = { // 10 deg < theta <= 30 deg
+    zone1: [[1, -1.3], [10, -1.3], [100, -1.1], [1000, -1.1]],
+    zone2: [[1, -1.6], [10, -1.6], [100, -1.2], [1000, -1.2]],
+    zone3: [[1, -2.9], [10, -2.9], [100, -2.0], [1000, -2.0]],
+    pos:   [[1, 0.4], [10, 0.4], [100, 0.3], [1000, 0.3]]
+  };
+  let monoslopeRoof = null;
+  if (s.hasMonoslopeRoof) {
+    const theta = s.theta;
+    const applicable = theta > 3 && theta <= 30.0001;
+    const a = computeZoneA(s.h, s.minDim, theta);
+    const A = Math.max(s.areaRoof, 0.1);
+    if (!applicable) {
+      monoslopeRoof = { applicable: false, theta, a, A };
+    } else {
+      const is5A = theta <= 10.0001;
+      const t = is5A ? MONOSLOPE_5A : MONOSLOPE_5B;
+      const pos = logLerpPts(A, t.pos);
+      const withP = (neg) => ({
+        gc: { neg, pos },
+        pMin: qh * KD * (neg - gcpi.pos),
+        pMax: qh * KD * (pos - gcpi.neg)
+      });
+      monoslopeRoof = {
+        applicable: true, is5A, theta, a, A,
+        zone1: withP(logLerpPts(A, t.zone1)),
+        zone2: withP(logLerpPts(A, t.zone2)),
+        zone3: withP(logLerpPts(A, t.zone3)),
+        zone2p: is5A ? withP(logLerpPts(A, t.zone2p)) : null,
+        zone3p: is5A ? withP(logLerpPts(A, t.zone3p)) : null
+      };
+    }
+  }
+
   // ── Minimum Design Wind Load Check ──────────────────────────────────────
   // ASCE/SEI 7-22 Sec. 27.1.5 (MWFRS) and Sec. 30.2.2 (C&C) require
   // computed net pressures to be not less than the tabulated minimums,
@@ -2180,7 +2258,7 @@ function compute(s) {
   return {
     kh, ke, kd: KD, qh, gcpi, a,
     steps, mwfrsLC1, mwfrsLC2, mwfrsLC3, mwfrsLC4, torsionApplies,
-    ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, canopy, circTank, steppedRoof, multispanRoof, sawtoothRoof, domeRoof, openRoof,
+    ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, canopy, circTank, steppedRoof, multispanRoof, sawtoothRoof, domeRoof, monoslopeRoof, openRoof,
     mwfrsMinCheck, mwfrsMinGoverns, ccMinCheck, ccMinGoverns,
     ch27, cc30p2, ch29, cc30s305,
     ch32: (s.ch32Enabled ? computeCh32(s) : null), s: s
@@ -2797,6 +2875,15 @@ function renderResults() {
   if (state.hasDomeRoof && r.domeRoof) {
     const domeRoofEl = document.getElementById('domeRoofResults');
     if (domeRoofEl) domeRoofEl.innerHTML = reportDomeRoofHTML(r);
+  }
+
+  // Monoslope Roofs (Fig. 30.3-5A/5B) — only shown when the
+  // "has monoslope roof" toggle is on
+  const monoslopeRoofSection = document.getElementById('monoslopeRoofSection');
+  if (monoslopeRoofSection) monoslopeRoofSection.style.display = state.hasMonoslopeRoof ? '' : 'none';
+  if (state.hasMonoslopeRoof && r.monoslopeRoof) {
+    const monoslopeRoofEl = document.getElementById('monoslopeRoofResults');
+    if (monoslopeRoofEl) monoslopeRoofEl.innerHTML = reportMonoslopeRoofHTML(r);
   }
 
   renderOpenRoof(r);
@@ -4224,6 +4311,98 @@ function reportDomeRoofHTML(r) {
   return html;
 }
 
+// Monoslope roof plan diagram — schematic zone layout per Fig. 30.3-5A/5B:
+// high eave on the left (enhanced 2a-wide zone, 4a corner length along the
+// edge), low eave on the right (standard a-wide zone, 2a corner length).
+// Not drawn to the actual a/building-dimension ratio -- illustrative only,
+// confirmed against the user's own CAD-traced zone diagrams (see compute()
+// comments above); the report table below carries the actual numbers.
+function monoslopeRoofSvg(t) {
+  const W = 420, H = 230, pad = 36;
+  const bw = W - 2 * pad, bh = H - 2 * pad;
+  const bx = pad, by = pad;
+  const hiW = bw * 0.20;                         // high-eave band width (2a), illustrative
+  const loW = bw * 0.10;                          // low-eave band width (a), illustrative
+  const sideW = t.is5A ? bh * 0.16 : bh * 0.09;    // top/bottom band: 2a (5A) or a (5B)
+  const cornerHi = bh * 0.28;                      // 4a corner length, high-eave edge
+  const cornerLo = bh * 0.15;                      // 2a corner length, low-eave edge
+  const p = t.is5A ? "'" : '';                     // prime suffix, Fig. 30.3-5A only
+  let s = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">`;
+  s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" fill="none" stroke="#1c2733" stroke-width="1.5"/>`;
+  s += `<rect x="${bx + hiW}" y="${by}" width="${bw - hiW - loW}" height="${sideW}" fill="#1f4e79" opacity="0.4"/>`;
+  s += `<rect x="${bx + hiW}" y="${by + bh - sideW}" width="${bw - hiW - loW}" height="${sideW}" fill="#1f4e79" opacity="0.4"/>`;
+  s += `<rect x="${bx}" y="${by + cornerHi}" width="${hiW}" height="${bh - 2 * cornerHi}" fill="#c0571f" opacity="0.5"/>`;
+  s += `<rect x="${bx}" y="${by}" width="${hiW}" height="${cornerHi}" fill="#7c3f12"/>`;
+  s += `<rect x="${bx}" y="${by + bh - cornerHi}" width="${hiW}" height="${cornerHi}" fill="#7c3f12"/>`;
+  s += `<rect x="${bx + bw - loW}" y="${by + cornerLo}" width="${loW}" height="${bh - 2 * cornerLo}" fill="#1f4e79" opacity="0.65"/>`;
+  s += `<rect x="${bx + bw - loW}" y="${by}" width="${loW}" height="${cornerLo}" fill="#3c4f63"/>`;
+  s += `<rect x="${bx + bw - loW}" y="${by + bh - cornerLo}" width="${loW}" height="${cornerLo}" fill="#3c4f63"/>`;
+  s += `<text x="${bx + bw / 2}" y="${by + bh / 2 + 4}" font-size="13" fill="var(--muted)" text-anchor="middle">1</text>`;
+  s += `<text x="${bx + hiW / 2}" y="${by + bh / 2 + 4}" font-size="11" fill="#fff" text-anchor="middle">2${p}</text>`;
+  s += `<text x="${bx + hiW / 2}" y="${by + cornerHi / 2 + 4}" font-size="11" fill="#fff" text-anchor="middle">3${p}</text>`;
+  s += `<text x="${bx + hiW / 2}" y="${by + bh - cornerHi / 2 + 4}" font-size="11" fill="#fff" text-anchor="middle">3${p}</text>`;
+  s += `<text x="${bx + bw - loW / 2}" y="${by + bh / 2 + 4}" font-size="10" fill="#fff" text-anchor="middle">2</text>`;
+  s += `<text x="${bx + bw - loW / 2}" y="${by + cornerLo / 2 + 4}" font-size="9" fill="#fff" text-anchor="middle">3</text>`;
+  s += `<text x="${bx + bw - loW / 2}" y="${by + bh - cornerLo / 2 + 4}" font-size="9" fill="#fff" text-anchor="middle">3</text>`;
+  s += `<text x="${bx + bw / 2}" y="${by + sideW / 2 + 4}" font-size="9" fill="#fff" text-anchor="middle">2${p}</text>`;
+  s += `<text x="${bx + bw / 2}" y="${by + bh - sideW / 2 + 4}" font-size="9" fill="#fff" text-anchor="middle">2${p}</text>`;
+  s += `<text x="${bx + hiW / 2}" y="${by - 10}" font-size="9" fill="#c0571f" text-anchor="middle">High eave</text>`;
+  s += `<text x="${bx + bw - loW / 2}" y="${by - 10}" font-size="9" fill="var(--muted)" text-anchor="middle">Low eave</text>`;
+  s += `<text x="${bx + bw / 2}" y="${by + bh + 20}" font-size="9" fill="var(--muted)" text-anchor="middle">slope direction, &theta; = ${fmt(t.theta, 1)}&deg;</text>`;
+  s += `</svg>`;
+  return s;
+}
+
+// Monoslope Roofs section (Fig. 30.3-5A/5B) — identical content for the
+// on-screen #monoslopeRoofResults and the print/export report.
+function reportMonoslopeRoofHTML(r) {
+  const t = r.monoslopeRoof;
+  if (!t) return '<p class="muted">Monoslope roof data unavailable.</p>';
+  const pU = pUnit();
+  const lU = state.unitSystem === 'SI' ? 'm' : 'ft';
+  const p2 = v => fmt(pVal(v), 2);
+
+  if (!t.applicable) {
+    return '<div class="alert warn">&theta; = ' + fmt(t.theta, 1) + '&deg; is outside the range Figs. 30.3-5A/5B cover (3&deg; &lt; &theta; &le; 30&deg;). No source-confirmed substitution was found for &theta; &le; 3&deg; or &theta; &gt; 30&deg; (unlike Figs. 30.3-4/30.3-6\'s own "use Fig. 30.3-2A for &theta; &le; 10&deg;" note, the Standard\'s text does not state an equivalent rule for monoslope roofs at very low slopes, and the figures simply stop at 30&deg;) &mdash; consult ASCE/SEI 7-22 directly rather than relying on an extrapolated value here.</div>';
+  }
+
+  let html = '<p class="muted" style="margin:0 0 10px;">p = q<sub>h</sub>&middot;K<sub>d</sub>&middot;[(GC<sub>p</sub>) &minus; (GC<sub>pi</sub>)] <span class="ref">Eq. 30.3-1</span> &mdash; (GC<sub>p</sub>) read from ' +
+    (t.is5A ? 'Fig. 30.3-5A (3&deg; &lt; &theta; &le; 10&deg;)' : 'Fig. 30.3-5B (10&deg; &lt; &theta; &le; 30&deg;)') +
+    ', digitized at the breakpoints below and interpolated linearly in log<sub>10</sub>(effective wind area), the same convention used for the other GC<sub>p</sub>-vs-area graphs on this page. Edge-zone width a uses the page\'s standard Notation formula (h and least horizontal dimension as entered above).</p>';
+
+  html += '<div class="zone-row"><div class="zone-tbl">' +
+    '<table class="report-input-table"><tbody>' +
+    '<tr><td>Roof angle, &theta;</td><td>' + fmt(t.theta, 1) + '&deg;</td></tr>' +
+    '<tr><td>Standard edge-zone width, a</td><td>' + fmt(lengthOut(t.a), 2) + ' ' + lU + '</td></tr>' +
+    '<tr><td>Enhanced (high-eave/side) zone width, 2a</td><td>' + fmt(lengthOut(2 * t.a), 2) + ' ' + lU + '</td></tr>' +
+    '<tr><td>Effective wind area, A</td><td>' + fmt(t.A, 1) + ' ft&sup2;</td></tr>' +
+    '</tbody></table></div><div class="zone-diag">' + monoslopeRoofSvg(t) + '</div></div>';
+
+  // Fig. 30.3-5B reuses the same plain Zone 2/Zone 3 (GCp) for both the
+  // high-eave straight edge and the low-eave/side-eave edges (no 2'/3'
+  // distinction at all in that figure) -- only the zone WIDTH differs
+  // geometrically (2a at the high eave vs a elsewhere), not the pressure
+  // coefficient, so the table below shows just one Zone 2 row and one
+  // Zone 3 row for Fig. 30.3-5B; Fig. 30.3-5A shows the full five-zone set.
+  const displayRows = t.is5A
+    ? [['zone1', 'Zone 1'], ['zone2p', "Zone 2' (high eave + side eaves)"], ['zone3p', "Zone 3' (high-eave corners)"], ['zone2', 'Zone 2 (low eave)'], ['zone3', 'Zone 3 (low-eave corners)']]
+    : [['zone1', 'Zone 1'], ['zone2', 'Zone 2 (high eave, width 2a; low eave + side eaves, width a)'], ['zone3', 'Zone 3 (all corners)']];
+
+  html += '<table class="report-table"><thead><tr><th>Zone</th><th>(GC<sub>p</sub>)<sub>neg</sub></th><th>(GC<sub>p</sub>)<sub>pos</sub></th><th>p<sub>min</sub></th><th>p<sub>max</sub></th></tr></thead><tbody>' +
+    displayRows.map(([key, label]) => {
+      const zz = t[key];
+      return '<tr><td>' + label + '</td><td>' + fmt(zz.gc.neg, 3) + '</td><td>' + fmt(zz.gc.pos, 3) + '</td><td class="val-neg">' + p2(zz.pMin) + ' ' + pU + '</td><td class="val-pos">' + p2(zz.pMax) + ' ' + pU + '</td></tr>';
+    }).join('') +
+    '</tbody></table>';
+
+  html += '<div class="alert info">Zone 1 = roof interior. The <strong>high eave</strong> (and, for Fig. 30.3-5A only, the two side eaves running along the slope direction) gets an <strong>enhanced</strong> edge zone of width 2a (corner sub-zones extending 4a along that edge from each end); the <strong>low eave</strong> keeps the standard width a (corner sub-zones extending 2a along that edge). ' +
+    (t.is5A
+      ? 'Fig. 30.3-5A labels the enhanced (high-eave/side) zones with primes (2\', 3\') &mdash; distinct, more severe (GC<sub>p</sub>) from the low eave\'s plain Zone 2/3.'
+      : 'Fig. 30.3-5B drops the primes: the side eaves revert to the same plain Zone 2 (GC<sub>p</sub>) as the low eave (only the zone width stays enhanced at the high eave, not the coefficient).') +
+    ' Zone geometry was confirmed directly from the user\'s own CAD tracing of each figure\'s plan diagram, not estimated from a rendered image &mdash; see the feature\'s "i" button for the full geometry description.</div>';
+  return html;
+}
+
 // Open Building — Free Roof Pressures section (Sec. 27.3.2, Eq. 27.3-2) —
 // identical cards/notes/tables/citations to the on-screen #openRoofSection.
 function reportOpenRoofHTML(r) {
@@ -4437,6 +4616,10 @@ function buildReportHTML(r) {
 
   if (s.hasDomeRoof && r.domeRoof) {
     html += section('Domed Roof &mdash; C&amp;C Pressures', 'Fig. 30.3-7, Eq. 30.3-1', reportDomeRoofHTML(r));
+  }
+
+  if (s.hasMonoslopeRoof && r.monoslopeRoof) {
+    html += section('Monoslope Roof &mdash; C&amp;C Pressures', 'Fig. 30.3-5A/5B, Eq. 30.3-1', reportMonoslopeRoofHTML(r));
   }
 
   if (r.openRoof) {
@@ -5438,6 +5621,16 @@ function bindInputs() {
     });
   }
 
+  // Monoslope Roofs (Fig. 30.3-5A/5B) toggle — reuses theta/h/minDim/areaRoof,
+  // no dedicated geometry inputs
+  const hasMonoslopeRoofEl = document.getElementById('hasMonoslopeRoof');
+  if (hasMonoslopeRoofEl) {
+    hasMonoslopeRoofEl.addEventListener('change', e => {
+      state.hasMonoslopeRoof = e.target.checked;
+      renderResults();
+    });
+  }
+
   // Torsional T-zone reference toggle (progressive disclosure when h <= 30 ft)
   const torsionToggle = document.getElementById('torsionToggle');
   if (torsionToggle) {
@@ -6006,6 +6199,15 @@ const INFO_CONTENT = {
     </tbody></table>
     <p><span class="src-tag">Note 1</span>: these values are used with q<sub>(hD+f)</sub>, the velocity pressure evaluated at the height of the dome's apex (h<sub>D</sub> + f) &mdash; not the page's shared q<sub>h</sub> &mdash; so this calculator recomputes K<sub>z</sub> and K<sub>zt</sub> at that height using the same formulas (Table 26.10-1, Sec. 26.8) used elsewhere on this page.</p>
     <p><span class="src-tag">Note 4</span>: the table applies only to 0 &le; h<sub>D</sub>/D &le; 0.5 and 0.2 &le; f/D &le; 0.5; outside that range the report flags the result as not validated for the entered geometry. <span class="src-tag">Note 5</span>: &theta; = 0&deg; at the dome's springline (base perimeter), &theta; = 90&deg; at its center top point. <span class="src-tag">Note 3</span>: each component must be checked against both the maximum positive and maximum negative pressure.</p>`
+  },
+  monoslopeRoof: {
+    title: 'Monoslope Roofs — Fig. 30.3-5A/5B',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, Sec. 30.3 Part 1 (h &le; 60 ft), Fig. 30.3-5A and Fig. 30.3-5B</span> &mdash; applies to enclosed, partially enclosed, or partially open buildings with a single sloped roof plane (one high eave, one low eave). Fig. 30.3-5A covers 3&deg; &lt; &theta; &le; 10&deg;; Fig. 30.3-5B covers 10&deg; &lt; &theta; &le; 30&deg;. (GC<sub>p</sub>) breakpoints were digitized directly from the user's own copy of each figure (exact coordinate pairs), and the zone geometry below was confirmed directly from the user's own CAD tracing of each figure's plan diagram (DXF, with literal "a"/"2a"/"4a" dimension callouts) &mdash; not estimated from a rendered image or assumed by analogy with the other roof-shape figures on this page.</p>
+    <p><strong>Zone geometry (both figures):</strong> the <strong>high eave</strong> gets an enhanced edge zone of width <strong>2a</strong> (corner sub-zones extending <strong>4a</strong> along that edge from each end); the <strong>low eave</strong> keeps the standard width <strong>a</strong> (corner sub-zones extending <strong>2a</strong> along that edge, widening to 2a perpendicular depth at the corner just like the high-eave corners). Zone 1 is the remaining roof interior.</p>
+    <p><strong>Fig. 30.3-5A (3&deg;&ndash;10&deg;)</strong> additionally extends the high eave's enhanced 2a-wide treatment to the two side eaves (running along the slope direction), and labels all of these enhanced zones with primes &mdash; Zone 2' (high eave + side eaves) and Zone 3' (high-eave corners) &mdash; with distinct, more severe (GC<sub>p</sub>) than the low eave's plain Zone 2/3.</p>
+    <p><strong>Fig. 30.3-5B (10&deg;&ndash;30&deg;)</strong> drops the primes: the two side eaves revert to the same plain Zone 2 (GC<sub>p</sub>) as the low eave (only the zone WIDTH stays enhanced at the high eave, not the coefficient) &mdash; just Zones 1/2/3, no 2'/3'.</p>
+    <p>The edge-zone width <strong>a</strong> reuses this page's standard Notation formula (computeZoneA: 10% of least horizontal dimension or 0.4h, whichever is smaller, not less than 4% of least horizontal dimension or 3 ft), with the page's global mean roof height h and least horizontal dimension &mdash; this calculator does not separately track a monoslope roof's distinct high-eave vs. low-eave heights, so h is reused as an approximation for both bands' "eave height" / "mean roof height" Notation references, the same disclosed approximation already used for the page's other roof-shape extras (stepped/multispan/sawtooth).</p>
+    <p><span class="src-tag">Scope limitation (disclosed, not invented):</span> &theta; &le; 3&deg; or &theta; &gt; 30&deg; is outside both figures' plotted range. Unlike Figs. 30.3-4/30.3-6, which explicitly state "for &theta; &le; 10&deg;, use Fig. 30.3-2A," no equivalent substitution rule for monoslope roofs at very low slopes was found in the Standard's extractable text, so this calculator does not extrapolate &mdash; it flags the result instead of guessing.</p>`
   },
   stepsInfo: {
     title: 'Velocity Pressure — Step by Step',
@@ -7278,6 +7480,10 @@ function init() {
   const domeHDElInit = document.getElementById('domeHD');
   if (domeHDElInit) domeHDElInit.value = state.domeHD;
 
+  // Monoslope Roofs (Fig. 30.3-5A/5B) toggle
+  const hasMonoslopeRoofElInit = document.getElementById('hasMonoslopeRoof');
+  if (hasMonoslopeRoofElInit) hasMonoslopeRoofElInit.checked = !!state.hasMonoslopeRoof;
+
   // Open Building — Free Roof (Sec. 27.3.2) inputs
   const openRoofShapeEl = document.getElementById('openRoofShape');
   if (openRoofShapeEl) openRoofShapeEl.value = state.openRoofShape;
@@ -7420,6 +7626,10 @@ document.addEventListener('DOMContentLoaded', init);
     if (domeFEl2) domeFEl2.value = fmt(lengthOut(state.domeF), 2);
     const domeHDEl2 = document.getElementById('domeHD');
     if (domeHDEl2) domeHDEl2.value = fmt(lengthOut(state.domeHD), 2);
+
+    // Monoslope Roofs (Fig. 30.3-5A/5B) toggle
+    const hasMonoslopeRoofEl2 = document.getElementById('hasMonoslopeRoof');
+    if (hasMonoslopeRoofEl2) hasMonoslopeRoofEl2.checked = !!state.hasMonoslopeRoof;
 
     // Open Building — Free Roof (Sec. 27.3.2) inputs
     const openRoofShapeEl = document.getElementById('openRoofShape');
