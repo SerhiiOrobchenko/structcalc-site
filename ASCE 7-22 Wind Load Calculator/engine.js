@@ -1963,8 +1963,12 @@ function compute(s) {
   };
   // Piecewise-linear interpolation of GCp across an arbitrary list of
   // [area, GCp] breakpoints, linear in log10(area) between consecutive
-  // points and clamped flat outside the table's range -- the general form
-  // of logLerpA() above for tables with more than two breakpoints.
+  // points -- the general form of logLerpA() above for tables with more
+  // than two breakpoints. For effective wind area below the table's first
+  // point (1 sq ft for all SAWTOOTH_GT10 tables), the value AT 1 sq ft is
+  // used; for area above the table's last point (1000 sq ft), the value AT
+  // 1000 sq ft is used -- no extrapolation past the figure's plotted range,
+  // matching how these GCp-vs-area graphs are meant to be read.
   function logLerpPts(A, pts) {
     const n = pts.length;
     const a = Math.min(Math.max(A, pts[0][0]), pts[n - 1][0]);
