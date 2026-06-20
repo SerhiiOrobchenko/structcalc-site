@@ -433,6 +433,9 @@ const state = {
   hasMultispanRoof: false, // Fig. 30.3-4 — building has a multispan gable roof (2+ repeating gable spans)
   msModuleW: 30, // single-span module width W', ft (Fig. 30.3-4 Notation) — reuses the page's theta/h/buildingL/areaRoof fields
 
+  hasSawtoothRoof: false, // Fig. 30.3-6 — building has a sawtooth (repeating monoslope) roof, 2+ spans
+  swModuleW: 30, // single-span module width W, ft (Fig. 30.3-6 Notation) — reuses the page's theta/h/buildingL/areaRoof fields
+
   // Open Building — Free Roof (Sec. 27.3.2), only used when enclosure === 'openFreeRoof'
   openRoofShape: 'monoslope', // 'monoslope' | 'pitched' | 'troughed' — Figs. 27.3-4/5/6
   openWindFlow: 'clear',      // 'clear' | 'obstructed' — Figs. 27.3-4/5/6/7 Note 2
@@ -1910,6 +1913,46 @@ function compute(s) {
     }
   }
 
+  // --- Sawtooth Roofs (Fig. 30.3-6) ---
+  // Fig. 30.3-6 Note 5: "For theta <= 10 deg, values of (GCp) from Figure
+  // 30.3-2A shall be used" -- same reuse pattern as multispan gable roofs.
+  // This figure's own zone geometry adds one twist beyond multispan gable:
+  // the low (upwind) eave of each monoslope span -- where the roof drops down
+  // to the next span, the defining "sawtooth" step -- gets a DOUBLED edge-zone
+  // width (2a) instead of the standard "a" used on the other three edges.
+  // SCOPE: for theta > 10 deg, Fig. 30.3-6 gives a single (GCp) vs. effective-
+  // area graph but with FOUR overlapping curves (Zone 1, Zone 2, Zone 3 for
+  // "Span A" specifically, and a separate Zone 3 curve for "Spans B, C, & D")
+  // and no printed coordinate table -- not digitized here for the same reason
+  // as multispan gable (avoiding guessed breakpoints); flagged NOT IMPLEMENTED.
+  let sawtoothRoof = null;
+  if (s.hasSawtoothRoof) {
+    const theta = s.theta;
+    if (theta <= 10.0001) {
+      const Wsp = Math.max(s.swModuleW, 0.01);
+      const Lmod = Math.min(Wsp, Math.max(s.buildingL, 0.01)); // least horiz. dim. of a single-span module
+      const aRaw = Math.min(0.10 * Lmod, 0.4 * s.h);
+      const aMin = Math.max(0.04 * Lmod, 3.0);
+      const a = Math.max(aRaw, aMin);
+      const aLow = 2 * a; // doubled zone width at the low eave of each span
+      const A = Math.max(s.areaRoof, 0.1);
+      const z1 = gcpRoof('1', A);
+      const z2 = gcpRoof('2', A);
+      const z3 = gcpRoof('3', A);
+      const withP = (gc) => ({
+        gc,
+        pMin: qh * KD * (gc.neg - gcpi.pos),
+        pMax: qh * KD * (gc.pos - gcpi.neg)
+      });
+      sawtoothRoof = {
+        thetaLE10: true, theta, Wsp, Lmod, a, aLow, A,
+        zone1: withP(z1), zone2: withP(z2), zone3: withP(z3)
+      };
+    } else {
+      sawtoothRoof = { thetaLE10: false, theta };
+    }
+  }
+
   // ── Minimum Design Wind Load Check ──────────────────────────────────────
   // ASCE/SEI 7-22 Sec. 27.1.5 (MWFRS) and Sec. 30.2.2 (C&C) require
   // computed net pressures to be not less than the tabulated minimums,
@@ -1992,7 +2035,7 @@ function compute(s) {
   return {
     kh, ke, kd: KD, qh, gcpi, a,
     steps, mwfrsLC1, mwfrsLC2, mwfrsLC3, mwfrsLC4, torsionApplies,
-    ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, canopy, circTank, steppedRoof, multispanRoof, openRoof,
+    ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, canopy, circTank, steppedRoof, multispanRoof, sawtoothRoof, openRoof,
     mwfrsMinCheck, mwfrsMinGoverns, ccMinCheck, ccMinGoverns,
     ch27, cc30p2, ch29, cc30s305,
     ch32: (s.ch32Enabled ? computeCh32(s) : null), s: s
@@ -2591,6 +2634,15 @@ function renderResults() {
   if (state.hasMultispanRoof && r.multispanRoof) {
     const multispanRoofEl = document.getElementById('multispanRoofResults');
     if (multispanRoofEl) multispanRoofEl.innerHTML = reportMultispanRoofHTML(r);
+  }
+
+  // Sawtooth Roofs (Fig. 30.3-6) — only shown when the
+  // "has sawtooth roof" toggle is on
+  const sawtoothRoofSection = document.getElementById('sawtoothRoofSection');
+  if (sawtoothRoofSection) sawtoothRoofSection.style.display = state.hasSawtoothRoof ? '' : 'none';
+  if (state.hasSawtoothRoof && r.sawtoothRoof) {
+    const sawtoothRoofEl = document.getElementById('sawtoothRoofResults');
+    if (sawtoothRoofEl) sawtoothRoofEl.innerHTML = reportSawtoothRoofHTML(r);
   }
 
   renderOpenRoof(r);
@@ -3855,6 +3907,71 @@ function reportMultispanRoofHTML(r) {
   return html;
 }
 
+// Sawtooth roof plan diagram — one module's zone pattern, highlighting the
+// doubled-width zone band at the low (upwind) eave of each span.
+function sawtoothRoofSvg(t) {
+  const W = 420, H = 230, pad = 40;
+  const modPx = W - 2 * pad;
+  const Lpx = H - 2 * pad;
+  const aPx = Math.min(t.a / t.Wsp * modPx, modPx * 0.22);
+  const aLowPx = Math.min(t.aLow / t.Wsp * modPx, modPx * 0.4);
+  let s = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">`;
+  s += `<rect x="${pad}" y="${pad}" width="${modPx}" height="${Lpx}" fill="none" stroke="#1c2733" stroke-width="1.5"/>`;
+  // top & bottom eave bands (standard width a) — zone 2
+  [pad, pad + Lpx - 4].forEach(y => {
+    s += `<rect x="${pad}" y="${y}" width="${modPx}" height="4" fill="#1f4e79"/>`;
+  });
+  // right eave band (standard width a) — zone 2
+  s += `<rect x="${pad + modPx - aPx}" y="${pad}" width="${aPx}" height="${Lpx}" fill="#1f4e79" opacity="0.45"/>`;
+  // left (low) eave band — doubled width 2a — zone 2, highlighted
+  s += `<rect x="${pad}" y="${pad}" width="${aLowPx}" height="${Lpx}" fill="#c0571f" opacity="0.55"/>`;
+  // corner squares — zone 3
+  const corners = [[pad, pad], [pad + modPx - 10, pad], [pad, pad + Lpx - 10], [pad + modPx - 10, pad + Lpx - 10]];
+  corners.forEach(([cx, cy]) => {
+    s += `<rect x="${cx}" y="${cy}" width="10" height="10" fill="#5b6b7c"/>`;
+  });
+  s += `<text x="${pad + modPx / 2}" y="${pad + Lpx / 2}" font-size="12" fill="var(--muted)" text-anchor="middle">1</text>`;
+  s += `<text x="${pad + aLowPx / 2}" y="${pad + Lpx / 2 + 16}" font-size="9" fill="#c0571f" text-anchor="middle">2a (low eave)</text>`;
+  s += `<text x="${pad + modPx / 2}" y="${pad - 8}" font-size="9" fill="var(--muted)" text-anchor="middle">a (eave)</text>`;
+  s += `<text x="${pad + modPx / 2}" y="${pad + Lpx + 16}" font-size="9" fill="var(--muted)" text-anchor="middle">W = ${fmt(lengthOut(t.Wsp), 1)} ${state.unitSystem === 'SI' ? 'm' : 'ft'} per span</text>`;
+  s += `</svg>`;
+  return s;
+}
+
+// Sawtooth Roofs section (Fig. 30.3-6) — identical content for the
+// on-screen #sawtoothRoofResults and the print/export report.
+function reportSawtoothRoofHTML(r) {
+  const t = r.sawtoothRoof;
+  if (!t) return '<p class="muted">Sawtooth roof data unavailable.</p>';
+  const pU = pUnit();
+  const lU = state.unitSystem === 'SI' ? 'm' : 'ft';
+  const p2 = v => fmt(pVal(v), 2);
+
+  if (!t.thetaLE10) {
+    return '<div class="alert warn">NOT IMPLEMENTED for &theta; = ' + fmt(t.theta, 1) + '&deg; &gt; 10&deg;. Fig. 30.3-6 gives a single (GC<sub>p</sub>) vs. effective-wind-area graph for &theta; &gt; 10&deg;, but with <em>four</em> overlapping curves (Zone 1, Zone 2, Zone 3 for "Span A" specifically, and a separate Zone 3 curve for "Spans B, C, &amp; D") and no printed coordinate table &mdash; digitizing these reliably was not done here to avoid guessing at unlabeled breakpoints. Reduce the roof angle &theta; to &le; 10&deg; to use this calculator\'s implementation (which reuses Fig. 30.3-2A per Fig. 30.3-6 Note 5), or consult Fig. 30.3-6 directly for steeper sawtooth roofs.</div>';
+  }
+
+  let html = '<p class="muted" style="margin:0 0 10px;">p = q<sub>h</sub>&middot;K<sub>d</sub>&middot;[(GC<sub>p</sub>) &minus; (GC<sub>pi</sub>)] <span class="ref">Eq. 30.3-1</span> &mdash; per Fig. 30.3-6 Note 5, for &theta; &le; 10&deg; the (GC<sub>p</sub>) values from Fig. 30.3-2A (flat roof) apply directly; only the edge-zone widths use this figure\'s own formula. Fig. 30.3-6\'s Notation calls for <em>eave</em> height in this &theta; &le; 10&deg; case &mdash; approximated here by the page\'s mean roof height h.</p>';
+  html += '<div class="zone-row"><div class="zone-tbl">' +
+    '<table class="report-input-table"><tbody>' +
+    '<tr><td>Roof angle, &theta;</td><td>' + fmt(t.theta, 1) + '&deg;</td></tr>' +
+    '<tr><td>Single-span module width, W</td><td>' + fmt(lengthOut(t.Wsp), 2) + ' ' + lU + '</td></tr>' +
+    '<tr><td>Least horiz. dim. of module</td><td>' + fmt(lengthOut(t.Lmod), 2) + ' ' + lU + '</td></tr>' +
+    '<tr><td>Standard edge-zone width, a</td><td>' + fmt(lengthOut(t.a), 2) + ' ' + lU + '</td></tr>' +
+    '<tr><td>Low-eave zone width, 2a</td><td>' + fmt(lengthOut(t.aLow), 2) + ' ' + lU + '</td></tr>' +
+    '</tbody></table></div><div class="zone-diag">' + sawtoothRoofSvg(t) + '</div></div>';
+
+  html += '<table class="report-table"><thead><tr><th>Zone</th><th>(GC<sub>p</sub>)<sub>neg</sub></th><th>(GC<sub>p</sub>)<sub>pos</sub></th><th>p<sub>min</sub></th><th>p<sub>max</sub></th></tr></thead><tbody>' +
+    ['1', '2', '3'].map(z => {
+      const zz = t['zone' + z];
+      return '<tr><td>Zone ' + z + '</td><td>' + fmt(zz.gc.neg, 3) + '</td><td>' + fmt(zz.gc.pos, 3) + '</td><td class="val-neg">' + p2(zz.pMin) + ' ' + pU + '</td><td class="val-pos">' + p2(zz.pMax) + ' ' + pU + '</td></tr>';
+    }).join('') +
+    '</tbody></table>';
+
+  html += '<div class="alert info">Zone 1 = roof interior; Zone 2 = the edge strip along the top, bottom, and right (high) eaves at the standard width a, AND a <strong>doubled</strong> width 2a along the left (low) eave of each span, where the monoslope roof drops down to the next span (the sawtooth\'s defining step); Zone 3 = corners. The doubled low-eave width is read directly from Fig. 30.3-6\'s own diagram dimensions.</div>';
+  return html;
+}
+
 // Open Building — Free Roof Pressures section (Sec. 27.3.2, Eq. 27.3-2) —
 // identical cards/notes/tables/citations to the on-screen #openRoofSection.
 function reportOpenRoofHTML(r) {
@@ -4060,6 +4177,10 @@ function buildReportHTML(r) {
 
   if (s.hasMultispanRoof && r.multispanRoof) {
     html += section('Multispan Gable Roof &mdash; C&amp;C Pressures', 'Fig. 30.3-4, Eq. 30.3-1', reportMultispanRoofHTML(r));
+  }
+
+  if (s.hasSawtoothRoof && r.sawtoothRoof) {
+    html += section('Sawtooth Roof &mdash; C&amp;C Pressures', 'Fig. 30.3-6, Eq. 30.3-1', reportSawtoothRoofHTML(r));
   }
 
   if (r.openRoof) {
@@ -5011,6 +5132,23 @@ function bindInputs() {
     });
   }
 
+  // Sawtooth Roofs (Fig. 30.3-6) toggle + module width
+  const hasSawtoothRoofEl = document.getElementById('hasSawtoothRoof');
+  if (hasSawtoothRoofEl) {
+    hasSawtoothRoofEl.addEventListener('change', e => {
+      state.hasSawtoothRoof = e.target.checked;
+      renderResults();
+    });
+  }
+  const swModuleWEl = document.getElementById('swModuleW');
+  if (swModuleWEl) {
+    swModuleWEl.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      state.swModuleW = toUSLength(isNaN(v) ? 0 : v, state.unitSystem);
+      renderResults();
+    });
+  }
+
   // Torsional T-zone reference toggle (progressive disclosure when h <= 30 ft)
   const torsionToggle = document.getElementById('torsionToggle');
   if (torsionToggle) {
@@ -5320,6 +5458,7 @@ function updateUnitLabels() {
   set('lblSteppedLowerH', sys === 'SI' ? 'm' : 'ft');
   set('lblSteppedLowerW', sys === 'SI' ? 'm' : 'ft');
   set('lblMsModuleW', sys === 'SI' ? 'm' : 'ft');
+  set('lblSwModuleW', sys === 'SI' ? 'm' : 'ft');
 }
 
 function setUnitSystem(sys) {
@@ -5557,6 +5696,13 @@ const INFO_CONTENT = {
     <p><strong>Zone pattern (tiled):</strong> unlike a single gable roof, every ridge AND every valley line between adjacent spans gets the same edge-zone (2) and corner-zone (3) treatment that a single building's perimeter eaves and ridge would get &mdash; Zone 3 sits at every point where an eave meets a ridge/valley line (i.e. at each module boundary along both long eaves), Zone 2 runs along the eaves and along every ridge/valley line, and Zone 1 is the remaining interior.</p>
     <p><span class="src-tag">Scope limitation (disclosed, not invented):</span> for &theta; &gt; 10&deg;, Fig. 30.3-4 gives its own (GC<sub>p</sub>) vs. effective-wind-area graphs for two ranges (10&deg; &lt; &theta; &le; 30&deg;, and 30&deg; &lt; &theta; &le; 45&deg;), each with three overlapping curves (Zones 1, 2, and 3) and no printed coordinate table &mdash; only a plotted graph. Digitizing the exact breakpoints from the rendered figure image was not done here, since misreading an unlabeled bend point would mean inventing a number rather than reading one. That range is flagged NOT IMPLEMENTED in the report; consult Fig. 30.3-4 directly for steeper multispan gable roofs.</p>
     <p>Fig. 30.3-4's Notation specifies <em>eave</em> height (not mean roof height) for the &theta; &le; 10&deg; case &mdash; this calculator approximates that with the page's mean roof height h, which is very close for a nearly flat roof.</p>`
+  },
+  sawtoothRoof: {
+    title: 'Sawtooth Roofs — Fig. 30.3-6',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, Fig. 30.3-6</span> &mdash; applies to buildings with two or more repeating monoslope spans arranged "sawtooth"-style (each span's low eave stepping down to the next span, the building's roof angle &theta; and mean roof height h are reused for this feature). Per the figure's own Note 5: <em>"For &theta; &le; 10&deg;, values of (GC<sub>p</sub>) from Figure 30.3-2A shall be used."</em> So for the common low-slope case, this calculator reuses the exact same Zone 1/2/3 flat-roof (GC<sub>p</sub>) table already used elsewhere on this page; only the edge-zone widths use Fig. 30.3-6's own formula: a = the smaller of 10% of the single-span module's least horizontal dimension or 0.4h, but not less than the larger of 4% of that dimension or 3 ft.</p>
+    <p><strong>Doubled low-eave zone:</strong> unlike a plain single-slope roof, Fig. 30.3-6's own diagram shows the edge-zone width <em>doubled</em> to 2a along the low (upwind) eave of each span &mdash; the step where the monoslope roof drops down to the next span, the sawtooth's defining feature. The other three edges (top, bottom, and the high/right eave) keep the standard width a.</p>
+    <p><span class="src-tag">Scope limitation (disclosed, not invented):</span> for &theta; &gt; 10&deg;, Fig. 30.3-6 gives a single (GC<sub>p</sub>) vs. effective-wind-area graph, but with <em>four</em> overlapping curves (Zone 1, Zone 2, a Zone 3 curve specifically for "Span A," and a separate Zone 3 curve for "Spans B, C, &amp; D") and no printed coordinate table &mdash; only a plotted graph. As with multispan gable roofs, digitizing the exact breakpoints from the rendered figure image was not done here to avoid inventing a number where one would have to be guessed. That range is flagged NOT IMPLEMENTED in the report; consult Fig. 30.3-6 directly for steeper sawtooth roofs.</p>
+    <p>Fig. 30.3-6's Notation specifies <em>eave</em> height (not mean roof height) for the &theta; &le; 10&deg; case &mdash; this calculator approximates that with the page's mean roof height h, which is very close for a nearly flat roof.</p>`
   },
   stepsInfo: {
     title: 'Velocity Pressure — Step by Step',
@@ -6813,6 +6959,12 @@ function init() {
   const msModuleWElInit = document.getElementById('msModuleW');
   if (msModuleWElInit) msModuleWElInit.value = state.msModuleW;
 
+  // Sawtooth Roofs (Fig. 30.3-6) inputs
+  const hasSawtoothRoofElInit = document.getElementById('hasSawtoothRoof');
+  if (hasSawtoothRoofElInit) hasSawtoothRoofElInit.checked = !!state.hasSawtoothRoof;
+  const swModuleWElInit = document.getElementById('swModuleW');
+  if (swModuleWElInit) swModuleWElInit.value = state.swModuleW;
+
   // Open Building — Free Roof (Sec. 27.3.2) inputs
   const openRoofShapeEl = document.getElementById('openRoofShape');
   if (openRoofShapeEl) openRoofShapeEl.value = state.openRoofShape;
@@ -6939,6 +7091,12 @@ document.addEventListener('DOMContentLoaded', init);
     if (hasMultispanRoofEl2) hasMultispanRoofEl2.checked = !!state.hasMultispanRoof;
     const msModuleWEl2 = document.getElementById('msModuleW');
     if (msModuleWEl2) msModuleWEl2.value = fmt(lengthOut(state.msModuleW), 2);
+
+    // Sawtooth Roofs (Fig. 30.3-6) inputs
+    const hasSawtoothRoofEl2 = document.getElementById('hasSawtoothRoof');
+    if (hasSawtoothRoofEl2) hasSawtoothRoofEl2.checked = !!state.hasSawtoothRoof;
+    const swModuleWEl2 = document.getElementById('swModuleW');
+    if (swModuleWEl2) swModuleWEl2.value = fmt(lengthOut(state.swModuleW), 2);
 
     // Open Building — Free Roof (Sec. 27.3.2) inputs
     const openRoofShapeEl = document.getElementById('openRoofShape');
