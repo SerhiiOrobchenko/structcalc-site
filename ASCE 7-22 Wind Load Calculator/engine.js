@@ -436,6 +436,11 @@ const state = {
   hasSawtoothRoof: false, // Fig. 30.3-6 — building has a sawtooth (repeating monoslope) roof, 2+ spans
   swModuleW: 30, // single-span module width W, ft (Fig. 30.3-6 Notation) — reuses the page's theta/h/buildingL/areaRoof fields
 
+  hasDomeRoof: false, // Fig. 30.3-7 — domed roof with a circular base
+  domeD: 60,  // dome diameter, D, ft (Fig. 30.3-7 Notation)
+  domeF: 12,  // dome rise, f, ft (Fig. 30.3-7 Notation) — applicability per Note 4: 0.2 <= f/D <= 0.5
+  domeHD: 20, // height to base of dome, h_D, ft (Fig. 30.3-7 Notation) — applicability per Note 4: 0 <= h_D/D <= 0.5
+
   // Open Building — Free Roof (Sec. 27.3.2), only used when enclosure === 'openFreeRoof'
   openRoofShape: 'monoslope', // 'monoslope' | 'pitched' | 'troughed' — Figs. 27.3-4/5/6
   openWindFlow: 'clear',      // 'clear' | 'obstructed' — Figs. 27.3-4/5/6/7 Note 2
@@ -1835,16 +1840,24 @@ function compute(s) {
     };
   }
 
-  // --- Stepped Roofs (Sec. 30.3.2.1, Fig. 30.3-3, Eq. 30.3-1) ---
-  // Fig. 30.3-3's own note: "On the lower level of flat, stepped roofs shown
-  // here, the zone designations and pressure coefficients shown in Figure
-  // 30.3-2A shall apply" — so this reuses the existing flat-roof (GCp) table
-  // (gcpRoof) and only computes new zone GEOMETRY for the lower roof level.
-  // SCOPE: only the common two-level (single-step) case is implemented. The
-  // figure illustrates cascading multi-step buildings (h_s1, h_s2, ...) but
-  // the Standard defines that geometry only on the diagram, not in words —
-  // implementing additional steps would require guessing at the pattern, so
-  // multi-step buildings are NOT implemented here; consult Fig. 30.3-3 directly.
+  // --- Stepped Roofs (Sec. 30.3.2.1, Fig. 30.3-3: Components and cladding,
+  // h <= 60 ft, theta <= 7 deg, stepped roofs) ---
+  // Fig. 30.3-3's own Note states: "On the lower level of flat, stepped roofs
+  // shown here, the zone designations and pressure coefficients shown in
+  // Figure 30.3-2A shall apply." I.e. Fig. 30.3-3 reuses the SAME (GCp) values
+  // already implemented for flat roofs (gcpRoof() / GCP_ROOF_LE7, Zones 1/2/3)
+  // -- it does not define a new GCp curve. What it DOES change is the zone
+  // GEOMETRY: per the figure's diagram, the edge-zone width at the building's
+  // ordinary (non-step) perimeter is the usual "a" (Notation under Fig.
+  // 28.3-1/30.3-1, via computeZoneA()), but the band immediately adjacent to
+  // the step (where the lower roof meets the foot of the taller wall) is
+  // widened to 1.5 x hs, where hs is the step height differential. This 1.5x
+  // multiplier is read directly off Fig. 30.3-3's own diagram dimensions
+  // (labelled "1.5h_s1" / "0.6h_s2" for cascading multi-step buildings) -- the
+  // Standard does not spell this out in words, only graphically.
+  // SCOPE: this calculator implements the common two-level stepped roof (one
+  // step). Buildings with more than one step (cascading/multi-level roofs)
+  // are NOT covered -- consult Fig. 30.3-3 directly for those.
   let steppedRoof = null;
   if (s.hasSteppedRoof) {
     const hTall = s.h;
@@ -1953,6 +1966,42 @@ function compute(s) {
     }
   }
 
+  // --- Domed Roofs with a Circular Base (Fig. 30.3-7) ---
+  // Unlike the other roof-shape extras above, Fig. 30.3-7 is a small, fully
+  // numeric (GCp) lookup table -- NOT a graph -- so no digitization/scope-
+  // limitation issue here. Table "Coefficients for Domes with a Circular
+  // Base": (GCp) = -0.9 for theta = 0-90 deg (negative/uplift case, all
+  // theta); (GCp) = +0.9 for theta = 0-60 deg and +0.5 for theta = 61-90 deg
+  // (positive case, near the dome's apex). Per Note 1, these values are used
+  // with q(hD+f) -- the velocity pressure AT THE TOP OF THE DOME, i.e. at
+  // height (h_D + f), not the page's shared qh (mean roof height) -- so qDome
+  // is recomputed here at that height using the same Kz/Kzt formulas used
+  // elsewhere on this page. Per Note 4, the table applies only to
+  // 0 <= h_D/D <= 0.5 and 0.2 <= f/D <= 0.5; outside that range is flagged.
+  let domeRoof = null;
+  if (s.hasDomeRoof) {
+    const D  = Math.max(s.domeD, 0.01);
+    const f  = Math.max(s.domeF, 0);
+    const hD = Math.max(s.domeHD, 0);
+    const hDoverD = hD / D;
+    const fOverD  = f / D;
+    const outOfRange = (hDoverD > 0.5 + 1e-9) || (fOverD < 0.2 - 1e-9) || (fOverD > 0.5 + 1e-9);
+    const domeTopZ = hD + f; // Note 1: height at the top of the dome
+    const kzDome  = computeKzDirect(domeTopZ, s.exposure);
+    const kztDome = computeKzt(s, domeTopZ).kzt;
+    const qDome   = 0.00256 * kzDome * kztDome * ke * s.V * s.V; // Eq. 26.10-1, evaluated at (h_D + f)
+    const gcpNeg     = -0.9; // theta 0-90 deg
+    const gcpPosLow  = 0.9;  // theta 0-60 deg
+    const gcpPosHigh = 0.5;  // theta 61-90 deg
+    domeRoof = {
+      D, f, hD, hDoverD, fOverD, outOfRange, domeTopZ, kzDome, kztDome, qDome,
+      gcpNeg, gcpPosLow, gcpPosHigh,
+      pNeg:     pRangeSingle(qDome, KD, gcpNeg, gcpi),
+      pPosLow:  pRangeSingle(qDome, KD, gcpPosLow, gcpi),
+      pPosHigh: pRangeSingle(qDome, KD, gcpPosHigh, gcpi)
+    };
+  }
+
   // ── Minimum Design Wind Load Check ──────────────────────────────────────
   // ASCE/SEI 7-22 Sec. 27.1.5 (MWFRS) and Sec. 30.2.2 (C&C) require
   // computed net pressures to be not less than the tabulated minimums,
@@ -2035,7 +2084,7 @@ function compute(s) {
   return {
     kh, ke, kd: KD, qh, gcpi, a,
     steps, mwfrsLC1, mwfrsLC2, mwfrsLC3, mwfrsLC4, torsionApplies,
-    ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, canopy, circTank, steppedRoof, multispanRoof, sawtoothRoof, openRoof,
+    ccWall, ccRoof, roofApplicable, roofCapped, ccOverhang, parapet, canopy, circTank, steppedRoof, multispanRoof, sawtoothRoof, domeRoof, openRoof,
     mwfrsMinCheck, mwfrsMinGoverns, ccMinCheck, ccMinGoverns,
     ch27, cc30p2, ch29, cc30s305,
     ch32: (s.ch32Enabled ? computeCh32(s) : null), s: s
@@ -2643,6 +2692,15 @@ function renderResults() {
   if (state.hasSawtoothRoof && r.sawtoothRoof) {
     const sawtoothRoofEl = document.getElementById('sawtoothRoofResults');
     if (sawtoothRoofEl) sawtoothRoofEl.innerHTML = reportSawtoothRoofHTML(r);
+  }
+
+  // Domed Roofs (Fig. 30.3-7) — only shown when the
+  // "has dome roof" toggle is on
+  const domeRoofSection = document.getElementById('domeRoofSection');
+  if (domeRoofSection) domeRoofSection.style.display = state.hasDomeRoof ? '' : 'none';
+  if (state.hasDomeRoof && r.domeRoof) {
+    const domeRoofEl = document.getElementById('domeRoofResults');
+    if (domeRoofEl) domeRoofEl.innerHTML = reportDomeRoofHTML(r);
   }
 
   renderOpenRoof(r);
@@ -3972,6 +4030,86 @@ function reportSawtoothRoofHTML(r) {
   return html;
 }
 
+// Domed roof elevation diagram — schematic dome profile on a cylindrical
+// base, with D/f/h_D dimensions and the apex "cap" region (theta 61-90 deg)
+// highlighted versus the rest of the dome (theta 0-60 deg). Not drawn to
+// angular scale (theta is a curved-surface angle, not a height fraction) —
+// illustrative only; the report table below carries the actual numbers.
+function domeRoofSvg(t) {
+  const W = 420, H = 230, pad = 30;
+  const baseY = H - 30;
+  const maxH = 130;
+  const totalH = Math.max(t.hD + t.f, 0.01);
+  const scaleV = maxH / totalH;
+  const hDpx = Math.min(Math.max(t.hD * scaleV, 0), maxH * 0.85);
+  const fPx = Math.max(maxH - hDpx, 18);
+  const rx = 110, cx = W / 2;
+  const baseTopY = baseY - hDpx;
+  const apexY = baseTopY - fPx;
+
+  let s = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">`;
+  s += `<line x1="${pad}" y1="${baseY}" x2="${W - pad}" y2="${baseY}" stroke="#1c2733" stroke-width="1.5"/>`;
+  if (hDpx > 1) {
+    s += `<rect x="${cx - rx}" y="${baseTopY}" width="${rx * 2}" height="${hDpx}" fill="none" stroke="#1c2733" stroke-width="1.5"/>`;
+  }
+  // dome cap (theta 61-90 deg, near apex) — drawn first so the outline draws over it
+  s += `<path d="M ${cx - rx * 0.5} ${baseTopY - fPx * 0.62} A ${rx * 0.5} ${fPx * 0.62} 0 0 1 ${cx + rx * 0.5} ${baseTopY - fPx * 0.62}" fill="#c0571f" opacity="0.45" stroke="none"/>`;
+  // full dome outline (theta 0-90 deg)
+  s += `<path d="M ${cx - rx} ${baseTopY} A ${rx} ${fPx} 0 0 1 ${cx + rx} ${baseTopY}" fill="none" stroke="#1c2733" stroke-width="1.5"/>`;
+  // wind arrow
+  s += `<line x1="${pad}" y1="${baseTopY - fPx * 0.4}" x2="${cx - rx - 10}" y2="${baseTopY - fPx * 0.4}" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#domeArrow)"/>`;
+  s += `<defs><marker id="domeArrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#5b6b7c"/></marker></defs>`;
+  s += `<text x="${pad}" y="${baseTopY - fPx * 0.4 - 6}" font-size="10" fill="#5b6b7c">Wind</text>`;
+  // D dimension (base width)
+  s += `<line x1="${cx - rx}" y1="${baseY + 12}" x2="${cx + rx}" y2="${baseY + 12}" stroke="var(--muted)" stroke-width="1"/>`;
+  s += `<text x="${cx}" y="${baseY + 24}" font-size="10" fill="var(--muted)" text-anchor="middle">D = ${fmt(lengthOut(t.D), 1)} ${state.unitSystem === 'SI' ? 'm' : 'ft'}</text>`;
+  // h_D dimension (right side, base height)
+  if (hDpx > 1) {
+    s += `<text x="${cx + rx + 8}" y="${(baseY + baseTopY) / 2 + 4}" font-size="10" fill="var(--muted)">h<tspan baseline-shift="sub" font-size="7">D</tspan> = ${fmt(lengthOut(t.hD), 1)}</text>`;
+  }
+  // f dimension (right side, dome rise)
+  s += `<text x="${cx + rx + 8}" y="${(baseTopY + apexY) / 2 + 4}" font-size="10" fill="var(--muted)">f = ${fmt(lengthOut(t.f), 1)}</text>`;
+  s += `<text x="${cx}" y="${apexY - fPx * 0.62 - 10}" font-size="9" fill="#c0571f" text-anchor="middle">&theta; 61&ndash;90&deg;</text>`;
+  s += `<text x="${cx}" y="${baseTopY - fPx * 0.2}" font-size="9" fill="var(--muted)" text-anchor="middle">&theta; 0&ndash;60&deg;</text>`;
+  s += `</svg>`;
+  return s;
+}
+
+// Domed Roofs section (Fig. 30.3-7) — identical content for the on-screen
+// #domeRoofResults and the print/export report.
+function reportDomeRoofHTML(r) {
+  const t = r.domeRoof;
+  if (!t) return '<p class="muted">Dome roof data unavailable.</p>';
+  const pU = pUnit();
+  const lU = state.unitSystem === 'SI' ? 'm' : 'ft';
+  const p2 = v => fmt(pVal(v), 2);
+
+  let html = '<p class="muted" style="margin:0 0 10px;">p = q<sub>(h<sub>D</sub>+f)</sub>&middot;K<sub>d</sub>&middot;[(GC<sub>p</sub>) &minus; (GC<sub>pi</sub>)] <span class="ref">Fig. 30.3-7, Note 1, Eq. 30.3-1</span> &mdash; (GC<sub>p</sub>) below comes directly from Fig. 30.3-7\'s own lookup table ("Coefficients for Domes with a Circular Base"), not a graph; the velocity pressure is evaluated at the height of the dome\'s apex (h<sub>D</sub> + f), not the page\'s shared q<sub>h</sub>.</p>';
+
+  html += '<div class="zone-row"><div class="zone-tbl">' +
+    '<table class="report-input-table"><tbody>' +
+    '<tr><td>Diameter, D</td><td>' + fmt(lengthOut(t.D), 2) + ' ' + lU + '</td></tr>' +
+    '<tr><td>Dome rise, f</td><td>' + fmt(lengthOut(t.f), 2) + ' ' + lU + '</td></tr>' +
+    '<tr><td>Height to base of dome, h<sub>D</sub></td><td>' + fmt(lengthOut(t.hD), 2) + ' ' + lU + '</td></tr>' +
+    '<tr><td>h<sub>D</sub> / D</td><td>' + fmt(t.hDoverD, 3) + (t.outOfRange ? ' <span class="val-neg">(out of range)</span>' : '') + '</td></tr>' +
+    '<tr><td>f / D</td><td>' + fmt(t.fOverD, 3) + (t.outOfRange ? ' <span class="val-neg">(out of range)</span>' : '') + '</td></tr>' +
+    '<tr><td>Height at top of dome, h<sub>D</sub>+f</td><td>' + fmt(lengthOut(t.domeTopZ), 2) + ' ' + lU + '</td></tr>' +
+    '<tr><td>Velocity pressure, q<sub>(hD+f)</sub></td><td>' + fmt(pVal(t.qDome), 2) + ' ' + pU + '</td></tr>' +
+    '</tbody></table></div><div class="zone-diag">' + domeRoofSvg(t) + '</div></div>';
+
+  html += '<table class="report-table"><thead><tr><th>External Pressure</th><th>&theta;, degrees</th><th>(GC<sub>p</sub>)</th><th>p<sub>min</sub></th><th>p<sub>max</sub></th></tr></thead><tbody>' +
+    '<tr><td>Negative (uplift)</td><td>0&ndash;90</td><td>' + fmt(t.gcpNeg, 2) + '</td><td class="val-neg">' + p2(t.pNeg.min) + ' ' + pU + '</td><td class="val-pos">' + p2(t.pNeg.max) + ' ' + pU + '</td></tr>' +
+    '<tr><td>Positive</td><td>0&ndash;60</td><td>+' + fmt(t.gcpPosLow, 2) + '</td><td class="val-neg">' + p2(t.pPosLow.min) + ' ' + pU + '</td><td class="val-pos">' + p2(t.pPosLow.max) + ' ' + pU + '</td></tr>' +
+    '<tr><td>Positive</td><td>61&ndash;90</td><td>+' + fmt(t.gcpPosHigh, 2) + '</td><td class="val-neg">' + p2(t.pPosHigh.min) + ' ' + pU + '</td><td class="val-pos">' + p2(t.pPosHigh.max) + ' ' + pU + '</td></tr>' +
+    '</tbody></table>';
+
+  if (t.outOfRange) {
+    html += '<div class="alert warn">h<sub>D</sub>/D and/or f/D fall outside the range Fig. 30.3-7\'s Note 4 covers (0 &le; h<sub>D</sub>/D &le; 0.5, 0.2 &le; f/D &le; 0.5). The table values above are shown anyway but are <strong>not validated</strong> for this geometry &mdash; consult ASCE/SEI 7-22 directly or use a wind-tunnel/specialist study for domes outside this range.</div>';
+  }
+  html += '<div class="alert info">Each component is designed for both the maximum positive and maximum negative pressure (Note 3). Per Note 2, plus signs act toward the surface and minus signs act away from it. &theta; = 0&deg; at the dome springline (base perimeter), &theta; = 90&deg; at the dome\'s center top point (Note 5).</div>';
+  return html;
+}
+
 // Open Building — Free Roof Pressures section (Sec. 27.3.2, Eq. 27.3-2) —
 // identical cards/notes/tables/citations to the on-screen #openRoofSection.
 function reportOpenRoofHTML(r) {
@@ -4181,6 +4319,10 @@ function buildReportHTML(r) {
 
   if (s.hasSawtoothRoof && r.sawtoothRoof) {
     html += section('Sawtooth Roof &mdash; C&amp;C Pressures', 'Fig. 30.3-6, Eq. 30.3-1', reportSawtoothRoofHTML(r));
+  }
+
+  if (s.hasDomeRoof && r.domeRoof) {
+    html += section('Domed Roof &mdash; C&amp;C Pressures', 'Fig. 30.3-7, Eq. 30.3-1', reportDomeRoofHTML(r));
   }
 
   if (r.openRoof) {
@@ -5149,6 +5291,39 @@ function bindInputs() {
     });
   }
 
+  // Domed Roofs (Fig. 30.3-7) toggle + geometry
+  const hasDomeRoofEl = document.getElementById('hasDomeRoof');
+  if (hasDomeRoofEl) {
+    hasDomeRoofEl.addEventListener('change', e => {
+      state.hasDomeRoof = e.target.checked;
+      renderResults();
+    });
+  }
+  const domeDEl = document.getElementById('domeD');
+  if (domeDEl) {
+    domeDEl.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      state.domeD = toUSLength(isNaN(v) ? 0 : v, state.unitSystem);
+      renderResults();
+    });
+  }
+  const domeFEl = document.getElementById('domeF');
+  if (domeFEl) {
+    domeFEl.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      state.domeF = toUSLength(isNaN(v) ? 0 : v, state.unitSystem);
+      renderResults();
+    });
+  }
+  const domeHDEl = document.getElementById('domeHD');
+  if (domeHDEl) {
+    domeHDEl.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      state.domeHD = toUSLength(isNaN(v) ? 0 : v, state.unitSystem);
+      renderResults();
+    });
+  }
+
   // Torsional T-zone reference toggle (progressive disclosure when h <= 30 ft)
   const torsionToggle = document.getElementById('torsionToggle');
   if (torsionToggle) {
@@ -5459,6 +5634,9 @@ function updateUnitLabels() {
   set('lblSteppedLowerW', sys === 'SI' ? 'm' : 'ft');
   set('lblMsModuleW', sys === 'SI' ? 'm' : 'ft');
   set('lblSwModuleW', sys === 'SI' ? 'm' : 'ft');
+  set('lblDomeD', sys === 'SI' ? 'm' : 'ft');
+  set('lblDomeF', sys === 'SI' ? 'm' : 'ft');
+  set('lblDomeHD', sys === 'SI' ? 'm' : 'ft');
 }
 
 function setUnitSystem(sys) {
@@ -5703,6 +5881,17 @@ const INFO_CONTENT = {
     <p><strong>Doubled low-eave zone:</strong> unlike a plain single-slope roof, Fig. 30.3-6's own diagram shows the edge-zone width <em>doubled</em> to 2a along the low (upwind) eave of each span &mdash; the step where the monoslope roof drops down to the next span, the sawtooth's defining feature. The other three edges (top, bottom, and the high/right eave) keep the standard width a.</p>
     <p><span class="src-tag">Scope limitation (disclosed, not invented):</span> for &theta; &gt; 10&deg;, Fig. 30.3-6 gives a single (GC<sub>p</sub>) vs. effective-wind-area graph, but with <em>four</em> overlapping curves (Zone 1, Zone 2, a Zone 3 curve specifically for "Span A," and a separate Zone 3 curve for "Spans B, C, &amp; D") and no printed coordinate table &mdash; only a plotted graph. As with multispan gable roofs, digitizing the exact breakpoints from the rendered figure image was not done here to avoid inventing a number where one would have to be guessed. That range is flagged NOT IMPLEMENTED in the report; consult Fig. 30.3-6 directly for steeper sawtooth roofs.</p>
     <p>Fig. 30.3-6's Notation specifies <em>eave</em> height (not mean roof height) for the &theta; &le; 10&deg; case &mdash; this calculator approximates that with the page's mean roof height h, which is very close for a nearly flat roof.</p>`
+  },
+  domeRoof: {
+    title: 'Domed Roofs — Fig. 30.3-7',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, Fig. 30.3-7</span> &mdash; "Coefficients for Domes with a Circular Base." Unlike the other roof-shape extras on this page, this figure is a small, fully numeric (GC<sub>p</sub>) lookup table, not a graph, so it is implemented in full with no scope limitation:</p>
+    <table class="report-input-table" style="margin:6px 0;"><thead><tr><th>External Pressure</th><th>&theta;, degrees</th><th>(GC<sub>p</sub>)</th></tr></thead><tbody>
+      <tr><td>Negative</td><td>0&ndash;90</td><td>&minus;0.9</td></tr>
+      <tr><td>Positive</td><td>0&ndash;60</td><td>+0.9</td></tr>
+      <tr><td>Positive</td><td>61&ndash;90</td><td>+0.5</td></tr>
+    </tbody></table>
+    <p><span class="src-tag">Note 1</span>: these values are used with q<sub>(hD+f)</sub>, the velocity pressure evaluated at the height of the dome's apex (h<sub>D</sub> + f) &mdash; not the page's shared q<sub>h</sub> &mdash; so this calculator recomputes K<sub>z</sub> and K<sub>zt</sub> at that height using the same formulas (Table 26.10-1, Sec. 26.8) used elsewhere on this page.</p>
+    <p><span class="src-tag">Note 4</span>: the table applies only to 0 &le; h<sub>D</sub>/D &le; 0.5 and 0.2 &le; f/D &le; 0.5; outside that range the report flags the result as not validated for the entered geometry. <span class="src-tag">Note 5</span>: &theta; = 0&deg; at the dome's springline (base perimeter), &theta; = 90&deg; at its center top point. <span class="src-tag">Note 3</span>: each component must be checked against both the maximum positive and maximum negative pressure.</p>`
   },
   stepsInfo: {
     title: 'Velocity Pressure — Step by Step',
@@ -6965,6 +7154,16 @@ function init() {
   const swModuleWElInit = document.getElementById('swModuleW');
   if (swModuleWElInit) swModuleWElInit.value = state.swModuleW;
 
+  // Domed Roofs (Fig. 30.3-7) inputs
+  const hasDomeRoofElInit = document.getElementById('hasDomeRoof');
+  if (hasDomeRoofElInit) hasDomeRoofElInit.checked = !!state.hasDomeRoof;
+  const domeDElInit = document.getElementById('domeD');
+  if (domeDElInit) domeDElInit.value = state.domeD;
+  const domeFElInit = document.getElementById('domeF');
+  if (domeFElInit) domeFElInit.value = state.domeF;
+  const domeHDElInit = document.getElementById('domeHD');
+  if (domeHDElInit) domeHDElInit.value = state.domeHD;
+
   // Open Building — Free Roof (Sec. 27.3.2) inputs
   const openRoofShapeEl = document.getElementById('openRoofShape');
   if (openRoofShapeEl) openRoofShapeEl.value = state.openRoofShape;
@@ -7097,6 +7296,16 @@ document.addEventListener('DOMContentLoaded', init);
     if (hasSawtoothRoofEl2) hasSawtoothRoofEl2.checked = !!state.hasSawtoothRoof;
     const swModuleWEl2 = document.getElementById('swModuleW');
     if (swModuleWEl2) swModuleWEl2.value = fmt(lengthOut(state.swModuleW), 2);
+
+    // Domed Roofs (Fig. 30.3-7) inputs
+    const hasDomeRoofEl2 = document.getElementById('hasDomeRoof');
+    if (hasDomeRoofEl2) hasDomeRoofEl2.checked = !!state.hasDomeRoof;
+    const domeDEl2 = document.getElementById('domeD');
+    if (domeDEl2) domeDEl2.value = fmt(lengthOut(state.domeD), 2);
+    const domeFEl2 = document.getElementById('domeF');
+    if (domeFEl2) domeFEl2.value = fmt(lengthOut(state.domeF), 2);
+    const domeHDEl2 = document.getElementById('domeHD');
+    if (domeHDEl2) domeHDEl2.value = fmt(lengthOut(state.domeHD), 2);
 
     // Open Building — Free Roof (Sec. 27.3.2) inputs
     const openRoofShapeEl = document.getElementById('openRoofShape');
