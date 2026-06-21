@@ -5868,6 +5868,7 @@ function bindInputs() {
         applySpecialRoofVisibility();
       }
       applyRoofTypeVisibility();
+      applyGenericRoofControlsVisibility();
       renderResults();
     });
   }
@@ -5961,6 +5962,7 @@ function bindInputs() {
       }
       applySpecialRoofVisibility();
       applyRoofTypeVisibility();
+      applyGenericRoofControlsVisibility();
       renderResults();
     });
   }
@@ -6403,6 +6405,24 @@ function applyRoofTypeVisibility() {
 function applyParapetVisibility() {
   const f = document.getElementById('parapetHeightField');
   if (f) f.style.display = state.hasParapet ? '' : 'none';
+}
+
+// None of the 6 Special roof/structure configuration calculations (canopy,
+// circular tank, stepped/multispan/sawtooth/dome roofs) read Roof type, Roof
+// angle/shape, or the Parapet toggle from state — each has its own
+// self-contained geometry — so hide those generic controls whenever a
+// special structure is selected to avoid showing inapplicable fields.
+// Monoslope is excluded from this check on purpose: it is driven by the Roof
+// shape select itself (hasMonoslopeRoof), so specialRoofTypeFromState()
+// already returns 'none' while it's active, keeping these fields visible.
+function applyGenericRoofControlsVisibility() {
+  const isSpecial = specialRoofTypeFromState(state) !== 'none';
+  const rtf = document.getElementById('roofTypeField');
+  if (rtf) rtf.style.display = isSpecial ? 'none' : '';
+  const tr = document.getElementById('thetaRow');
+  if (tr) tr.style.display = isSpecial ? 'none' : '';
+  const pr = document.getElementById('parapetRow');
+  if (pr) pr.style.display = isSpecial ? 'none' : '';
 }
 
 // Open Building — Free Roof (Sec. 27.3.2): when enclosure === 'openFreeRoof',
@@ -8026,6 +8046,7 @@ function init() {
   const specialRoofTypeElInit = document.getElementById('specialRoofType');
   if (specialRoofTypeElInit) specialRoofTypeElInit.value = specialRoofTypeFromState(state);
   applySpecialRoofVisibility();
+  applyGenericRoofControlsVisibility();
 
   // Open Building — Free Roof (Sec. 27.3.2) inputs
   const openRoofShapeEl = document.getElementById('openRoofShape');
@@ -8179,6 +8200,7 @@ document.addEventListener('DOMContentLoaded', init);
     const specialRoofTypeEl2 = document.getElementById('specialRoofType');
     if (specialRoofTypeEl2) specialRoofTypeEl2.value = specialRoofTypeFromState(state);
     applySpecialRoofVisibility();
+    applyGenericRoofControlsVisibility();
 
     // Open Building — Free Roof (Sec. 27.3.2) inputs
     const openRoofShapeEl = document.getElementById('openRoofShape');
