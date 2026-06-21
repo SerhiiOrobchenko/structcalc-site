@@ -1655,6 +1655,10 @@ function compute(s) {
   // theta > 7 deg: Figs. 30.3-2B/2C (gable) or 2D-2G equivalent (hip), zones 1, 2, 3
   // (no zone 1' on the sloped-roof figures). theta beyond the figures' range (27° gable,
   // 45° hip) is capped at the last band's values and flagged via roofCapped.
+  // theta > 7 deg, roofShape monoslope: this generic gable/hip table does NOT apply
+  // (a monoslope roof has no ridge) — left empty; the dedicated Fig. 30.3-5A/5B
+  // calculation (hasMonoslopeRoof/monoslopeRoof below) is the sole source of roof
+  // C&C pressures in that case, shown in its own report section.
   const roofApplicable = true;
   let roofCapped = false;
   const ccRoof = (s.theta <= 7)
@@ -1662,11 +1666,11 @@ function compute(s) {
       const gc = gcpRoof(z, s.areaRoof);
       return { zone: z, gcp: gc, p: pRangeDual(qh, KD, gc.neg, gc.pos, gcpi) };
     })
-    : ['1', '2', '3'].map(z => {
+    : (s.roofShape === 'monoslope' ? [] : ['1', '2', '3'].map(z => {
       const gc = gcpRoofSloped(z, s.areaRoof, s.theta, s.roofShape);
       if (gc.capped) roofCapped = true;
       return { zone: z, gcp: gc, p: pRangeDual(qh, KD, gc.neg, gc.pos, gcpi) };
-    });
+    }));
 
   // --- C&C Roof Overhangs (Sec. 30.7) ---
   // Net top-surface (roof) + bottom-surface (wall) (GCp), zones 2 (eave) and 3 (corner)
@@ -3027,8 +3031,9 @@ function reportInputDataHTML(r) {
     rows += reportRow('Roof angle, &theta;', fmt(s.theta, 1) + '&deg;', 'Notation, Fig. 28.3-1/30.3-1');
   }
   if (s.roofType !== 'flat' && s.mode === 'cc') {
-    rows += reportRow('Roof shape', s.roofShape === 'hip' ? 'Hip roof' : 'Gable roof',
-      s.roofShape === 'hip' ? 'Figs. 30.3-2D&ndash;G equiv.' : 'Figs. 30.3-2B/2C');
+    rows += reportRow('Roof shape',
+      s.roofShape === 'hip' ? 'Hip roof' : (s.roofShape === 'monoslope' ? 'Monoslope roof' : 'Gable roof'),
+      s.roofShape === 'hip' ? 'Figs. 30.3-2D&ndash;G equiv.' : (s.roofShape === 'monoslope' ? 'Figs. 30.3-5A/5B' : 'Figs. 30.3-2B/2C'));
   }
   rows += reportRow('Parapet', s.hasParapet
     ? ('Yes &mdash; height = ' + fmt(lengthOut(s.parapetHeight), 2) + ' ' + lenUnit)
@@ -4170,18 +4175,25 @@ function reportCCHTML(r) {
   const s = state;
   let html = '<h3>Walls &mdash; Zones 4 &amp; 5 <span class="ref">Fig. 30.3-1</span></h3>' + zoneTableHTML(r.ccWall, true);
 
+  const isMonoslopeShape = s.theta > 7 && s.roofShape === 'monoslope';
   const roofHeading = (s.theta <= 7)
     ? 'Roof &mdash; Zones 1&prime;, 1, 2, 3 <span class="ref">Fig. 30.3-2A, &theta; &le; 7&deg;</span>'
-    : 'Roof &mdash; Zones 1, 2, 3 <span class="ref">' +
-      (s.roofShape === 'hip' ? 'Figs. 30.3-2D&ndash;G equiv.' : 'Figs. 30.3-2B/2C') +
-      ', &theta; &gt; 7&deg;</span>';
+    : isMonoslopeShape
+      ? 'Roof &mdash; see Monoslope Roof section below <span class="ref">Figs. 30.3-5A/5B</span>'
+      : 'Roof &mdash; Zones 1, 2, 3 <span class="ref">' +
+        (s.roofShape === 'hip' ? 'Figs. 30.3-2D&ndash;G equiv.' : 'Figs. 30.3-2B/2C') +
+        ', &theta; &gt; 7&deg;</span>';
   html += '<h3>' + roofHeading + '</h3>';
-  if (s.theta > 7 && r.roofCapped) {
-    html += '<div class="alert warn">' + (s.roofShape === 'hip'
-      ? 'Roof angle &theta; &gt; 45&deg;: Figures 30.3-2D&ndash;G (hip) do not extend past &theta; = 45&deg;. The &theta; = 45&deg; coefficients are used as a capped approximation &mdash; verify against the Standard for roofs steeper than 45&deg;.'
-      : 'Roof angle &theta; &gt; 27&deg;: Figures 30.3-2B/2C (gable) do not extend past &theta; = 27&deg;. The &theta; = 20&deg;&ndash;27&deg; (Fig. 30.3-2C) coefficients are used as a capped approximation &mdash; verify against the Standard for roofs steeper than 27&deg;.') + '</div>';
+  if (isMonoslopeShape) {
+    html += '<p class="muted" style="margin:0 0 10px;">Figs. 30.3-2B/2C/2D&ndash;G (gable/hip) do not apply to a monoslope roof &mdash; pressures are calculated separately in the Monoslope Roof section below.</p>';
+  } else {
+    if (s.theta > 7 && r.roofCapped) {
+      html += '<div class="alert warn">' + (s.roofShape === 'hip'
+        ? 'Roof angle &theta; &gt; 45&deg;: Figures 30.3-2D&ndash;G (hip) do not extend past &theta; = 45&deg;. The &theta; = 45&deg; coefficients are used as a capped approximation &mdash; verify against the Standard for roofs steeper than 45&deg;.'
+        : 'Roof angle &theta; &gt; 27&deg;: Figures 30.3-2B/2C (gable) do not extend past &theta; = 27&deg;. The &theta; = 20&deg;&ndash;27&deg; (Fig. 30.3-2C) coefficients are used as a capped approximation &mdash; verify against the Standard for roofs steeper than 27&deg;.') + '</div>';
+    }
+    html += zoneTableHTML(r.ccRoof, true);
   }
-  html += zoneTableHTML(r.ccRoof, true);
 
   if (s.hasOverhang) {
     html += '<h3>Roof Overhangs &mdash; Net (Top + Bottom) <span class="ref">Sec. 30.7</span></h3>' +
@@ -4295,6 +4307,47 @@ function reportCircTankHTML(r) {
 
   html += '<div class="alert warn">NOT IMPLEMENTED &mdash; roof pressures for isolated circular bins (Sec. 30.10.4, Fig. 30.10-2, Zones 1&ndash;4) and roof/wall pressures for grouped circular bins (Sec. 30.10.6, Figs. 30.10-3/30.10-4, used when center-to-center spacing &lt; 1.25D) are NOT calculated by this module. Both exist only as graphical figures in ASCE/SEI 7-22 with no numeric (GC<sub>p</sub>) values given in the standard\'s text or Commentary &mdash; consult the Standard directly for these provisions.</div>';
   return html;
+}
+
+// Attached canopy elevation schematic — building wall up to eave height h_e
+// with a canopy slab projecting from the wall at height h_c (Figs. 30.9-1B/
+// 2B Notation), used by the single-select "Special structure" dropdown's
+// diagram swap in the top Building Geometry & Schematic panel. Reads h_c/h_e
+// directly from state (the r.canopy result object only stores their ratio,
+// not the raw heights) — same convention already used elsewhere on this page
+// for unit-label lookups inside per-type SVG functions.
+function canopySchematicSvg(t) {
+  const W = 420, H = 230, pad = 40;
+  const groundY = H - 40;
+  const he = Math.max(state.canopyHe, 0.01);
+  const hc = Math.max(state.canopyHc, 0);
+  const maxHpx = H - 70;
+  const scale = maxHpx / Math.max(he, hc, 0.01);
+  const hePx = he * scale, hcPx = Math.min(hc * scale, hePx);
+  const wallL = pad + 20, wallR = W - pad - 70;
+  const eaveY = groundY - hePx;
+  const canopyY = groundY - hcPx;
+  const canopyLen = 70;
+  let s = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">`;
+  // ground
+  s += `<line x1="${pad - 10}" y1="${groundY}" x2="${W - pad + 10}" y2="${groundY}" stroke="#888" stroke-width="1"/>`;
+  // building wall
+  s += `<rect x="${wallL}" y="${eaveY}" width="${wallR - wallL}" height="${groundY - eaveY}" fill="none" stroke="#1c2733" stroke-width="1.5"/>`;
+  // canopy slab projecting from the wall at height h_c (slight downward cant typical of Fig. 30.9-1/2 elevations)
+  s += `<line x1="${wallR}" y1="${canopyY}" x2="${wallR + canopyLen}" y2="${canopyY + 6}" stroke="#c0571f" stroke-width="4"/>`;
+  s += `<line x1="${wallR + 14}" y1="${canopyY + 2}" x2="${wallR + 14}" y2="${groundY}" stroke="#5b6b7c" stroke-width="2" stroke-dasharray="3,2"/>`;
+  // dimension callouts: h_e (eave, left of wall) and h_c (canopy, right of wall)
+  s += `<line x1="${wallL - 14}" y1="${groundY}" x2="${wallL - 14}" y2="${eaveY}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3,2"/>`;
+  s += `<text x="${wallL - 18}" y="${(groundY + eaveY) / 2}" font-size="9" fill="var(--muted)" text-anchor="end" dominant-baseline="middle">h&#8337; = ${fmt(lengthOut(he), 1)} ${state.unitSystem === 'SI' ? 'm' : 'ft'}</text>`;
+  s += `<line x1="${wallR + canopyLen + 14}" y1="${groundY}" x2="${wallR + canopyLen + 14}" y2="${canopyY}" stroke="var(--accent)" stroke-width="1" stroke-dasharray="3,2"/>`;
+  s += `<text x="${wallR + canopyLen + 18}" y="${(groundY + canopyY) / 2}" font-size="9" fill="var(--accent)" text-anchor="start" dominant-baseline="middle">h&#8278; = ${fmt(lengthOut(hc), 1)} ${state.unitSystem === 'SI' ? 'm' : 'ft'}</text>`;
+  // wind arrow
+  s += `<line x1="6" y1="${(groundY + eaveY) / 2}" x2="${wallL - 24}" y2="${(groundY + eaveY) / 2}" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrowCanopy)"/>`;
+  s += `<text x="6" y="${(groundY + eaveY) / 2 - 6}" font-size="9" fill="var(--accent)">Wind</text>`;
+  s += `<defs><marker id="arrowCanopy" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="var(--accent)"/></marker></defs>`;
+  s += `<text x="${(wallL + wallR) / 2}" y="14" font-size="9" fill="var(--muted)" text-anchor="middle">Attached canopy &mdash; Sec. 30.9</text>`;
+  s += `</svg>`;
+  return s;
 }
 
 // Circular bin/silo/tank elevation schematic — cylinder profile sized by wall
@@ -4988,8 +5041,13 @@ function renderDiagram(r) {
   const specialWrap = document.getElementById('specialSchematicWrap');
   const specialLabel = document.getElementById('specialSchematicLabel');
   const specialSvgEl = document.getElementById('specialSchematicSvg');
-  const specialType = specialRoofTypeFromState(state);
+  // Monoslope is driven by the Roof shape select (hasMonoslopeRoof), not by
+  // the Special structure dropdown — checked first since it's mutually
+  // exclusive with specialRoofTypeFromState() by construction (see the
+  // roofShape/specialRoofType change-listeners in bindInputs()).
+  const specialType = state.hasMonoslopeRoof ? 'monoslope' : specialRoofTypeFromState(state);
   const SPECIAL_SVG = {
+    canopy: { key: 'canopy', fn: canopySchematicSvg, label: 'Schematic — Attached canopy (Sec. 30.9, Figs. 30.9-1B/2B)' },
     circTank: { key: 'circTank', fn: circTankSchematicSvg, label: 'Schematic — Circular bin/silo/tank (Sec. 30.10)' },
     stepped: { key: 'steppedRoof', fn: steppedRoofSvg, label: 'Schematic — Stepped roof (Fig. 30.3-3)' },
     multispan: { key: 'multispanRoof', fn: multispanRoofSvg, label: 'Schematic — Multispan gable roof, plan view (Fig. 30.3-4)' },
@@ -5563,6 +5621,7 @@ function renderCCCombined(r) {
   if (!el) return;
   var pU = pUnit();
   var isFlat = state.theta <= 7;
+  var isMonoslope = !isFlat && state.roofShape === 'monoslope';
   var roofRef = isFlat ? 'Fig. 30.3-2A, θ ≤ 7°' :
     (state.roofShape === 'hip' ? 'Figs. 30.3-2D–G, θ > 7°' : 'Figs. 30.3-2B/2C, θ > 7°');
   var html = '<table>';
@@ -5575,14 +5634,19 @@ function renderCCCombined(r) {
     html += '<tr><td>'+(ZONE_LABELS[row.zone]||row.zone)+'</td><td>'+gcStr+'</td>'+
       '<td>'+fmt(pVal(row.p.min),2)+'</td><td>'+fmt(pVal(row.p.max),2)+'</td></tr>';
   });
-  html += '<tr><td colspan="4" class="cc-section-header">Roof — Zones ' +
-    (isFlat ? '1&prime;, 1, 2, 3' : '1, 2, 3') +
-    '  <span class="ref">' + roofRef + '</span></td></tr>';
-  (r.ccRoof||[]).forEach(function(row) {
-    var gcStr = fmt(row.gcp.neg,2) + ' to ' + fmt(row.gcp.pos,2);
-    html += '<tr><td>'+(ZONE_LABELS[row.zone]||row.zone)+'</td><td>'+gcStr+'</td>'+
-      '<td>'+fmt(pVal(row.p.min),2)+'</td><td>'+fmt(pVal(row.p.max),2)+'</td></tr>';
-  });
+  if (isMonoslope) {
+    html += '<tr><td colspan="4" class="cc-section-header">Roof &mdash; see Monoslope Roof section below <span class="ref">Figs. 30.3-5A/5B</span></td></tr>';
+    html += '<tr><td colspan="4" class="muted" style="font-size:.82rem;">Figs. 30.3-2B/2C/2D&ndash;G (gable/hip) do not apply to a monoslope roof &mdash; pressures are calculated separately below.</td></tr>';
+  } else {
+    html += '<tr><td colspan="4" class="cc-section-header">Roof — Zones ' +
+      (isFlat ? '1&prime;, 1, 2, 3' : '1, 2, 3') +
+      '  <span class="ref">' + roofRef + '</span></td></tr>';
+    (r.ccRoof||[]).forEach(function(row) {
+      var gcStr = fmt(row.gcp.neg,2) + ' to ' + fmt(row.gcp.pos,2);
+      html += '<tr><td>'+(ZONE_LABELS[row.zone]||row.zone)+'</td><td>'+gcStr+'</td>'+
+        '<td>'+fmt(pVal(row.p.min),2)+'</td><td>'+fmt(pVal(row.p.max),2)+'</td></tr>';
+    });
+  }
   html += '</tbody></table>';
   el.innerHTML = html;
   var roofNote = document.getElementById('ccRoofNote');
@@ -5782,11 +5846,28 @@ function bindInputs() {
     renderResults();
   });
 
-  // Roof shape (gable vs hip) — selects Fig. 30.3-2B/2C vs 2D-2G equiv. for theta > 7 deg
+  // Roof shape — selects Fig. 30.3-2B/2C (gable) vs 2D-2G equiv. (hip) for
+  // theta > 7 deg, or routes to the dedicated Fig. 30.3-5A/5B monoslope calc
+  // (hasMonoslopeRoof) for 3deg < theta <= 30deg. Picking "Monoslope" here is
+  // mutually exclusive with the Special roof/structure configuration dropdown
+  // above, so it clears those 6 flags and resets that dropdown back to "None".
   const roofShapeEl = document.getElementById('roofShape');
   if (roofShapeEl) {
     roofShapeEl.addEventListener('change', e => {
       state.roofShape = e.target.value;
+      state.hasMonoslopeRoof = (state.roofShape === 'monoslope');
+      if (state.hasMonoslopeRoof) {
+        state.hasCanopy = false;
+        state.hasCircularTank = false;
+        state.hasSteppedRoof = false;
+        state.hasMultispanRoof = false;
+        state.hasSawtoothRoof = false;
+        state.hasDomeRoof = false;
+        const specialEl = document.getElementById('specialRoofType');
+        if (specialEl) specialEl.value = 'none';
+        applySpecialRoofVisibility();
+      }
+      applyRoofTypeVisibility();
       renderResults();
     });
   }
@@ -5805,6 +5886,7 @@ function bindInputs() {
   if (hasParapetEl) {
     hasParapetEl.addEventListener('change', e => {
       state.hasParapet = e.target.checked;
+      applyParapetVisibility();
       renderResults();
     });
   }
@@ -5817,7 +5899,10 @@ function bindInputs() {
     });
   }
 
-  // Attached Canopies (Sec. 30.9) toggle + geometry
+  // Attached Canopies (Sec. 30.9) — hasCanopy is now set via the Special roof/
+  // structure configuration dropdown above; this #hasCanopy checkbox no
+  // longer exists in the markup, so this listener is inert (left in place,
+  // null-guarded, as harmless dead code per the dropdown migration).
   const hasCanopyEl = document.getElementById('hasCanopy');
   if (hasCanopyEl) {
     hasCanopyEl.addEventListener('change', e => {
@@ -5850,20 +5935,32 @@ function bindInputs() {
     });
   }
 
-  // Single-select "Special structure" dropdown — sets exactly one of the 6
-  // underlying booleans true (and the rest false), then reuses the same
-  // visibility-toggle + diagram-swap logic as before.
+  // Single-select "Special roof / structure configuration" dropdown —
+  // sets exactly one of the 6 underlying hasXxx booleans true (rest false).
+  // Monoslope roofs are NOT part of this dropdown — they're a Roof shape
+  // option (alongside Gable/Hip) since a monoslope roof is just a roof-shape
+  // variant of the same standard building, not a separate structure type.
+  // Selecting anything here therefore always clears hasMonoslopeRoof, and if
+  // Roof shape had been left on "Monoslope" it's reset back to "Gable" so the
+  // dropdown and the underlying flag never drift out of sync.
   const specialRoofTypeEl = document.getElementById('specialRoofType');
   if (specialRoofTypeEl) {
     specialRoofTypeEl.addEventListener('change', e => {
       const v = e.target.value;
+      state.hasCanopy        = (v === 'canopy');
       state.hasCircularTank  = (v === 'circTank');
       state.hasSteppedRoof   = (v === 'stepped');
       state.hasMultispanRoof = (v === 'multispan');
       state.hasSawtoothRoof  = (v === 'sawtooth');
       state.hasDomeRoof      = (v === 'dome');
-      state.hasMonoslopeRoof = (v === 'monoslope');
+      state.hasMonoslopeRoof = false;
+      if (state.roofShape === 'monoslope') {
+        state.roofShape = 'gable';
+        const rsEl = document.getElementById('roofShape');
+        if (rsEl) rsEl.value = 'gable';
+      }
       applySpecialRoofVisibility();
+      applyRoofTypeVisibility();
       renderResults();
     });
   }
@@ -6296,6 +6393,16 @@ function applyRoofTypeVisibility() {
   if (f) f.style.display = state.roofType === 'flat' ? 'none' : '';
   const rs = document.getElementById('roofShapeField');
   if (rs) rs.style.display = state.roofType === 'flat' ? 'none' : '';
+  const mi = document.getElementById('monoslopeInfoBtn');
+  if (mi) mi.style.display = state.roofShape === 'monoslope' ? '' : 'none';
+}
+
+// Building has a parapet (Sec. 27.3.4/28.3.4 MWFRS + Sec. 30.6 C&C) — hide
+// the parapet height input entirely when the checkbox is unchecked, matching
+// the show/hide convention used for every other conditional field on this page.
+function applyParapetVisibility() {
+  const f = document.getElementById('parapetHeightField');
+  if (f) f.style.display = state.hasParapet ? '' : 'none';
 }
 
 // Open Building — Free Roof (Sec. 27.3.2): when enclosure === 'openFreeRoof',
@@ -6331,12 +6438,12 @@ function applyStructureCategoryVisibility() {
 // needs modification — this dropdown is purely a UI-layer abstraction that
 // sets exactly one boolean true and the rest false.
 function specialRoofTypeFromState(s) {
+  if (s.hasCanopy)        return 'canopy';
   if (s.hasCircularTank)  return 'circTank';
   if (s.hasSteppedRoof)   return 'stepped';
   if (s.hasMultispanRoof) return 'multispan';
   if (s.hasSawtoothRoof)  return 'sawtooth';
   if (s.hasDomeRoof)      return 'dome';
-  if (s.hasMonoslopeRoof) return 'monoslope';
   return 'none';
 }
 function applySpecialRoofVisibility() {
@@ -7720,7 +7827,11 @@ async function exportReportXLSX(r) {
     appendAoaSheet(wb, 'MWFRS LC4 (T-zones)', 'MWFRS Load Case 4 T-zones — Fig. 28.3-2' + (r.torsionApplies ? '' : ' (h <= 30 ft: not required, shown for reference)'), zoneTableAOA(r.mwfrsLC4, false));
   } else {
     appendAoaSheet(wb, 'C&C Walls', 'C&C Walls — Zones 4 & 5 — Fig. 30.3-1', zoneTableAOA(r.ccWall, true));
-    appendAoaSheet(wb, 'C&C Roof', 'C&C Roof — Fig. 30.3-2' + (s.theta <= 7 ? 'A (theta <= 7 deg)' : (s.roofShape === 'hip' ? 'D-G equiv. (hip)' : 'B/C (gable), theta > 7 deg')), zoneTableAOA(r.ccRoof, true));
+    appendAoaSheet(wb, 'C&C Roof',
+      s.theta <= 7 ? 'C&C Roof — Fig. 30.3-2A (theta <= 7 deg)'
+        : s.roofShape === 'monoslope' ? 'C&C Roof — see Monoslope Roof sheet (Figs. 30.3-5A/5B); Figs. 30.3-2B/2C/D-G do not apply'
+        : 'C&C Roof — Fig. 30.3-2' + (s.roofShape === 'hip' ? 'D-G equiv. (hip)' : 'B/C (gable)') + ', theta > 7 deg',
+      zoneTableAOA(r.ccRoof, true));
     if (s.hasOverhang) {
       appendAoaSheet(wb, 'C&C Overhangs', 'Roof Overhangs — Net (Top + Bottom) — Sec. 30.7', zoneTableAOA(r.ccOverhang, true, OVERHANG_ZONE_LABELS));
     }
@@ -7854,6 +7965,7 @@ function init() {
   if (hasParapetEl) hasParapetEl.checked = !!state.hasParapet;
   const parapetHeightEl = document.getElementById('parapetHeight');
   if (parapetHeightEl) parapetHeightEl.value = state.parapetHeight;
+  applyParapetVisibility();
 
   // Attached Canopy (Sec. 30.9) inputs
   const hasCanopyElInit = document.getElementById('hasCanopy');
@@ -8005,6 +8117,7 @@ document.addEventListener('DOMContentLoaded', init);
     if (hasParapetEl) hasParapetEl.checked = !!state.hasParapet;
     const parapetHeightEl = document.getElementById('parapetHeight');
     if (parapetHeightEl) parapetHeightEl.value = fmt(lengthOut(state.parapetHeight), 2);
+    applyParapetVisibility();
 
     // Attached Canopy (Sec. 30.9) inputs
     const hasCanopyEl2 = document.getElementById('hasCanopy');

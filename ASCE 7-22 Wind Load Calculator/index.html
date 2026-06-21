@@ -458,84 +458,42 @@
     <h2>1. Building Geometry &amp; Schematic <span class="ref">Sec. 26.2; Fig. 28.3-1/30.3-1/30.3-2A Notation</span></h2>
     <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start;">
       <div style="flex:1 1 380px; min-width:300px;">
-        <div class="row3">
-          <div class="field">
-            <label for="h">Mean roof height, h (<span id="lblH">ft</span>)<button type="button" class="info-btn" data-info="h" aria-label="Learn more">i</button></label>
-            <input type="number" id="h" step="any" min="0">
-          </div>
-          <div class="field">
-            <label for="minDim">Bldg. width, B — perpendicular to wind (<span id="lblMinDim">ft</span>)<button type="button" class="info-btn" data-info="minDim" aria-label="Learn more">i</button></label>
-            <input type="number" id="minDim" step="any" min="0">
-          </div>
-          <div class="field" id="buildingLRow" style="display:none;">
-            <label for="buildingL">Bldg. length, L — parallel to wind (<span id="lblBuildingL">ft</span>)</label>
-            <input type="number" id="buildingL" step="any" min="0">
-          </div>
-          <div class="field" id="roofTypeField">
-            <label for="roofType">Roof type<button type="button" class="info-btn" data-info="roofType" aria-label="Learn more">i</button></label>
-            <select id="roofType">
-              <option value="flat">Flat / low-slope (&theta; &le; 7&deg;)</option>
-              <option value="sloped">Gable, hip, or other sloped (&theta; &gt; 7&deg;)</option>
-            </select>
-          </div>
-        </div>
-        <div class="row3" id="thetaRow">
-          <div class="field" id="thetaField">
-            <label for="theta">Roof angle, &theta; (degrees)<button type="button" class="info-btn" data-info="theta" aria-label="Learn more">i</button></label>
-            <input type="number" id="theta" step="any" min="0" max="90">
-          </div>
-          <div class="field" id="roofShapeField">
-            <label for="roofShape">Roof shape<button type="button" class="info-btn" data-info="roofShape" aria-label="Learn more">i</button></label>
-            <select id="roofShape">
-              <option value="gable">Gable (Figs. 30.3-2B/2C)</option>
-              <option value="hip">Hip (Figs. 30.3-2D&ndash;G)</option>
-            </select>
-          </div>
-        </div>
-        <div class="row2">
-          <div class="field checkbox-field">
-            <label for="hasParapet"><input type="checkbox" id="hasParapet"> Building has a parapet <span class="ref">Sec. 27.3.4 / 30.6</span><button type="button" class="info-btn" data-info="parapet" aria-label="Learn more">i</button></label>
-          </div>
-          <div class="field">
-            <label for="parapetHeight">Parapet height above roof (<span id="lblParapetHeight">ft</span>)<button type="button" class="info-btn" data-info="parapet" aria-label="Learn more">i</button></label>
-            <input type="number" id="parapetHeight" step="any" min="0">
-          </div>
-        </div>
-        <div class="row2">
-          <div class="field checkbox-field">
-            <label for="hasCanopy"><input type="checkbox" id="hasCanopy"> Building has an attached canopy <span class="ref">Sec. 30.9</span><button type="button" class="info-btn" data-info="canopy" aria-label="Learn more">i</button></label>
-          </div>
-          <div class="field">
-            <label for="canopyArea">Canopy effective wind area, A (<span id="lblCanopyArea">ft&sup2;</span>)<button type="button" class="info-btn" data-info="canopy" aria-label="Learn more">i</button></label>
-            <input type="number" id="canopyArea" step="any" min="0">
-          </div>
-        </div>
-        <div class="row2" id="canopyGeomRow">
-          <div class="field">
-            <label for="canopyHc">Canopy height, h<sub>c</sub> (<span id="lblCanopyHc">ft</span>)<button type="button" class="info-btn" data-info="canopy" aria-label="Learn more">i</button></label>
-            <input type="number" id="canopyHc" step="any" min="0">
-          </div>
-          <div class="field">
-            <label for="canopyHe">Building eave height, h<sub>e</sub> (<span id="lblCanopyHe">ft</span>)<button type="button" class="info-btn" data-info="canopy" aria-label="Learn more">i</button></label>
-            <input type="number" id="canopyHe" step="any" min="0">
-          </div>
-        </div>
         <div class="row2">
           <div class="field field-full">
             <label for="specialRoofType">Special roof / structure configuration</label>
             <select id="specialRoofType">
-              <option value="none">None &mdash; standard (use Roof type above)</option>
+              <option value="none">None &mdash; standard (use Roof type/shape below)</option>
+              <option value="canopy">Attached canopy (Sec. 30.9)</option>
               <option value="circTank">Circular bin, silo, or tank (Sec. 30.10)</option>
               <option value="stepped">Stepped (multi-level flat) roof (Fig. 30.3-3)</option>
               <option value="multispan">Multispan gable roof, 2+ spans (Fig. 30.3-4)</option>
               <option value="sawtooth">Sawtooth roof, 2+ spans (Fig. 30.3-6)</option>
               <option value="dome">Domed roof, circular base (Fig. 30.3-7)</option>
-              <option value="monoslope">Monoslope roof, 3&deg; &lt; &theta; &le; 30&deg; (Fig. 30.3-5A/5B)</option>
             </select>
           </div>
         </div>
 
         <div id="specialRoofRows">
+
+          <!-- Attached Canopies on Buildings (Sec. 30.9) -->
+          <div class="special-row" id="special-canopy">
+            <div class="row2">
+              <div class="field">
+                <label for="canopyArea">Canopy effective wind area, A (<span id="lblCanopyArea">ft&sup2;</span>)<button type="button" class="info-btn" data-info="canopy" aria-label="Learn more">i</button></label>
+                <input type="number" id="canopyArea" step="any" min="0">
+              </div>
+            </div>
+            <div class="row2">
+              <div class="field">
+                <label for="canopyHc">Canopy height, h<sub>c</sub> (<span id="lblCanopyHc">ft</span>)<button type="button" class="info-btn" data-info="canopy" aria-label="Learn more">i</button></label>
+                <input type="number" id="canopyHc" step="any" min="0">
+              </div>
+              <div class="field">
+                <label for="canopyHe">Building eave height, h<sub>e</sub> (<span id="lblCanopyHe">ft</span>)<button type="button" class="info-btn" data-info="canopy" aria-label="Learn more">i</button></label>
+                <input type="number" id="canopyHe" step="any" min="0">
+              </div>
+            </div>
+          </div>
 
           <!-- Circular Bins, Silos, and Tanks (Sec. 30.10) -->
           <div class="special-row" id="special-circTank">
@@ -613,12 +571,52 @@
             </div>
           </div>
 
-          <!-- Monoslope Roofs (Fig. 30.3-5A/5B) — reuses theta/h/minDim/areaRoof above -->
-          <div class="special-row" id="special-monoslope">
-            <p class="muted" style="margin:0 0 4px; font-size:.82rem;">Reuses the Roof angle &theta;, Mean roof height h, Bldg. width B, and Roof C&amp;C effective wind area fields already entered above &mdash; no separate geometry inputs needed.</p>
-          </div>
-
         </div><!-- /specialRoofRows -->
+
+        <div class="row3">
+          <div class="field">
+            <label for="h">Mean roof height, h (<span id="lblH">ft</span>)<button type="button" class="info-btn" data-info="h" aria-label="Learn more">i</button></label>
+            <input type="number" id="h" step="any" min="0">
+          </div>
+          <div class="field">
+            <label for="minDim">Bldg. width, B — perpendicular to wind (<span id="lblMinDim">ft</span>)<button type="button" class="info-btn" data-info="minDim" aria-label="Learn more">i</button></label>
+            <input type="number" id="minDim" step="any" min="0">
+          </div>
+          <div class="field" id="buildingLRow" style="display:none;">
+            <label for="buildingL">Bldg. length, L — parallel to wind (<span id="lblBuildingL">ft</span>)</label>
+            <input type="number" id="buildingL" step="any" min="0">
+          </div>
+          <div class="field" id="roofTypeField">
+            <label for="roofType">Roof type<button type="button" class="info-btn" data-info="roofType" aria-label="Learn more">i</button></label>
+            <select id="roofType">
+              <option value="flat">Flat / low-slope (&theta; &le; 7&deg;)</option>
+              <option value="sloped">Gable, hip, or other sloped (&theta; &gt; 7&deg;)</option>
+            </select>
+          </div>
+        </div>
+        <div class="row3" id="thetaRow">
+          <div class="field" id="thetaField">
+            <label for="theta">Roof angle, &theta; (degrees)<button type="button" class="info-btn" data-info="theta" aria-label="Learn more">i</button></label>
+            <input type="number" id="theta" step="any" min="0" max="90">
+          </div>
+          <div class="field" id="roofShapeField">
+            <label for="roofShape">Roof shape<button type="button" class="info-btn" data-info="roofShape" aria-label="Learn more">i</button><button type="button" class="info-btn" id="monoslopeInfoBtn" data-info="monoslopeRoof" aria-label="Learn more about monoslope roofs" style="display:none;">i</button></label>
+            <select id="roofShape">
+              <option value="gable">Gable (Figs. 30.3-2B/2C)</option>
+              <option value="hip">Hip (Figs. 30.3-2D&ndash;G)</option>
+              <option value="monoslope">Monoslope, 3&deg; &lt; &theta; &le; 30&deg; (Fig. 30.3-5A/5B)</option>
+            </select>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field checkbox-field">
+            <label for="hasParapet"><input type="checkbox" id="hasParapet"> Building has a parapet <span class="ref">Sec. 27.3.4 / 30.6</span><button type="button" class="info-btn" data-info="parapet" aria-label="Learn more">i</button></label>
+          </div>
+          <div class="field" id="parapetHeightField">
+            <label for="parapetHeight">Parapet height above roof (<span id="lblParapetHeight">ft</span>)<button type="button" class="info-btn" data-info="parapet" aria-label="Learn more">i</button></label>
+            <input type="number" id="parapetHeight" step="any" min="0">
+          </div>
+        </div>
       </div>
       <div style="flex:1 1 460px; min-width:300px;">
         <p class="muted" style="margin:0 0 10px;" id="schematicIntro">Schematic only, updates live with the inputs at left. The edge-zone width <strong>a</strong> shown is computed per the Notation under Figures 28.3-1/30.3-1/30.3-2A (<button type="button" class="info-btn" data-info="minDim" aria-label="Learn more">i</button> see "Least Horizontal Dimension"). For the exact pressure-zone layouts, see ASCE/SEI 7-22 Figure 28.3-1 (MWFRS) or Figures 30.3-1 / 30.3-2A (C&amp;C).</p>
