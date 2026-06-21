@@ -110,6 +110,9 @@
      letting them stretch to fill a wide grid cell (was ~1/4 of the page). */
   .field input[type="number"]{max-width:130px;}
   .field-full input[type="number"]{max-width:130px;}
+  /* Section 1 now shares its row with a wider schematic pane — keep its
+     numeric fields even tighter so the input column stays narrow. */
+  #diagramPanel .field input[type="number"]{max-width:100px;}
   .checkbox-field label{gap:6px; font-weight:600; cursor:pointer;}
   .checkbox-field input[type="checkbox"]{width:auto; flex:none;}
   .row3{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
@@ -471,7 +474,7 @@
   <div class="panel" id="diagramPanel">
     <h2>1. Building Geometry &amp; Schematic <span class="ref">Sec. 26.2; Fig. 28.3-1/30.3-1/30.3-2A Notation</span></h2>
     <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start;">
-      <div style="flex:1 1 300px; min-width:240px;">
+      <div style="flex:1 1 0; min-width:200px;">
         <div class="row2">
           <div class="field field-full">
             <label for="specialRoofType">Special roof / structure configuration</label>
@@ -632,15 +635,15 @@
           </div>
         </div>
       </div>
-      <div style="flex:0 1 230px; min-width:180px; max-width:240px;">
+      <div style="flex:1 1 0; min-width:220px;">
         <p class="muted" style="margin:0 0 8px; font-size:.76rem;" id="schematicIntro">Schematic only, updates live with the inputs at left. Edge-zone width <strong>a</strong> per Notation, Figs. 28.3-1/30.3-1/30.3-2A (<button type="button" class="info-btn" data-info="minDim" aria-label="Learn more">i</button>).</p>
         <div id="genericSchematicWrap">
-          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-start;">
-            <div style="flex:1; min-width:90px;">
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-start;">
+            <div style="flex:1; min-width:120px;">
               <div class="muted" style="font-size:.72rem; font-weight:600; margin-bottom:2px;">Elevation</div>
               <svg id="elevSvg" viewBox="0 0 280 200" style="width:100%; background:#fff; border:1px solid var(--line); border-radius:6px;"></svg>
             </div>
-            <div style="flex:1; min-width:90px;">
+            <div style="flex:1; min-width:120px;">
               <div class="muted" style="font-size:.72rem; font-weight:600; margin-bottom:2px;">Plan</div>
               <svg id="planSvg" viewBox="0 0 280 200" style="width:100%; background:#fff; border:1px solid var(--line); border-radius:6px;"></svg>
             </div>
