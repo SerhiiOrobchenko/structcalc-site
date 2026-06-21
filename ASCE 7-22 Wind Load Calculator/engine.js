@@ -549,7 +549,9 @@ const state = {
   ch29GsRows:     5,    // number of rows in the array
   ch29GsBlockage: 5,    // support-framing blockage ratio (%) over any 4·Lc length
   ch29GsA:        50,   // effective wind area A (ft²) for GCgn/GCgm interpolation
-  ch29GsZone:     1     // user-selected zone: 1=interior shielded, 2=exterior perimeter
+  ch29GsZone:     1,    // user-selected zone: 1=interior shielded, 2=exterior perimeter
+  ch29GsFreq:     3,    // lowest natural frequency of the array n, Hz (Eq. 29.4-12)
+  ch29GsDamping:  0.01  // damping ratio β (fraction, e.g. 0.01 = 1%; Fig. 29.4-11, Note 1)
 };
 
 /* =====================================================================
@@ -3561,9 +3563,8 @@ function gcrnNom(An, zone, omega) {
 // NOTE: this is the STATIC term only (GCgn_static / GCgm_static). Eq. 29.4-10
 // and Eq. 29.4-11 define the full coefficient as
 //   (GCgn) = (GCgn_static) ± (GCgn_dynamic),  (GCgm) = (GCgm_static) ± (GCgm_dynamic)
-// and the DYNAMIC term (Fig. 29.4-11) has not been supplied/digitized, so it
-// is omitted here — disclosed explicitly in the report. Omitting it can
-// UNDERESTIMATE the governing force/moment; do not use for final design.
+// — see GS_GCGN_DYNAMIC/GS_GCGM_DYNAMIC and gsDynamic() below (Fig. 29.4-11)
+// for the dynamic term, which is combined with this static term further down.
 // ------------------------------------------------------------------
 const GS_GCGN_STATIC = {
   lo: { zone1: [[1, 1.5], [10, 1.5], [5000, 0.8], [10000, 0.8]],
@@ -3592,6 +3593,81 @@ function gsStatic(table, A, zone, omega) {
   if (omega >= 15) return hi;
   const t = (omega - 5) / 10;
   return lo * (1 - t) + hi * t;
+}
+
+// ------------------------------------------------------------------
+// Figure 29.4-11, ASCE 7-22 Sec. 29.4.5 — DYNAMIC net-pressure and moment
+// coefficients (GCgn_dynamic / GCgm_dynamic) for ground-mounted fixed-tilt
+// solar panel systems, vs. reduced frequency Ns (Eq. 29.4-12).
+// Source: exact [Ns, coefficient] breakpoints digitized directly from
+// Fig. 29.4-11 by the user (Figure 29.4-11.txt) — not estimated.
+// Four charts are plotted: effective wind area A≤A1 or A≥A2 (Notation:
+// A1 = min(4·Lc², 500 ft²), A2 = min(15·Lc², 1000 ft²)), crossed with tilt
+// band 0°<ω≤15° or 15°≤ω≤60° (contiguous bands meeting at ω=15°, unlike
+// Fig. 29.4-10's gapped bands — no inter-band interpolation needed here).
+// Note 2 to this figure explicitly permits LINEAR interpolation for
+// intermediate effective wind area A (between A1 and A2) — unlike Fig.
+// 29.4-10/30.3-x's log-area convention, this figure's own note says linear,
+// so a plain linear interpolation is used (see linLerpPts(), gsDynamic()).
+// All curves are at 1% damping (β=0.01, "1% Damping" annotation on every
+// chart); Note 1 requires scaling by √(0.01/β) for any other damping ratio,
+// valid only for β ≤ 0.05 — applied in gsDynamic(), flagged if β exceeds it.
+// ------------------------------------------------------------------
+const GS_GCGN_DYNAMIC = {
+  loOmegaLo: { zone1: [[0,1.2],[0.2,1.2],[0.7,0.36],[0.8,0.36]],
+               zone2: [[0,2.2],[0.2,2.2],[0.7,0.8],[0.8,0.8]] },              // A≤A1, 0°<ω≤15°
+  loOmegaHi: { zone1: [[0,2.4],[0.2,2.4],[0.3,1.2],[0.7,0.4],[0.8,0.4]],
+               zone2: [[0,4.2],[0.2,4.2],[0.3,1.6],[0.7,0.4],[0.8,0.4]] },    // A≤A1, 15°≤ω≤60°
+  hiOmegaLo: { zone1: [[0,0.9],[0.2,0.9],[0.7,0.2],[0.8,0.2]],
+               zone2: [[0,1.2],[0.2,1.2],[0.7,0.3],[0.8,0.3]] },              // A≥A2, 0°<ω≤15°
+  hiOmegaHi: { zone1: [[0,1.7],[0.2,1.7],[0.3,0.8],[0.7,0.4],[0.8,0.4]],
+               zone2: [[0,3.4],[0.2,3.4],[0.3,1.2],[0.7,0.4],[0.8,0.4]] }     // A≥A2, 15°≤ω≤60°
+};
+const GS_GCGM_DYNAMIC = {
+  loOmegaLo: { zone1: [[0,0.27],[0.2,0.27],[0.7,0.08],[0.8,0.08]],
+               zone2: [[0,0.4],[0.2,0.4],[0.7,0.17],[0.8,0.17]] },
+  loOmegaHi: { zone1: [[0,0.4],[0.2,0.4],[0.3,0.26],[0.7,0.1],[0.8,0.1]],
+               zone2: [[0,0.75],[0.2,0.75],[0.3,0.4],[0.7,0.18],[0.8,0.18]] },
+  hiOmegaLo: { zone1: [[0,0.2],[0.2,0.2],[0.7,0.05],[0.8,0.05]],
+               zone2: [[0,0.26],[0.2,0.26],[0.7,0.10],[0.8,0.10]] },
+  hiOmegaHi: { zone1: [[0,0.34],[0.2,0.34],[0.3,0.18],[0.7,0.08],[0.8,0.08]],
+               zone2: [[0,0.64],[0.2,0.64],[0.3,0.28],[0.7,0.08],[0.8,0.08]] }
+};
+// Plain linear interpolation across breakpoints (the Ns axis here is linear,
+// 0–0.8 — unlike the log10-area axis used for Figs. 29.4-7/29.4-10/30.3-x).
+// No extrapolation past the table's domain: clamps to the end-point value.
+function linLerpPts(x, pts) {
+  const n = pts.length;
+  const xc = Math.min(Math.max(x, pts[0][0]), pts[n - 1][0]);
+  for (let i = 0; i < n - 1; i++) {
+    const x0 = pts[i][0], v0 = pts[i][1], x1 = pts[i + 1][0], v1 = pts[i + 1][1];
+    if (xc <= x1 || i === n - 2) {
+      if (x1 === x0) return v0;
+      const t = (xc - x0) / (x1 - x0);
+      return v0 + t * (v1 - v0);
+    }
+  }
+  return pts[n - 1][1];
+}
+// Interpolate a Fig. 29.4-11 dynamic coefficient at given reduced frequency
+// Ns, zone (1|2), tilt ω (deg), effective wind area A vs. thresholds A1/A2,
+// and damping ratio beta (fraction, e.g. 0.01 = 1%). Per Note 2, A between
+// A1 and A2 is interpolated LINEARLY between the A≤A1 and A≥A2 chart values
+// (at the same Ns). Per Note 1, the result is scaled by √(0.01/beta).
+function gsDynamic(table, Ns, zone, omega, A, A1, A2, beta) {
+  const key = (zone === 2) ? 'zone2' : 'zone1';
+  const suf = (omega <= 15) ? 'OmegaLo' : 'OmegaHi';
+  const loVal = linLerpPts(Ns, table['lo' + suf][key]);
+  const hiVal = linLerpPts(Ns, table['hi' + suf][key]);
+  let base;
+  if (A <= A1) base = loVal;
+  else if (A >= A2) base = hiVal;
+  else {
+    const t = (A2 > A1) ? (A - A1) / (A2 - A1) : 0;
+    base = loVal + t * (hiVal - loVal);
+  }
+  const scale = Math.sqrt(0.01 / Math.max(beta, 1e-6)); // Note 1
+  return base * scale;
 }
 
 // ------------------------------------------------------------------
@@ -3730,8 +3806,8 @@ function computeCh29(s) {
     // Sec. 29.4.5 Ground-Mounted Fixed-Tilt Solar Panel Systems
     // Eq. 29.4-8: Fn = qh·Kd·(GCgn)·A   (h = mean panel height, bound to shared ch29H)
     // Eq. 29.4-9: Mc = qh·Kd·(GCgm)·A·Lc
-    // (GCgn)/(GCgm) — STATIC term only (Fig. 29.4-10); dynamic term (Fig. 29.4-11) not
-    // available — see gsStatic()/GS_GCGN_STATIC comments above for full disclosure.
+    // (GCgn)/(GCgm) = static term (Fig. 29.4-10) combined with dynamic term
+    // (Fig. 29.4-11) per Eqs. 29.4-10/29.4-11 — see gsStatic()/gsDynamic() above.
     const KD = 0.85; // Table 26.6-1 has no dedicated "solar panel" line item found in the
                       // extracted text; 0.85 applied by the same category fallback already
                       // used for rooftop solar panels (most structure types default to 0.85)
@@ -3747,6 +3823,8 @@ function computeCh29(s) {
     const blockage = s.ch29GsBlockage;
     const A    = s.ch29GsA;
     const zoneSel = s.ch29GsZone;
+    const freq = s.ch29GsFreq;    // n, lowest natural frequency of the array, Hz
+    const beta = s.ch29GsDamping; // damping ratio β (fraction, e.g. 0.01 = 1%)
 
     // Sec. 29.4.5.1 Scope — applicability checks (all disclosed, none invented)
     var warnings = [];
@@ -3763,18 +3841,38 @@ function computeCh29(s) {
     if (ST > 2 * Srow)            warnings.push('ST = ' + fmt(ST,2) + ' ft exceeds 2·S = ' + fmt(2*Srow,2) + ' ft');
     if (rows < 3)                 warnings.push('Number of rows = ' + rows + ' < 3 (min. per Sec. 29.4.5.1)');
     if (blockage > 8)             warnings.push('Support-framing blockage ratio = ' + fmt(blockage,1) + '% exceeds 8% (over any 4·Lc length)');
+    if (beta > 0.05)              warnings.push('Damping β = ' + fmt(beta*100,2) + '% exceeds 5% (Fig. 29.4-11, Note 1 valid only for β ≤ 0.05)');
 
     // Forced-Zone-2 overrides, per Sec. 29.4.5.1 notes:
     const forceZone2_LcS = (LcS >= 0.20 && LcS < 0.25);
     const forceZone2_Kzt = KZT > 1.0;
     const zone = (forceZone2_LcS || forceZone2_Kzt) ? 2 : zoneSel;
 
-    const GCgn = gsStatic(GS_GCGN_STATIC, A, zone, omega);
-    const GCgm = gsStatic(GS_GCGM_STATIC, A, zone, omega);
-    // Static term applied with both signs (±), mirroring how the existing
-    // rooftop solar-panel feature reports its analogous (GCrn) — see
-    // reportCh29HTML 'solarPanel' branch — since the omitted dynamic term is
-    // the only piece that would otherwise fix the combined sign per Eq. 29.4-10/11.
+    // Static term — Fig. 29.4-10 (Eqs. 29.4-10/29.4-11, first term)
+    const GCgnStatic = gsStatic(GS_GCGN_STATIC, A, zone, omega);
+    const GCgmStatic = gsStatic(GS_GCGM_STATIC, A, zone, omega);
+
+    // Reduced frequency Ns, Eq. 29.4-12 (US units): Ns = 0.682·n·Lc/V
+    const Ns = (s.V > 0) ? 0.682 * freq * Lc / s.V : 0;
+    // Fig. 29.4-11 Notation: A1 = min(4Lc², 500 ft²), A2 = min(15Lc², 1000 ft²)
+    const A1 = Math.min(4 * Lc * Lc, 500);
+    const A2 = Math.min(15 * Lc * Lc, 1000);
+    // Dynamic term — Fig. 29.4-11 (Eqs. 29.4-10/29.4-11, second term), already
+    // scaled for damping β per Note 1 inside gsDynamic()
+    const GCgnDynamic = gsDynamic(GS_GCGN_DYNAMIC, Ns, zone, omega, A, A1, A2, beta);
+    const GCgmDynamic = gsDynamic(GS_GCGM_DYNAMIC, Ns, zone, omega, A, A1, A2, beta);
+
+    // Eqs. 29.4-10/29.4-11: (GCgn) = (GCgn_static) ± (GCgn_dynamic), "applied
+    // with the sign that yields the most adverse load effect." Both the
+    // static and dynamic table values are tabulated as non-negative
+    // magnitudes (same convention as GCrn for rooftop solar panels), so the
+    // "minus" combination is never larger in magnitude than "plus" — the
+    // most-adverse choice is always to ADD the two terms. The resulting
+    // combined magnitude is then itself applied with the overall ± sign to
+    // represent the two physical load directions (uplift/suction and
+    // downward/pressure), exactly as already done for the static-only case.
+    const GCgn = GCgnStatic + GCgnDynamic;
+    const GCgm = GCgmStatic + GCgmDynamic;
     const Fn = qh * KD * GCgn * A;     // lbf (Eq. 29.4-8 magnitude)
     const Mc = qh * KD * GCgm * A * Lc; // lbf·ft (Eq. 29.4-9 magnitude)
     // Sec. 29.4.5.3: horizontal component of Fn shall be ≥ 0.1× the vertical component
@@ -3784,9 +3882,11 @@ function computeCh29(s) {
              h, omega, Lc, Wg, S: Srow, sp, SL, ST, rows, blockage, A,
              zoneSel, zone, forceZone2_LcS, forceZone2_Kzt,
              WgLc, hLc, LcS, KZT,
+             freq, beta, Ns, A1, A2,
+             GCgnStatic, GCgmStatic, GCgnDynamic, GCgmDynamic,
              GCgn, GCgm, Fn, Mc, FnH_min,
              warnings,
-             eqRef: 'Eqs. 29.4-8/29.4-9', cfRef: 'Fig. 29.4-10 (static only)' };
+             eqRef: 'Eqs. 29.4-8/29.4-9', cfRef: 'Figs. 29.4-10/29.4-11' };
   }
 
   return null;
@@ -3999,15 +4099,6 @@ function reportCh29HTML(r) {
   } else if (c.type === 'groundSolar') {
     var ZONE_NAMES_GS = ['', 'Zone 1 — Interior (shielded)', 'Zone 2 — Exterior perimeter'];
     html += '<h3>Ground-Mounted Fixed-Tilt Solar Panels <span class="ref">Sec. 29.4.5, Eqs. 29.4-8/29.4-9</span></h3>';
-    html += '<div class="alert warn" style="font-size:0.82em;margin-bottom:8px;">'
-          + '<strong>Dynamic term omitted:</strong> Eq. 29.4-10/29.4-11 define '
-          + '(GC<sub>gn</sub>) = (GC<sub>gn</sub>)<sub>static</sub> &plusmn; (GC<sub>gn</sub>)<sub>dynamic</sub> '
-          + '(and likewise for (GC<sub>gm</sub>)). Only the <strong>static</strong> term (Fig. 29.4-10, '
-          + 'digitized directly from the figure) is implemented below &mdash; the dynamic term '
-          + '(Fig. 29.4-11, which requires the array&rsquo;s reduced frequency N<sub>s</sub> per '
-          + 'Eq. 29.4-12) has not been supplied and is <strong>not</strong> included. '
-          + 'Omitting it may <strong>underestimate</strong> the governing force/moment &mdash; '
-          + 'do not use for final design until Fig. 29.4-11 data is added.</div>';
     if (c.warnings && c.warnings.length) {
       html += '<div class="alert warn"><strong>Applicability (Sec. 29.4.5.1 Scope):</strong> ' +
         c.warnings.map(function(w){return '<br>&bull; '+w;}).join('') + '</div>';
@@ -4015,9 +4106,14 @@ function reportCh29HTML(r) {
     html += '<div class="alert info" style="font-size:0.82em;margin-bottom:8px;">'
           + '<strong>Note:</strong> all rows in the array must have the same chord length '
           + '(Sec. 29.4.5.1) &mdash; not numerically checkable here; verify directly. '
-          + 'The 5°&ndash;15° tilt gap in Fig. 29.4-10 is bridged by linear interpolation in '
-          + '&omega;, the same convention already used for the analogous gap in Fig. 29.4-7 '
-          + '(rooftop solar panels) &mdash; an engineering judgment by analogy, not a Standard value.</div>';
+          + 'The 5°&ndash;15° tilt gap in Fig. 29.4-10 (static term) is bridged by linear '
+          + 'interpolation in &omega;, the same convention already used for the analogous gap '
+          + 'in Fig. 29.4-7 (rooftop solar panels) &mdash; an engineering judgment by analogy, '
+          + 'not a Standard value. Per Eqs. 29.4-10/29.4-11, (GC<sub>gn</sub>) = '
+          + '(GC<sub>gn</sub>)<sub>static</sub> &plusmn; (GC<sub>gn</sub>)<sub>dynamic</sub> '
+          + '(likewise for (GC<sub>gm</sub>)); since both tabulated terms are non-negative '
+          + 'magnitudes, the <strong>most-adverse (&ldquo;+&rdquo;) combination is always used</strong> '
+          + 'below &mdash; see the engine.js comments for the full disclosure of this convention.</div>';
     html += '<table class="report-input-table"><tbody>'
           + '<tr><td>Tilt angle &omega;</td><td>' + fmt(c.omega,1) + '&deg;</td></tr>'
           + '<tr><td>Chord length L<sub>c</sub></td><td>' + fmt(lengthOut(c.Lc),2) + ' ' + lU + '</td></tr>'
@@ -4040,16 +4136,27 @@ function reportCh29HTML(r) {
           + '<tr><td>Effective zone used</td><td>' + (ZONE_NAMES_GS[c.zone]||'Zone '+c.zone) +
           (c.forceZone2_LcS ? ' (forced: 0.20&le;L<sub>c</sub>/S&lt;0.25)' : '') +
           (c.forceZone2_Kzt ? ' (forced: K<sub>zt</sub>&gt;1.0)' : '') + '</td></tr>'
-          + '<tr><td>(GC<sub>gn</sub>)<sub>static</sub> &mdash; Fig. 29.4-10</td><td><strong>' + fmt(c.GCgn,3) + '</strong></td></tr>'
-          + '<tr><td>(GC<sub>gm</sub>)<sub>static</sub> &mdash; Fig. 29.4-10</td><td><strong>' + fmt(c.GCgm,3) + '</strong></td></tr>'
+          + '</tbody></table>'
+          + '<h4>Dynamic Term Inputs <span class="ref">Fig. 29.4-11, Eq. 29.4-12</span></h4>'
+          + '<table class="report-input-table"><tbody>'
+          + '<tr><td>Natural frequency n</td><td>' + fmt(c.freq,2) + ' Hz</td></tr>'
+          + '<tr><td>Damping ratio &beta;</td><td>' + fmt(c.beta*100,2) + '%</td></tr>'
+          + '<tr><td>N<sub>s</sub> = 0.682&middot;n&middot;L<sub>c</sub>/V &mdash; Eq. 29.4-12</td><td>' + fmt(c.Ns,4) + '</td></tr>'
+          + '<tr><td>A<sub>1</sub> = min(4L<sub>c</sub>&sup2;, 500 ft&sup2;)</td><td>' + fmt(areaOut(c.A1),1) + ' ' + aU + '</td></tr>'
+          + '<tr><td>A<sub>2</sub> = min(15L<sub>c</sub>&sup2;, 1000 ft&sup2;)</td><td>' + fmt(areaOut(c.A2),1) + ' ' + aU + '</td></tr>'
+          + '</tbody></table>'
+          + '<table class="report-input-table"><tbody>'
+          + '<tr><th></th><th>Static (Fig. 29.4-10)</th><th>Dynamic (Fig. 29.4-11)</th><th>Combined</th></tr>'
+          + '<tr><td>(GC<sub>gn</sub>)</td><td>' + fmt(c.GCgnStatic,3) + '</td><td>' + fmt(c.GCgnDynamic,3) + '</td><td><strong>' + fmt(c.GCgn,3) + '</strong></td></tr>'
+          + '<tr><td>(GC<sub>gm</sub>)</td><td>' + fmt(c.GCgmStatic,3) + '</td><td>' + fmt(c.GCgmDynamic,3) + '</td><td><strong>' + fmt(c.GCgm,3) + '</strong></td></tr>'
           + '</tbody></table>'
           + '<table class="report-table"><thead><tr>'
           + '<th>Quantity</th><th>Formula</th><th>Value (&plusmn;)</th></tr></thead><tbody>'
           + '<tr><td>F<sub>n</sub> (normal force)</td>'
-          + '<td>q<sub>h</sub>&middot;K<sub>d</sub>&middot;(GC<sub>gn</sub>)<sub>static</sub>&middot;A</td>'
+          + '<td>q<sub>h</sub>&middot;K<sub>d</sub>&middot;(GC<sub>gn</sub>)&middot;A</td>'
           + '<td class="val-pos">&plusmn;' + f2(c.Fn) + ' ' + fU + '</td></tr>'
           + '<tr><td>M<sub>c</sub> (moment, per unit length)</td>'
-          + '<td>q<sub>h</sub>&middot;K<sub>d</sub>&middot;(GC<sub>gm</sub>)<sub>static</sub>&middot;A&middot;L<sub>c</sub></td>'
+          + '<td>q<sub>h</sub>&middot;K<sub>d</sub>&middot;(GC<sub>gm</sub>)&middot;A&middot;L<sub>c</sub></td>'
           + '<td class="val-pos">&plusmn;' + f2(c.Mc) + ' ' + fU + '&middot;' + lenU + '</td></tr>'
           + '</tbody></table>'
           + '<p class="muted" style="font-size:0.82em;">Sec. 29.4.5.3: horizontal component of F<sub>n</sub> shall be &ge; 0.1&times; '
@@ -5991,6 +6098,16 @@ function bindInputs() {
   bindCh29Num('ch29GsBlockage', 'ch29GsBlockage');
   bindCh29Area('ch29GsA',       'ch29GsA');
   bindCh29Sel('ch29GsZone',     'ch29GsZone');
+  bindCh29Num('ch29GsFreq',     'ch29GsFreq');
+  // Damping ratio input is in %, state stores the fraction (Fig. 29.4-11, Note 1)
+  const ch29GsDampingEl = document.getElementById('ch29GsDamping');
+  if (ch29GsDampingEl) {
+    ch29GsDampingEl.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      state.ch29GsDamping = isNaN(v) ? 0.01 : v / 100;
+      renderResults();
+    });
+  }
 
   // Sec. 30.5 Open Building C&C bindings
   var bind305 = function(id, key, parser) {
