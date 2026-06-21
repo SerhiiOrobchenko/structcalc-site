@@ -4297,6 +4297,51 @@ function reportCircTankHTML(r) {
   return html;
 }
 
+// Circular bin/silo/tank elevation schematic — cylinder profile sized by wall
+// height H and diameter D, with optional support legs (elevated bin) and an
+// open/closed top, used by the single-select "Special structure" dropdown's
+// diagram swap in the top Building Geometry & Schematic panel.
+function circTankSchematicSvg(t) {
+  const W = 420, H = 230, pad = 40;
+  const groundY = H - 40;
+  const legPx = t.isElevated ? 30 : 0;
+  const maxHpx = H - 80 - legPx, maxDpx = W - 2 * pad - 40;
+  const scale = Math.min(maxHpx / t.H, maxDpx / t.D);
+  const Dpx = t.D * scale, Hpx = t.H * scale;
+  const cx = W / 2;
+  const baseY = groundY - legPx;
+  const topY = baseY - Hpx;
+  let s = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">`;
+  // ground
+  s += `<line x1="${pad - 10}" y1="${groundY}" x2="${W - pad + 10}" y2="${groundY}" stroke="#888" stroke-width="1"/>`;
+  // elevated support legs
+  if (t.isElevated) {
+    [cx - Dpx / 2 + 6, cx + Dpx / 2 - 6].forEach(lx => {
+      s += `<line x1="${lx}" y1="${baseY}" x2="${lx}" y2="${groundY}" stroke="#5b6b7c" stroke-width="3"/>`;
+    });
+  }
+  // cylinder wall
+  s += `<rect x="${cx - Dpx / 2}" y="${topY}" width="${Dpx}" height="${Hpx}" fill="none" stroke="#1c2733" stroke-width="1.5"/>`;
+  // top cap — dashed ellipse if open-topped, filled ellipse if closed
+  if (t.isOpenTop) {
+    s += `<ellipse cx="${cx}" cy="${topY}" rx="${Dpx / 2}" ry="6" fill="none" stroke="#1c2733" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+  } else {
+    s += `<ellipse cx="${cx}" cy="${topY}" rx="${Dpx / 2}" ry="6" fill="#d6ecf8" stroke="#1c2733" stroke-width="1.5"/>`;
+  }
+  // dimension callouts: D (top) and H (side)
+  s += `<line x1="${cx - Dpx / 2}" y1="${topY - 16}" x2="${cx + Dpx / 2}" y2="${topY - 16}" stroke="var(--muted)" stroke-width="1"/>`;
+  s += `<text x="${cx}" y="${topY - 20}" font-size="9" fill="var(--muted)" text-anchor="middle">D = ${fmt(lengthOut(t.D), 1)} ${state.unitSystem === 'SI' ? 'm' : 'ft'}</text>`;
+  s += `<line x1="${cx + Dpx / 2 + 14}" y1="${topY}" x2="${cx + Dpx / 2 + 14}" y2="${baseY}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3,2"/>`;
+  s += `<text x="${cx + Dpx / 2 + 18}" y="${(topY + baseY) / 2}" font-size="9" fill="var(--muted)" text-anchor="start" dominant-baseline="middle">H = ${fmt(lengthOut(t.H), 1)} ${state.unitSystem === 'SI' ? 'm' : 'ft'}</text>`;
+  // wind arrow
+  s += `<line x1="6" y1="${(topY + baseY) / 2}" x2="${cx - Dpx / 2 - 8}" y2="${(topY + baseY) / 2}" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrowTank)"/>`;
+  s += `<text x="6" y="${(topY + baseY) / 2 - 6}" font-size="9" fill="var(--accent)">Wind</text>`;
+  s += `<defs><marker id="arrowTank" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="var(--accent)"/></marker></defs>`;
+  s += `<text x="${cx}" y="14" font-size="9" fill="var(--muted)" text-anchor="middle">${t.isElevated ? 'Elevated' : 'Ground-supported'} circular bin/silo/tank${t.isOpenTop ? ' (open top)' : ''}</text>`;
+  s += `</svg>`;
+  return s;
+}
+
 // Stepped roof elevation diagram — side-profile SVG showing the taller and
 // lower roof levels, the step, and the widened step-adjacent zone band.
 function steppedRoofSvg(t) {
@@ -4934,6 +4979,36 @@ function buildReportHTML(r) {
    28.3-1/30.3-1/30.3-2A) and reported in the C&C / MWFRS tables.
    ===================================================================== */
 function renderDiagram(r) {
+  // Single-select "Special structure" dropdown: when one of the special
+  // roof/structure types is active, swap the generic Elevation/Plan pair
+  // for that type's own dedicated schematic SVG (reusing the same per-type
+  // functions already used in each type's report section) instead of the
+  // generic low-rise building elevation/plan below.
+  const genericWrap = document.getElementById('genericSchematicWrap');
+  const specialWrap = document.getElementById('specialSchematicWrap');
+  const specialLabel = document.getElementById('specialSchematicLabel');
+  const specialSvgEl = document.getElementById('specialSchematicSvg');
+  const specialType = specialRoofTypeFromState(state);
+  const SPECIAL_SVG = {
+    circTank: { key: 'circTank', fn: circTankSchematicSvg, label: 'Schematic — Circular bin/silo/tank (Sec. 30.10)' },
+    stepped: { key: 'steppedRoof', fn: steppedRoofSvg, label: 'Schematic — Stepped roof (Fig. 30.3-3)' },
+    multispan: { key: 'multispanRoof', fn: multispanRoofSvg, label: 'Schematic — Multispan gable roof, plan view (Fig. 30.3-4)' },
+    sawtooth: { key: 'sawtoothRoof', fn: sawtoothRoofSvg, label: 'Schematic — Sawtooth roof (Fig. 30.3-6)' },
+    dome: { key: 'domeRoof', fn: domeRoofSvg, label: 'Schematic — Domed roof (Fig. 30.3-7)' },
+    monoslope: { key: 'monoslopeRoof', fn: monoslopeRoofSvg, label: 'Schematic — Monoslope roof (Fig. 30.3-5A/5B)' }
+  };
+  const spec = SPECIAL_SVG[specialType];
+  const specData = spec ? r[spec.key] : null;
+  if (spec && specData && specialWrap && specialSvgEl) {
+    if (genericWrap) genericWrap.style.display = 'none';
+    specialWrap.style.display = '';
+    if (specialLabel) specialLabel.textContent = spec.label;
+    specialSvgEl.innerHTML = spec.fn(specData);
+    return;
+  }
+  if (genericWrap) genericWrap.style.display = '';
+  if (specialWrap) specialWrap.style.display = 'none';
+
   const elev = document.getElementById('elevSvg');
   const plan = document.getElementById('planSvg');
   const note = document.getElementById('enclosureNote');
@@ -5775,6 +5850,24 @@ function bindInputs() {
     });
   }
 
+  // Single-select "Special structure" dropdown — sets exactly one of the 6
+  // underlying booleans true (and the rest false), then reuses the same
+  // visibility-toggle + diagram-swap logic as before.
+  const specialRoofTypeEl = document.getElementById('specialRoofType');
+  if (specialRoofTypeEl) {
+    specialRoofTypeEl.addEventListener('change', e => {
+      const v = e.target.value;
+      state.hasCircularTank  = (v === 'circTank');
+      state.hasSteppedRoof   = (v === 'stepped');
+      state.hasMultispanRoof = (v === 'multispan');
+      state.hasSawtoothRoof  = (v === 'sawtooth');
+      state.hasDomeRoof      = (v === 'dome');
+      state.hasMonoslopeRoof = (v === 'monoslope');
+      applySpecialRoofVisibility();
+      renderResults();
+    });
+  }
+
   // Circular Bins, Silos, and Tanks (Sec. 30.10) toggle + geometry
   const hasCircularTankEl = document.getElementById('hasCircularTank');
   if (hasCircularTankEl) {
@@ -6227,6 +6320,30 @@ function applyStructureCategoryVisibility() {
   const rows = document.querySelectorAll('#ch29TypeRows .ch29-row');
   rows.forEach(row => row.classList.remove('active'));
   const activeRow = document.getElementById('ch29-' + state.ch29Type);
+  if (activeRow) activeRow.classList.add('active');
+}
+
+// Single-select "Special structure" dropdown (#specialRoofType) — replaces
+// the former 6 independent checkboxes (hasCircularTank, hasSteppedRoof,
+// hasMultispanRoof, hasSawtoothRoof, hasDomeRoof, hasMonoslopeRoof) with one
+// mutually-exclusive selector. The 6 underlying boolean state flags are kept
+// completely unchanged so no downstream compute()/report()/export() logic
+// needs modification — this dropdown is purely a UI-layer abstraction that
+// sets exactly one boolean true and the rest false.
+function specialRoofTypeFromState(s) {
+  if (s.hasCircularTank)  return 'circTank';
+  if (s.hasSteppedRoof)   return 'stepped';
+  if (s.hasMultispanRoof) return 'multispan';
+  if (s.hasSawtoothRoof)  return 'sawtooth';
+  if (s.hasDomeRoof)      return 'dome';
+  if (s.hasMonoslopeRoof) return 'monoslope';
+  return 'none';
+}
+function applySpecialRoofVisibility() {
+  const el = document.getElementById('specialRoofType');
+  const v = el ? el.value : 'none';
+  document.querySelectorAll('#specialRoofRows .special-row').forEach(row => row.classList.remove('active'));
+  const activeRow = document.getElementById('special-' + v);
   if (activeRow) activeRow.classList.add('active');
 }
 
@@ -7794,6 +7911,10 @@ function init() {
   const hasMonoslopeRoofElInit = document.getElementById('hasMonoslopeRoof');
   if (hasMonoslopeRoofElInit) hasMonoslopeRoofElInit.checked = !!state.hasMonoslopeRoof;
 
+  const specialRoofTypeElInit = document.getElementById('specialRoofType');
+  if (specialRoofTypeElInit) specialRoofTypeElInit.value = specialRoofTypeFromState(state);
+  applySpecialRoofVisibility();
+
   // Open Building — Free Roof (Sec. 27.3.2) inputs
   const openRoofShapeEl = document.getElementById('openRoofShape');
   if (openRoofShapeEl) openRoofShapeEl.value = state.openRoofShape;
@@ -7940,6 +8061,11 @@ document.addEventListener('DOMContentLoaded', init);
     // Monoslope Roofs (Fig. 30.3-5A/5B) toggle
     const hasMonoslopeRoofEl2 = document.getElementById('hasMonoslopeRoof');
     if (hasMonoslopeRoofEl2) hasMonoslopeRoofEl2.checked = !!state.hasMonoslopeRoof;
+
+    // Single-select special-structure dropdown — sync from the 6 booleans above
+    const specialRoofTypeEl2 = document.getElementById('specialRoofType');
+    if (specialRoofTypeEl2) specialRoofTypeEl2.value = specialRoofTypeFromState(state);
+    applySpecialRoofVisibility();
 
     // Open Building — Free Roof (Sec. 27.3.2) inputs
     const openRoofShapeEl = document.getElementById('openRoofShape');

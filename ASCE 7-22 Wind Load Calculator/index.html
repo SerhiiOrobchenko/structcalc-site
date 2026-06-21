@@ -86,6 +86,9 @@
   /* Sub-type field visibility within ch29Inputs */
   #ch29TypeRows .ch29-row{display:none;}
   #ch29TypeRows .ch29-row.active{display:block;}
+  /* Sub-type field visibility within the Building Geometry special-structure selector */
+  #specialRoofRows .special-row{display:none;}
+  #specialRoofRows .special-row.active{display:block;}
   .mode-badge{
     display:inline-block; background:#fff; color:var(--brand); border-radius:4px;
     padding:2px 10px; font-size:.8rem; font-weight:700; margin-left:8px; vertical-align:middle;
@@ -518,102 +521,125 @@
           </div>
         </div>
         <div class="row2">
-          <div class="field checkbox-field">
-            <label for="hasCircularTank"><input type="checkbox" id="hasCircularTank"> Circular bin, silo, or tank <span class="ref">Sec. 30.10</span><button type="button" class="info-btn" data-info="circTank" aria-label="Learn more">i</button></label>
+          <div class="field field-full">
+            <label for="specialRoofType">Special roof / structure configuration</label>
+            <select id="specialRoofType">
+              <option value="none">None &mdash; standard (use Roof type above)</option>
+              <option value="circTank">Circular bin, silo, or tank (Sec. 30.10)</option>
+              <option value="stepped">Stepped (multi-level flat) roof (Fig. 30.3-3)</option>
+              <option value="multispan">Multispan gable roof, 2+ spans (Fig. 30.3-4)</option>
+              <option value="sawtooth">Sawtooth roof, 2+ spans (Fig. 30.3-6)</option>
+              <option value="dome">Domed roof, circular base (Fig. 30.3-7)</option>
+              <option value="monoslope">Monoslope roof, 3&deg; &lt; &theta; &le; 30&deg; (Fig. 30.3-5A/5B)</option>
+            </select>
           </div>
         </div>
-        <div class="row2" id="circTankGeomRow">
-          <div class="field">
-            <label for="tankD">Diameter, D (<span id="lblTankD">ft</span>)<button type="button" class="info-btn" data-info="circTank" aria-label="Learn more">i</button></label>
-            <input type="number" id="tankD" step="any" min="0">
+
+        <div id="specialRoofRows">
+
+          <!-- Circular Bins, Silos, and Tanks (Sec. 30.10) -->
+          <div class="special-row" id="special-circTank">
+            <div class="row2" id="circTankGeomRow">
+              <div class="field">
+                <label for="tankD">Diameter, D (<span id="lblTankD">ft</span>)<button type="button" class="info-btn" data-info="circTank" aria-label="Learn more">i</button></label>
+                <input type="number" id="tankD" step="any" min="0">
+              </div>
+              <div class="field">
+                <label for="tankH">Cylinder height, H (<span id="lblTankH">ft</span>)<button type="button" class="info-btn" data-info="circTank" aria-label="Learn more">i</button></label>
+                <input type="number" id="tankH" step="any" min="0">
+              </div>
+            </div>
+            <div class="row2" id="circTankOptRow">
+              <div class="field checkbox-field">
+                <label for="tankOpenTop"><input type="checkbox" id="tankOpenTop"> Open-topped <span class="ref">Sec. 30.10.3, Eq. 30.10-5</span><button type="button" class="info-btn" data-info="circTank" aria-label="Learn more">i</button></label>
+              </div>
+              <div class="field checkbox-field">
+                <label for="tankElevated"><input type="checkbox" id="tankElevated"> Elevated on columns <span class="ref">Sec. 30.10.5</span><button type="button" class="info-btn" data-info="circTank" aria-label="Learn more">i</button></label>
+              </div>
+            </div>
           </div>
-          <div class="field">
-            <label for="tankH">Cylinder height, H (<span id="lblTankH">ft</span>)<button type="button" class="info-btn" data-info="circTank" aria-label="Learn more">i</button></label>
-            <input type="number" id="tankH" step="any" min="0">
+
+          <!-- Stepped Roofs (Fig. 30.3-3) -->
+          <div class="special-row" id="special-stepped">
+            <div class="row2" id="steppedRoofGeomRow">
+              <div class="field">
+                <label for="steppedLowerH">Lower roof mean height (<span id="lblSteppedLowerH">ft</span>)<button type="button" class="info-btn" data-info="steppedRoof" aria-label="Learn more">i</button></label>
+                <input type="number" id="steppedLowerH" step="any" min="0">
+              </div>
+              <div class="field">
+                <label for="steppedLowerW">Lower roof width, W<sub>L</sub> (<span id="lblSteppedLowerW">ft</span>)<button type="button" class="info-btn" data-info="steppedRoof" aria-label="Learn more">i</button></label>
+                <input type="number" id="steppedLowerW" step="any" min="0">
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="row2" id="circTankOptRow">
-          <div class="field checkbox-field">
-            <label for="tankOpenTop"><input type="checkbox" id="tankOpenTop"> Open-topped <span class="ref">Sec. 30.10.3, Eq. 30.10-5</span><button type="button" class="info-btn" data-info="circTank" aria-label="Learn more">i</button></label>
+
+          <!-- Multispan Gable Roofs (Fig. 30.3-4) -->
+          <div class="special-row" id="special-multispan">
+            <div class="row2">
+              <div class="field">
+                <label for="msModuleW">Single-span module width, W&prime; (<span id="lblMsModuleW">ft</span>)<button type="button" class="info-btn" data-info="multispanRoof" aria-label="Learn more">i</button></label>
+                <input type="number" id="msModuleW" step="any" min="0">
+              </div>
+            </div>
           </div>
-          <div class="field checkbox-field">
-            <label for="tankElevated"><input type="checkbox" id="tankElevated"> Elevated on columns <span class="ref">Sec. 30.10.5</span><button type="button" class="info-btn" data-info="circTank" aria-label="Learn more">i</button></label>
+
+          <!-- Sawtooth Roofs (Fig. 30.3-6) -->
+          <div class="special-row" id="special-sawtooth">
+            <div class="row2">
+              <div class="field">
+                <label for="swModuleW">Single-span module width, W (<span id="lblSwModuleW">ft</span>)<button type="button" class="info-btn" data-info="sawtoothRoof" aria-label="Learn more">i</button></label>
+                <input type="number" id="swModuleW" step="any" min="0">
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="row2">
-          <div class="field checkbox-field">
-            <label for="hasSteppedRoof"><input type="checkbox" id="hasSteppedRoof"> Stepped (multi-level flat) roof <span class="ref">Fig. 30.3-3</span><button type="button" class="info-btn" data-info="steppedRoof" aria-label="Learn more">i</button></label>
+
+          <!-- Domed Roofs (Fig. 30.3-7) -->
+          <div class="special-row" id="special-dome">
+            <div class="row2" id="domeRoofGeomRow">
+              <div class="field">
+                <label for="domeD">Diameter, D (<span id="lblDomeD">ft</span>)<button type="button" class="info-btn" data-info="domeRoof" aria-label="Learn more">i</button></label>
+                <input type="number" id="domeD" step="any" min="0">
+              </div>
+              <div class="field">
+                <label for="domeF">Dome rise, f (<span id="lblDomeF">ft</span>)<button type="button" class="info-btn" data-info="domeRoof" aria-label="Learn more">i</button></label>
+                <input type="number" id="domeF" step="any" min="0">
+              </div>
+            </div>
+            <div class="row2" id="domeRoofGeomRow2">
+              <div class="field">
+                <label for="domeHD">Height to base of dome, h<sub>D</sub> (<span id="lblDomeHD">ft</span>)<button type="button" class="info-btn" data-info="domeRoof" aria-label="Learn more">i</button></label>
+                <input type="number" id="domeHD" step="any" min="0">
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="row2" id="steppedRoofGeomRow">
-          <div class="field">
-            <label for="steppedLowerH">Lower roof mean height (<span id="lblSteppedLowerH">ft</span>)<button type="button" class="info-btn" data-info="steppedRoof" aria-label="Learn more">i</button></label>
-            <input type="number" id="steppedLowerH" step="any" min="0">
+
+          <!-- Monoslope Roofs (Fig. 30.3-5A/5B) — reuses theta/h/minDim/areaRoof above -->
+          <div class="special-row" id="special-monoslope">
+            <p class="muted" style="margin:0 0 4px; font-size:.82rem;">Reuses the Roof angle &theta;, Mean roof height h, Bldg. width B, and Roof C&amp;C effective wind area fields already entered above &mdash; no separate geometry inputs needed.</p>
           </div>
-          <div class="field">
-            <label for="steppedLowerW">Lower roof width, W<sub>L</sub> (<span id="lblSteppedLowerW">ft</span>)<button type="button" class="info-btn" data-info="steppedRoof" aria-label="Learn more">i</button></label>
-            <input type="number" id="steppedLowerW" step="any" min="0">
-          </div>
-        </div>
-        <div class="row2">
-          <div class="field checkbox-field">
-            <label for="hasMultispanRoof"><input type="checkbox" id="hasMultispanRoof"> Multispan gable roof (2+ spans) <span class="ref">Fig. 30.3-4</span><button type="button" class="info-btn" data-info="multispanRoof" aria-label="Learn more">i</button></label>
-          </div>
-          <div class="field">
-            <label for="msModuleW">Single-span module width, W&prime; (<span id="lblMsModuleW">ft</span>)<button type="button" class="info-btn" data-info="multispanRoof" aria-label="Learn more">i</button></label>
-            <input type="number" id="msModuleW" step="any" min="0">
-          </div>
-        </div>
-        <div class="row2">
-          <div class="field checkbox-field">
-            <label for="hasSawtoothRoof"><input type="checkbox" id="hasSawtoothRoof"> Sawtooth roof (2+ spans) <span class="ref">Fig. 30.3-6</span><button type="button" class="info-btn" data-info="sawtoothRoof" aria-label="Learn more">i</button></label>
-          </div>
-          <div class="field">
-            <label for="swModuleW">Single-span module width, W (<span id="lblSwModuleW">ft</span>)<button type="button" class="info-btn" data-info="sawtoothRoof" aria-label="Learn more">i</button></label>
-            <input type="number" id="swModuleW" step="any" min="0">
-          </div>
-        </div>
-        <div class="row2">
-          <div class="field checkbox-field">
-            <label for="hasDomeRoof"><input type="checkbox" id="hasDomeRoof"> Domed roof, circular base <span class="ref">Fig. 30.3-7</span><button type="button" class="info-btn" data-info="domeRoof" aria-label="Learn more">i</button></label>
-          </div>
-        </div>
-        <div class="row2" id="domeRoofGeomRow">
-          <div class="field">
-            <label for="domeD">Diameter, D (<span id="lblDomeD">ft</span>)<button type="button" class="info-btn" data-info="domeRoof" aria-label="Learn more">i</button></label>
-            <input type="number" id="domeD" step="any" min="0">
-          </div>
-          <div class="field">
-            <label for="domeF">Dome rise, f (<span id="lblDomeF">ft</span>)<button type="button" class="info-btn" data-info="domeRoof" aria-label="Learn more">i</button></label>
-            <input type="number" id="domeF" step="any" min="0">
-          </div>
-        </div>
-        <div class="row2" id="domeRoofGeomRow2">
-          <div class="field">
-            <label for="domeHD">Height to base of dome, h<sub>D</sub> (<span id="lblDomeHD">ft</span>)<button type="button" class="info-btn" data-info="domeRoof" aria-label="Learn more">i</button></label>
-            <input type="number" id="domeHD" step="any" min="0">
-          </div>
-        </div>
-        <div class="row2">
-          <div class="field checkbox-field">
-            <label for="hasMonoslopeRoof"><input type="checkbox" id="hasMonoslopeRoof"> Monoslope roof, 3&deg; &lt; &theta; &le; 30&deg; <span class="ref">Fig. 30.3-5A/5B</span><button type="button" class="info-btn" data-info="monoslopeRoof" aria-label="Learn more">i</button></label>
-          </div>
-        </div>
+
+        </div><!-- /specialRoofRows -->
       </div>
       <div style="flex:1 1 460px; min-width:300px;">
-        <p class="muted" style="margin:0 0 10px;">Schematic only, updates live with the inputs at left. The edge-zone width <strong>a</strong> shown is computed per the Notation under Figures 28.3-1/30.3-1/30.3-2A (<button type="button" class="info-btn" data-info="minDim" aria-label="Learn more">i</button> see "Least Horizontal Dimension"). For the exact pressure-zone layouts, see ASCE/SEI 7-22 Figure 28.3-1 (MWFRS) or Figures 30.3-1 / 30.3-2A (C&amp;C).</p>
-        <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start;">
-          <div style="flex:1; min-width:200px;">
-            <div class="muted" style="font-size:.8rem; font-weight:600; margin-bottom:4px;">Elevation</div>
-            <svg id="elevSvg" viewBox="0 0 280 200" style="width:100%; background:#fff; border:1px solid var(--line); border-radius:6px;"></svg>
+        <p class="muted" style="margin:0 0 10px;" id="schematicIntro">Schematic only, updates live with the inputs at left. The edge-zone width <strong>a</strong> shown is computed per the Notation under Figures 28.3-1/30.3-1/30.3-2A (<button type="button" class="info-btn" data-info="minDim" aria-label="Learn more">i</button> see "Least Horizontal Dimension"). For the exact pressure-zone layouts, see ASCE/SEI 7-22 Figure 28.3-1 (MWFRS) or Figures 30.3-1 / 30.3-2A (C&amp;C).</p>
+        <div id="genericSchematicWrap">
+          <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start;">
+            <div style="flex:1; min-width:200px;">
+              <div class="muted" style="font-size:.8rem; font-weight:600; margin-bottom:4px;">Elevation</div>
+              <svg id="elevSvg" viewBox="0 0 280 200" style="width:100%; background:#fff; border:1px solid var(--line); border-radius:6px;"></svg>
+            </div>
+            <div style="flex:1; min-width:200px;">
+              <div class="muted" style="font-size:.8rem; font-weight:600; margin-bottom:4px;">Plan (roof / footprint)</div>
+              <svg id="planSvg" viewBox="0 0 280 200" style="width:100%; background:#fff; border:1px solid var(--line); border-radius:6px;"></svg>
+            </div>
           </div>
-          <div style="flex:1; min-width:200px;">
-            <div class="muted" style="font-size:.8rem; font-weight:600; margin-bottom:4px;">Plan (roof / footprint)</div>
-            <svg id="planSvg" viewBox="0 0 280 200" style="width:100%; background:#fff; border:1px solid var(--line); border-radius:6px;"></svg>
-          </div>
+          <p class="muted" id="enclosureNote" style="margin-top:10px;"></p>
+          <p class="muted" id="ccZoneKey" style="margin-top:6px; font-size:.8rem;"></p>
         </div>
-        <p class="muted" id="enclosureNote" style="margin-top:10px;"></p>
-        <p class="muted" id="ccZoneKey" style="margin-top:6px; font-size:.8rem;"></p>
+        <div id="specialSchematicWrap" style="display:none;">
+          <div class="muted" style="font-size:.8rem; font-weight:600; margin-bottom:4px;" id="specialSchematicLabel">Schematic</div>
+          <div id="specialSchematicSvg" style="background:#fff; border:1px solid var(--line); border-radius:6px; padding:4px;"></div>
+        </div>
       </div>
     </div>
   </div>
