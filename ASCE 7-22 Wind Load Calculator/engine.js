@@ -3929,6 +3929,31 @@ function reportCh29InputDataHTML(r) {
 }
 
 // ------------------------------------------------------------------
+// reportSpecialStructureInputDataHTML(r, label, ref): minimal basic-
+// parameter input summary for the building-category "special structure"
+// print report (Attached Canopy, Circular Tank/Bin/Silo, Stepped/
+// Multispan/Sawtooth/Domed roof). These are each a standalone Ch.30
+// C&C calculation in their own right — the building's generic MWFRS/CC
+// Design Pressures and the roof type/shape/enclosure/parapet rows in
+// reportInputDataHTML are a separate calculation for the building itself
+// and are not part of (and must not appear alongside) these results.
+// ------------------------------------------------------------------
+function reportSpecialStructureInputDataHTML(r, label, ref) {
+  const s = state;
+  const lenUnit = s.unitSystem === 'SI' ? 'm' : 'ft';
+  const spdUnit = s.unitSystem === 'SI' ? 'm/s' : 'mph';
+  let rows = '';
+  rows += reportRow('Calculation type', label, ref);
+  rows += reportRow('Risk Category', s.riskCategory, 'Table 1.5-1');
+  rows += reportRow('Basic wind speed, V', fmt(speedOut(s.V), 1) + ' ' + spdUnit, 'Sec. 26.5.1, Figs. 26.5-1A&ndash;D');
+  rows += reportRow('Exposure category', EXPOSURE[s.exposure].label, 'Sec. 26.7.3');
+  rows += reportRow('Topographic factor, K<sub>zt</sub>', fmt(s.kzt, 2), 'Sec. 26.8.2, Fig. 26.8-1');
+  rows += reportRow('Ground elevation, z<sub>e</sub>', fmt(lengthOut(s.groundElev), 1) + ' ' + lenUnit, 'Table 26.9-1, Note 2');
+  rows += reportRow('Mean roof height, h', fmt(lengthOut(s.h), 1) + ' ' + lenUnit, 'Sec. 26.2');
+  return '<table class="report-input-table"><thead><tr><th>Parameter</th><th>Value</th><th>Reference</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+// ------------------------------------------------------------------
 // reportCh29HTML(r): render Ch.29 results
 // ------------------------------------------------------------------
 function reportCh29HTML(r) {
@@ -4977,6 +5002,56 @@ function buildReportHTML(r) {
     if (s.ch32Enabled && r.ch32) {
       html += section('Ch.32 &mdash; Tornado Loads', 'Secs. 32.1&ndash;32.17', reportCh32HTML(r.ch32, r));
     }
+    return '<table class="report-page"><thead><tr><th>' + buildTitleBlockHTML() +
+      '</th></tr></thead><tbody><tr><td>' + html + '</td></tr></tbody></table>';
+  }
+
+  // Building-category "special structure" types (Attached Canopy, Circular
+  // Tank/Bin/Silo, Stepped/Multispan/Sawtooth/Domed roof) are each a
+  // standalone Ch.30 C&C calculation. The building's own generic MWFRS/C&C
+  // Design Pressures (Ch.27/28/30 Part 1/2) and Building Geometry diagram
+  // are a separate calculation and are not relevant to these results —
+  // skip them and emit only the selected special structure's section
+  // (plus Parapet/Ch.32 Tornado Loads, if those are also applicable).
+  const specialType = specialRoofTypeFromState(s);
+  if (specialType !== 'none') {
+    const SPECIAL_LABELS = {
+      canopy:    ['Attached Canopy on Building', 'Sec. 30.9'],
+      circTank:  ['Circular Bin, Silo, or Tank', 'Sec. 30.10'],
+      stepped:   ['Stepped (Multi-Level Flat) Roof', 'Fig. 30.3-3'],
+      multispan: ['Multispan Gable Roof', 'Fig. 30.3-4'],
+      sawtooth:  ['Sawtooth Roof', 'Fig. 30.3-6'],
+      dome:      ['Domed Roof', 'Fig. 30.3-7']
+    };
+    const lbl = SPECIAL_LABELS[specialType] || [specialType, ''];
+    html += section('Project &amp; Input Data', 'ASCE/SEI 7-22, Ch. 26', reportSpecialStructureInputDataHTML(r, lbl[0], lbl[1]));
+
+    if (specialType === 'canopy' && r.canopy) {
+      html += section('Attached Canopy Wind Pressures', 'Sec. 30.9', reportCanopyHTML(r));
+    }
+    if (specialType === 'circTank' && r.circTank) {
+      html += section('Circular Bins, Silos, and Tanks &mdash; C&amp;C Pressures', 'Sec. 30.10, Eq. 30.10-1', reportCircTankHTML(r));
+    }
+    if (specialType === 'stepped' && r.steppedRoof) {
+      html += section('Stepped Roof &mdash; C&amp;C Pressures', 'Sec. 30.3.2.1, Fig. 30.3-3, Eq. 30.3-1', reportSteppedRoofHTML(r));
+    }
+    if (specialType === 'multispan' && r.multispanRoof) {
+      html += section('Multispan Gable Roof &mdash; C&amp;C Pressures', 'Fig. 30.3-4, Eq. 30.3-1', reportMultispanRoofHTML(r));
+    }
+    if (specialType === 'sawtooth' && r.sawtoothRoof) {
+      html += section('Sawtooth Roof &mdash; C&amp;C Pressures', 'Fig. 30.3-6, Eq. 30.3-1', reportSawtoothRoofHTML(r));
+    }
+    if (specialType === 'dome' && r.domeRoof) {
+      html += section('Domed Roof &mdash; C&amp;C Pressures', 'Fig. 30.3-7, Eq. 30.3-1', reportDomeRoofHTML(r));
+    }
+
+    if (s.hasParapet && r.parapet) {
+      html += section('Parapet Wind Pressures', 'Sec. 27.3.4/28.3.4 (MWFRS); Sec. 30.6 (C&amp;C)', reportParapetHTML(r));
+    }
+    if (s.ch32Enabled && r.ch32) {
+      html += section('Ch.32 &mdash; Tornado Loads', 'Secs. 32.1&ndash;32.17', reportCh32HTML(r.ch32, r));
+    }
+
     return '<table class="report-page"><thead><tr><th>' + buildTitleBlockHTML() +
       '</th></tr></thead><tbody><tr><td>' + html + '</td></tr></tbody></table>';
   }
