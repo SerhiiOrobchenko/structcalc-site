@@ -106,6 +106,10 @@
     border:1px solid var(--line); border-radius:5px; padding:6px 8px; font-size:.92rem; width:100%;
     background:#fcfdfe;
   }
+  /* Numeric inputs never need more than ~7 digits — cap their width instead of
+     letting them stretch to fill a wide grid cell (was ~1/4 of the page). */
+  .field input[type="number"]{max-width:130px;}
+  .field-full input[type="number"]{max-width:130px;}
   .checkbox-field label{gap:6px; font-weight:600; cursor:pointer;}
   .checkbox-field input[type="checkbox"]{width:auto; flex:none;}
   .row3{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
@@ -249,7 +253,13 @@
   table.report-input-table td:nth-child(3), table.report-input-table th:nth-child(3){width:5%; white-space:nowrap;}
   @media print{
     header.topbar, .info-btn, .btn, footer.sources, #exportModal{display:none !important;}
-    .intro, #projectInfoPanel, #calcSetupPanel, #diagramPanel, .grid{display:none !important;}
+    /* Hide every live input/results panel in <main> except the generated
+       print-only report (cover + reportContent). This is a catch-all so any
+       current or future input panel (Ch.29 inputs, Ch.32 toggle/inputs,
+       open-roof C&C, etc.) is hidden regardless of which structure type is
+       selected, instead of relying on an explicit per-panel list. */
+    main > *:not(.print-only){display:none !important;}
+    #ch29Section{display:none !important;}
     .print-only{display:block;}
     body{background:#fff;}
     main{max-width:100%; padding:0;}
@@ -367,6 +377,10 @@
     <p>Items not yet covered by this module are listed in the Roadmap in the footer below.</p>
   </div>
 
+  <div class="grid">
+
+    <!-- LEFT COLUMN: INPUTS -->
+    <div>
   <div class="panel" id="projectInfoPanel">
     <h2>Project Information <span class="ref">Report header</span></h2>
     <div class="report-meta">
@@ -456,8 +470,8 @@
 
   <div class="panel" id="diagramPanel">
     <h2>1. Building Geometry &amp; Schematic <span class="ref">Sec. 26.2; Fig. 28.3-1/30.3-1/30.3-2A Notation</span></h2>
-    <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start;">
-      <div style="flex:1 1 380px; min-width:300px;">
+    <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start;">
+      <div style="flex:1 1 300px; min-width:240px;">
         <div class="row2">
           <div class="field field-full">
             <label for="specialRoofType">Special roof / structure configuration</label>
@@ -618,16 +632,16 @@
           </div>
         </div>
       </div>
-      <div style="flex:1 1 460px; min-width:300px;">
-        <p class="muted" style="margin:0 0 10px;" id="schematicIntro">Schematic only, updates live with the inputs at left. The edge-zone width <strong>a</strong> shown is computed per the Notation under Figures 28.3-1/30.3-1/30.3-2A (<button type="button" class="info-btn" data-info="minDim" aria-label="Learn more">i</button> see "Least Horizontal Dimension"). For the exact pressure-zone layouts, see ASCE/SEI 7-22 Figure 28.3-1 (MWFRS) or Figures 30.3-1 / 30.3-2A (C&amp;C).</p>
+      <div style="flex:0 1 230px; min-width:180px; max-width:240px;">
+        <p class="muted" style="margin:0 0 8px; font-size:.76rem;" id="schematicIntro">Schematic only, updates live with the inputs at left. Edge-zone width <strong>a</strong> per Notation, Figs. 28.3-1/30.3-1/30.3-2A (<button type="button" class="info-btn" data-info="minDim" aria-label="Learn more">i</button>).</p>
         <div id="genericSchematicWrap">
-          <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start;">
-            <div style="flex:1; min-width:200px;">
-              <div class="muted" style="font-size:.8rem; font-weight:600; margin-bottom:4px;">Elevation</div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-start;">
+            <div style="flex:1; min-width:90px;">
+              <div class="muted" style="font-size:.72rem; font-weight:600; margin-bottom:2px;">Elevation</div>
               <svg id="elevSvg" viewBox="0 0 280 200" style="width:100%; background:#fff; border:1px solid var(--line); border-radius:6px;"></svg>
             </div>
-            <div style="flex:1; min-width:200px;">
-              <div class="muted" style="font-size:.8rem; font-weight:600; margin-bottom:4px;">Plan (roof / footprint)</div>
+            <div style="flex:1; min-width:90px;">
+              <div class="muted" style="font-size:.72rem; font-weight:600; margin-bottom:2px;">Plan</div>
               <svg id="planSvg" viewBox="0 0 280 200" style="width:100%; background:#fff; border:1px solid var(--line); border-radius:6px;"></svg>
             </div>
           </div>
@@ -642,10 +656,7 @@
     </div>
   </div>
 
-  <div class="grid">
 
-    <!-- LEFT COLUMN: INPUTS -->
-    <div>
       <div class="panel">
         <h2>2. Basic Wind Parameters <span class="ref">ASCE 7-22 Ch. 26</span></h2>
         <div class="row2">
@@ -754,30 +765,6 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- RIGHT COLUMN: RESULTS -->
-    <div>
-      <div class="panel">
-        <h2>Results Summary</h2>
-        <div class="summary-cards">
-          <div class="scard"><div class="v" id="cardQh">&ndash;</div><div class="k">q<sub>h</sub></div></div>
-          <div class="scard"><div class="v" id="cardKh">&ndash;</div><div class="k">K<sub>h</sub></div></div>
-          <div class="scard"><div class="v" id="cardKe">&ndash;</div><div class="k">K<sub>e</sub></div></div>
-          <div class="scard" id="cardGCpiWrap"><div class="v" id="cardGCpi">&ndash;</div><div class="k">(GC<sub>pi</sub>)</div></div>
-          <div class="scard"><div class="v" id="cardA">&ndash;</div><div class="k">Zone dim. a</div></div>
-        </div>
-      </div>
-
-      <div id="minWindWarning" class="min-wind-warn"></div>
-
-      <div class="panel">
-        <h2>Velocity Pressure &mdash; Step by Step<button type="button" class="info-btn" data-info="stepsInfo" aria-label="Learn more">i</button></h2>
-        <div id="stepsContainer" class="steps"></div>
-      </div>
-    </div>
-  </div>
-
   <!-- Ch.29 Other Structures — Inputs (shown when cat-other) -->
   <div class="panel" id="ch29Inputs" style="display:none;">
     <h2>Ch.29 Other Structures &mdash; Inputs <span class="ref">Sec. 29.3 / 29.4 / 29.4.1, ASCE 7-22</span></h2>
@@ -1092,6 +1079,31 @@
     </div><!-- /ch29TypeRows -->
   </div>
   <!-- /Ch.29 Inputs -->
+
+    </div>
+
+    <!-- RIGHT COLUMN: RESULTS -->
+    <div>
+      <div class="panel">
+        <h2>Results Summary</h2>
+        <div class="summary-cards">
+          <div class="scard"><div class="v" id="cardQh">&ndash;</div><div class="k">q<sub>h</sub></div></div>
+          <div class="scard"><div class="v" id="cardKh">&ndash;</div><div class="k">K<sub>h</sub></div></div>
+          <div class="scard"><div class="v" id="cardKe">&ndash;</div><div class="k">K<sub>e</sub></div></div>
+          <div class="scard" id="cardGCpiWrap"><div class="v" id="cardGCpi">&ndash;</div><div class="k">(GC<sub>pi</sub>)</div></div>
+          <div class="scard"><div class="v" id="cardA">&ndash;</div><div class="k">Zone dim. a</div></div>
+        </div>
+      </div>
+
+      <div id="minWindWarning" class="min-wind-warn"></div>
+
+      <div class="panel">
+        <h2>Velocity Pressure &mdash; Step by Step<button type="button" class="info-btn" data-info="stepsInfo" aria-label="Learn more">i</button></h2>
+        <div id="stepsContainer" class="steps"></div>
+      </div>
+    </div>
+  </div>
+
 
 
   <div class="panel" data-mode="mwfrs">

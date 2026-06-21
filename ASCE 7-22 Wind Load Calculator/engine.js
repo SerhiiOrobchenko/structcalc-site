@@ -14,6 +14,16 @@ function fmt(v, d = 2) {
   return Number(v).toFixed(d);
 }
 
+// Populate a length-type <input> value: 1-decimal precision (these fields
+// never need more), and blank instead of a placeholder "0.0" when the
+// underlying value is zero/unset — avoids clutter on fields like building
+// width that haven't been given a real value yet.
+function fmtLenIn(ft) {
+  const v = lengthOut(ft);
+  if (!v) return '';
+  return fmt(v, 1);
+}
+
 // Escape free-text user input before inserting it into an innerHTML string
 // (used by the print title block, which is built via string concatenation).
 function escHtml(s) {
@@ -3898,6 +3908,27 @@ function computeCh29(s) {
 }
 
 // ------------------------------------------------------------------
+// reportCh29InputDataHTML(r): minimal basic-parameter input summary for
+// the Ch.29 "Other Structures" print report — Ch.29 calcs are not a
+// building, so the building-oriented rows in reportInputDataHTML
+// (enclosure, roof type/shape, parapet, C&C effective wind areas, etc.)
+// are irrelevant and must not appear.
+// ------------------------------------------------------------------
+function reportCh29InputDataHTML(r) {
+  const s = state;
+  const lenUnit = s.unitSystem === 'SI' ? 'm' : 'ft';
+  const spdUnit = s.unitSystem === 'SI' ? 'm/s' : 'mph';
+  let rows = '';
+  rows += reportRow('Calculation procedure', 'Ch. 29 &mdash; Other Structures', 'Ch. 29');
+  rows += reportRow('Risk Category', s.riskCategory, 'Table 1.5-1');
+  rows += reportRow('Basic wind speed, V', fmt(speedOut(s.V), 1) + ' ' + spdUnit, 'Sec. 26.5.1, Figs. 26.5-1A&ndash;D');
+  rows += reportRow('Exposure category', EXPOSURE[s.exposure].label, 'Sec. 26.7.3');
+  rows += reportRow('Topographic factor, K<sub>zt</sub>', fmt(s.kzt, 2), 'Sec. 26.8.2, Fig. 26.8-1');
+  rows += reportRow('Ground elevation, z<sub>e</sub>', fmt(lengthOut(s.groundElev), 1) + ' ' + lenUnit, 'Table 26.9-1, Note 2');
+  return '<table class="report-input-table"><thead><tr><th>Parameter</th><th>Value</th><th>Reference</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+// ------------------------------------------------------------------
 // reportCh29HTML(r): render Ch.29 results
 // ------------------------------------------------------------------
 function reportCh29HTML(r) {
@@ -4934,6 +4965,21 @@ function buildReportHTML(r) {
   };
 
   let html = '';
+
+  // Ch.29 "Other Structures" (signs, chimneys, towers, rooftop equipment,
+  // solar arrays, etc.) are not buildings: skip the generic Building
+  // Geometry diagram and MWFRS/C&C Design Pressures sections entirely and
+  // emit only the Ch.29-relevant content (plus Ch.32 Tornado Loads, if the
+  // user separately enabled that toggle).
+  if (s.structureCategory === 'otherStructure') {
+    html += section('Project &amp; Input Data', 'ASCE/SEI 7-22, Ch. 26', reportCh29InputDataHTML(r));
+    html += section('Ch.29 Other Structures &mdash; Design Wind Force', 'ASCE/SEI 7-22, Ch. 29', reportCh29HTML(r));
+    if (s.ch32Enabled && r.ch32) {
+      html += section('Ch.32 &mdash; Tornado Loads', 'Secs. 32.1&ndash;32.17', reportCh32HTML(r.ch32, r));
+    }
+    return '<table class="report-page"><thead><tr><th>' + buildTitleBlockHTML() +
+      '</th></tr></thead><tbody><tr><td>' + html + '</td></tr></tbody></table>';
+  }
 
   html += section('Project &amp; Input Data', 'ASCE/SEI 7-22, Chapters 26&ndash;32', reportInputDataHTML(r));
   html += section('Design Summary', null, reportDesignSummaryHTML(r));
@@ -6509,26 +6555,26 @@ function setUnitSystem(sys) {
 
   document.getElementById('V').value = fmt(speedOut(state.V), 1);
   document.getElementById('groundElev').value = fmt(lengthOut(state.groundElev), 1);
-  document.getElementById('h').value = fmt(lengthOut(state.h), 2);
-  document.getElementById('minDim').value = fmt(lengthOut(state.minDim), 2);
+  document.getElementById('h').value = fmtLenIn(state.h);
+  document.getElementById('minDim').value = fmtLenIn(state.minDim);
   const blEl = document.getElementById('buildingL');
-  if (blEl) blEl.value = fmt(lengthOut(state.buildingL), 2);
+  if (blEl) blEl.value = fmtLenIn(state.buildingL);
   document.getElementById('areaWall').value = fmt(areaOut(state.areaWall), 2);
   document.getElementById('areaRoof').value = fmt(areaOut(state.areaRoof), 2);
   const parapetHeightEl = document.getElementById('parapetHeight');
-  if (parapetHeightEl) parapetHeightEl.value = fmt(lengthOut(state.parapetHeight), 2);
+  if (parapetHeightEl) parapetHeightEl.value = fmtLenIn(state.parapetHeight);
   const canopyAreaEl = document.getElementById('canopyArea');
   if (canopyAreaEl) canopyAreaEl.value = fmt(areaOut(state.canopyArea), 1);
   const canopyHcEl = document.getElementById('canopyHc');
-  if (canopyHcEl) canopyHcEl.value = fmt(lengthOut(state.canopyHc), 2);
+  if (canopyHcEl) canopyHcEl.value = fmtLenIn(state.canopyHc);
   const canopyHeEl = document.getElementById('canopyHe');
-  if (canopyHeEl) canopyHeEl.value = fmt(lengthOut(state.canopyHe), 2);
+  if (canopyHeEl) canopyHeEl.value = fmtLenIn(state.canopyHe);
   const tankDEl = document.getElementById('tankD');
-  if (tankDEl) tankDEl.value = fmt(lengthOut(state.tankD), 2);
+  if (tankDEl) tankDEl.value = fmtLenIn(state.tankD);
   const tankHEl = document.getElementById('tankH');
-  if (tankHEl) tankHEl.value = fmt(lengthOut(state.tankH), 2);
+  if (tankHEl) tankHEl.value = fmtLenIn(state.tankH);
   const openLEl = document.getElementById('openL');
-  if (openLEl) openLEl.value = fmt(lengthOut(state.openL), 2);
+  if (openLEl) openLEl.value = fmtLenIn(state.openL);
 
   updateUnitLabels();
   renderResults();
@@ -8119,10 +8165,10 @@ document.addEventListener('DOMContentLoaded', init);
     if (document.getElementById('kzt')) document.getElementById('kzt').value = state.kzt;
     document.getElementById('groundElev').value = fmt(lengthOut(state.groundElev), 1);
     document.getElementById('enclosure').value = state.enclosure;
-    document.getElementById('h').value = fmt(lengthOut(state.h), 2);
-    document.getElementById('minDim').value = fmt(lengthOut(state.minDim), 2);
+    document.getElementById('h').value = fmtLenIn(state.h);
+    document.getElementById('minDim').value = fmtLenIn(state.minDim);
   const blEl = document.getElementById('buildingL');
-  if (blEl) blEl.value = fmt(lengthOut(state.buildingL), 2);
+  if (blEl) blEl.value = fmtLenIn(state.buildingL);
     document.getElementById('theta').value = state.theta;
     document.getElementById('areaWall').value = fmt(areaOut(state.areaWall), 2);
     document.getElementById('areaRoof').value = fmt(areaOut(state.areaRoof), 2);
@@ -8137,7 +8183,7 @@ document.addEventListener('DOMContentLoaded', init);
     const hasParapetEl = document.getElementById('hasParapet');
     if (hasParapetEl) hasParapetEl.checked = !!state.hasParapet;
     const parapetHeightEl = document.getElementById('parapetHeight');
-    if (parapetHeightEl) parapetHeightEl.value = fmt(lengthOut(state.parapetHeight), 2);
+    if (parapetHeightEl) parapetHeightEl.value = fmtLenIn(state.parapetHeight);
     applyParapetVisibility();
 
     // Attached Canopy (Sec. 30.9) inputs
@@ -8146,17 +8192,17 @@ document.addEventListener('DOMContentLoaded', init);
     const canopyAreaEl2 = document.getElementById('canopyArea');
     if (canopyAreaEl2) canopyAreaEl2.value = fmt(areaOut(state.canopyArea), 1);
     const canopyHcEl2 = document.getElementById('canopyHc');
-    if (canopyHcEl2) canopyHcEl2.value = fmt(lengthOut(state.canopyHc), 2);
+    if (canopyHcEl2) canopyHcEl2.value = fmtLenIn(state.canopyHc);
     const canopyHeEl2 = document.getElementById('canopyHe');
-    if (canopyHeEl2) canopyHeEl2.value = fmt(lengthOut(state.canopyHe), 2);
+    if (canopyHeEl2) canopyHeEl2.value = fmtLenIn(state.canopyHe);
 
     // Circular Bins, Silos, and Tanks (Sec. 30.10) inputs
     const hasCircularTankEl2 = document.getElementById('hasCircularTank');
     if (hasCircularTankEl2) hasCircularTankEl2.checked = !!state.hasCircularTank;
     const tankDEl2 = document.getElementById('tankD');
-    if (tankDEl2) tankDEl2.value = fmt(lengthOut(state.tankD), 2);
+    if (tankDEl2) tankDEl2.value = fmtLenIn(state.tankD);
     const tankHEl2 = document.getElementById('tankH');
-    if (tankHEl2) tankHEl2.value = fmt(lengthOut(state.tankH), 2);
+    if (tankHEl2) tankHEl2.value = fmtLenIn(state.tankH);
     const tankOpenTopEl2 = document.getElementById('tankOpenTop');
     if (tankOpenTopEl2) tankOpenTopEl2.checked = !!state.tankOpenTop;
     const tankElevatedEl2 = document.getElementById('tankElevated');
@@ -8166,31 +8212,31 @@ document.addEventListener('DOMContentLoaded', init);
     const hasSteppedRoofEl2 = document.getElementById('hasSteppedRoof');
     if (hasSteppedRoofEl2) hasSteppedRoofEl2.checked = !!state.hasSteppedRoof;
     const steppedLowerHEl2 = document.getElementById('steppedLowerH');
-    if (steppedLowerHEl2) steppedLowerHEl2.value = fmt(lengthOut(state.steppedLowerH), 2);
+    if (steppedLowerHEl2) steppedLowerHEl2.value = fmtLenIn(state.steppedLowerH);
     const steppedLowerWEl2 = document.getElementById('steppedLowerW');
-    if (steppedLowerWEl2) steppedLowerWEl2.value = fmt(lengthOut(state.steppedLowerW), 2);
+    if (steppedLowerWEl2) steppedLowerWEl2.value = fmtLenIn(state.steppedLowerW);
 
     // Multispan Gable Roofs (Fig. 30.3-4) inputs
     const hasMultispanRoofEl2 = document.getElementById('hasMultispanRoof');
     if (hasMultispanRoofEl2) hasMultispanRoofEl2.checked = !!state.hasMultispanRoof;
     const msModuleWEl2 = document.getElementById('msModuleW');
-    if (msModuleWEl2) msModuleWEl2.value = fmt(lengthOut(state.msModuleW), 2);
+    if (msModuleWEl2) msModuleWEl2.value = fmtLenIn(state.msModuleW);
 
     // Sawtooth Roofs (Fig. 30.3-6) inputs
     const hasSawtoothRoofEl2 = document.getElementById('hasSawtoothRoof');
     if (hasSawtoothRoofEl2) hasSawtoothRoofEl2.checked = !!state.hasSawtoothRoof;
     const swModuleWEl2 = document.getElementById('swModuleW');
-    if (swModuleWEl2) swModuleWEl2.value = fmt(lengthOut(state.swModuleW), 2);
+    if (swModuleWEl2) swModuleWEl2.value = fmtLenIn(state.swModuleW);
 
     // Domed Roofs (Fig. 30.3-7) inputs
     const hasDomeRoofEl2 = document.getElementById('hasDomeRoof');
     if (hasDomeRoofEl2) hasDomeRoofEl2.checked = !!state.hasDomeRoof;
     const domeDEl2 = document.getElementById('domeD');
-    if (domeDEl2) domeDEl2.value = fmt(lengthOut(state.domeD), 2);
+    if (domeDEl2) domeDEl2.value = fmtLenIn(state.domeD);
     const domeFEl2 = document.getElementById('domeF');
-    if (domeFEl2) domeFEl2.value = fmt(lengthOut(state.domeF), 2);
+    if (domeFEl2) domeFEl2.value = fmtLenIn(state.domeF);
     const domeHDEl2 = document.getElementById('domeHD');
-    if (domeHDEl2) domeHDEl2.value = fmt(lengthOut(state.domeHD), 2);
+    if (domeHDEl2) domeHDEl2.value = fmtLenIn(state.domeHD);
 
     // Monoslope Roofs (Fig. 30.3-5A/5B) toggle
     const hasMonoslopeRoofEl2 = document.getElementById('hasMonoslopeRoof');
@@ -8214,7 +8260,7 @@ document.addEventListener('DOMContentLoaded', init);
       state.openWindFlow = openWindFlowEl.value;
     }
     const openLEl = document.getElementById('openL');
-    if (openLEl) openLEl.value = fmt(lengthOut(state.openL || 40), 2);
+    if (openLEl) openLEl.value = fmtLenIn(state.openL || 40);
 
     // Project Information (report header)
     if (!state.projectDate) {
