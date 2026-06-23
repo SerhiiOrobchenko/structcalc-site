@@ -1322,7 +1322,6 @@ footer.sources ul{padding-left:18px;}
           </div>
           <div class="panel" id="openRoofCCSection" style="display:none;"></div>
           <div class="panel" id="ch32ResultsSection" style="display:none;"></div>
-        </div>
     </div><!-- /center-results -->
 
     <!-- ════════ CENTER OVERLAY: Report Preview ════════ -->
@@ -1456,9 +1455,23 @@ footer.sources ul{padding-left:18px;}
 
   function updateReportPreview() {
     try {
-      var html = typeof buildReportHTML === 'function' ? buildReportHTML() : '';
       var frame = document.getElementById('reportPreviewFrame');
-      if (frame && html) frame.srcdoc = html;
+      if (!frame) return;
+      // #reportContent is a print-only div that engine.js populates on every render
+      var reportEl = document.getElementById('reportContent');
+      if (reportEl && reportEl.innerHTML.trim()) {
+        // Wrap in a minimal HTML shell with the module's styles
+        var styleEls = document.querySelectorAll('style');
+        var styles = '';
+        styleEls.forEach(function(s) { styles += s.outerHTML; });
+        frame.srcdoc = '<!DOCTYPE html><html><head><meta charset="utf-8">' + styles +
+          '<style>body{margin:0;padding:0;font-family:system-ui,sans-serif;}</style></head>' +
+          '<body>' + reportEl.innerHTML + '</body></html>';
+      } else {
+        frame.srcdoc = '<html><body style="font-family:system-ui;padding:40px;color:#666;">' +
+          '<p>Run a calculation first (fill inputs and wait for results), then switch to Report.</p>' +
+          '</body></html>';
+      }
     } catch(e) {}
   }
 
