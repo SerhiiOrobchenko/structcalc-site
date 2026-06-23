@@ -49,7 +49,8 @@
     padding:2px 8px; font-size:.78rem; font-weight:600; margin-right:6px;
   }
 
-  .grid{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+  .grid{display:grid; grid-template-columns:200px 1fr 380px; gap:18px; align-items:start;}
+  @media (max-width:1100px){ .grid{grid-template-columns:1fr 1fr;} }
   @media (max-width:900px){ .grid{grid-template-columns:1fr;} }
 
   /* ---- MWFRS / C&C mode visibility -------------------------------------- */
@@ -290,6 +291,66 @@
 .zone-row .zone-diag svg{width:100%;display:block;max-height:420px;}
 .cc-section-header{background:var(--brand-light,#eaf3ff);font-weight:700;font-size:.8rem;padding:3px 6px;}
 @media(max-width:640px){.zone-row{grid-template-columns:1fr;}}
+
+  /* ── 3-column module layout ──────────────────────────────────────────── */
+  .module-nav{
+    position:sticky; top:0; align-self:start;
+    background:var(--panel); border:1px solid var(--line); border-radius:8px;
+    padding:12px 0; max-height:calc(100vh - 30px); overflow-y:auto;
+  }
+  .module-nav .nav-group{ padding:0 0 8px; }
+  .module-nav .nav-label{
+    padding:6px 14px 4px; font-size:.7rem; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--muted);
+  }
+  .module-nav .nav-item{
+    display:block; padding:5px 14px 5px 16px; font-size:.83rem; color:var(--ink);
+    text-decoration:none; border-left:3px solid transparent; transition:all .15s;
+    line-height:1.35;
+  }
+  .module-nav .nav-item:hover{ background:var(--brand-light); color:var(--brand); border-left-color:var(--brand); }
+  .module-nav .nav-item.active{ background:var(--brand-light); color:var(--brand);
+    border-left-color:var(--brand); font-weight:600; }
+  .module-nav .nav-sep{ height:1px; background:var(--line); margin:4px 14px 8px; }
+
+  /* Module inputs middle column – nothing special needed */
+
+  /* Results column — sticky */
+  .module-results{
+    position:sticky; top:0; align-self:start;
+    max-height:calc(100vh - 30px); overflow-y:auto;
+  }
+
+  /* Procedure tab bar styling ──────────────────────────────────────────── */
+  #calcSetupPanel{
+    background:var(--panel); border:1px solid var(--line); border-radius:8px;
+    padding:0; margin-bottom:18px; overflow:hidden;
+  }
+  #structureCatControls{
+    display:flex; align-items:center; gap:10px; padding:10px 16px 8px;
+    border-bottom:1px solid var(--line); margin-bottom:0;
+  }
+  #calcProcControls{
+    padding:0 16px 10px; display:flex; flex-direction:column; gap:4px;
+  }
+  #calcProcControls > strong{ padding:8px 0 4px; display:block; font-size:.83rem; }
+  #calcProcControls .seg-light{
+    border:none; border-radius:0; gap:0; display:flex; flex-wrap:wrap;
+  }
+  #calcProcControls .seg-light button{
+    flex:1; min-width:0; padding:9px 10px; font-size:.85rem; border-radius:0;
+    border:1px solid var(--line) !important; border-right:none !important;
+    color:var(--brand); background:#fff; transition:all .15s; font-weight:500;
+  }
+  #calcProcControls .seg-light button:first-child{ border-radius:6px 0 0 6px; }
+  #calcProcControls .seg-light button:last-child{ border-radius:0 6px 6px 0; border-right:1px solid var(--line) !important; }
+  #calcProcControls .seg-light button.active{
+    background:var(--brand); color:#fff; font-weight:700; z-index:1;
+    box-shadow:inset 0 -3px 0 rgba(0,0,0,.15);
+  }
+  #calcProcControls .seg-light button:not(.active):hover{ background:var(--brand-light); }
+  #procHint{ padding:0; }
+
 </style>
 </head>
 <body>
@@ -382,8 +443,38 @@
 
   <div class="grid">
 
+
+    <!-- LEFT NAV COLUMN -->
+    <div class="module-nav" id="moduleNav">
+      <div class="nav-group">
+        <div class="nav-label">Setup</div>
+        <a href="#projectInfoPanel" class="nav-item">Project Info</a>
+        <a href="#calcSetupPanel" class="nav-item">Procedure</a>
+      </div>
+      <div class="nav-sep"></div>
+      <div class="nav-group">
+        <div class="nav-label">Building Inputs</div>
+        <a href="#diagramPanel" class="nav-item">1. Geometry &amp; Schematic</a>
+        <a href="#windParamsPanel" class="nav-item">2. Wind Parameters</a>
+        <a href="#ccEwaPanel" class="nav-item" id="navCCEwa">3. C&amp;C Areas</a>
+      </div>
+      <div class="nav-sep"></div>
+      <div class="nav-group">
+        <div class="nav-label">Special Cases</div>
+        <a href="#ch29Inputs" class="nav-item" id="navCh29">Other Structures</a>
+        <a href="#ch32Inputs" class="nav-item">Tornado (Ch.32)</a>
+      </div>
+      <div class="nav-sep"></div>
+      <div class="nav-group">
+        <div class="nav-label">Results</div>
+        <a href="#resultsPanel" class="nav-item">Summary &amp; Steps</a>
+        <a href="#mwfrsPressurePanel" class="nav-item" id="navMWFRS">MWFRS Pressures</a>
+        <a href="#ccPressurePanel" class="nav-item" id="navCC">C&amp;C Pressures</a>
+      </div>
+    </div>
+
     <!-- LEFT COLUMN: INPUTS -->
-    <div>
+    <div class="module-inputs">
   <div class="panel" id="projectInfoPanel">
     <h2>Project Information <span class="ref">Report header</span></h2>
     <div class="report-meta">
@@ -660,7 +751,7 @@
   </div>
 
 
-      <div class="panel">
+      <div class="panel" id="windParamsPanel">
         <h2>2. Basic Wind Parameters <span class="ref">ASCE 7-22 Ch. 26</span></h2>
         <div class="row2">
           <div class="field">
@@ -750,7 +841,7 @@
         </div>
       </div>
 
-      <div class="panel" data-mode="cc">
+      <div class="panel" id="ccEwaPanel" data-mode="cc">
         <h2>3. Components &amp; Cladding &mdash; Effective Wind Areas <span class="ref">Sec. 26.2; Fig. 30.3-1/30.3-2A-2G</span></h2>
         <div class="row2">
           <div class="field">
@@ -1085,9 +1176,10 @@
 
     </div>
 
+
     <!-- RIGHT COLUMN: RESULTS -->
-    <div>
-      <div class="panel">
+    <div class="module-results">
+      <div class="panel" id="resultsPanel">
         <h2>Results Summary</h2>
         <div class="summary-cards">
           <div class="scard"><div class="v" id="cardQh">&ndash;</div><div class="k">q<sub>h</sub></div></div>
@@ -1109,7 +1201,7 @@
 
 
 
-  <div class="panel" data-mode="mwfrs">
+  <div class="panel" id="mwfrsPressurePanel" data-mode="mwfrs">
     <h2>MWFRS Design Pressures <button type="button" class="info-btn" data-info="mwfrs" aria-label="Learn more">i</button></h2>
 
     <!-- Procedure toggle: now controlled by top-level 3-button selector (A2) — hidden here -->
@@ -1157,7 +1249,7 @@
     </div>
   </div>
 
-  <div class="panel" data-mode="cc">
+  <div class="panel" id="ccPressurePanel" data-mode="cc">
     <h2>Components &amp; Cladding Design Pressures <button type="button" class="info-btn" data-info="cc" aria-label="Learn more">i</button></h2>
 
     <!-- C&C Procedure toggle (hidden — auto-selected from h) -->
@@ -1395,5 +1487,47 @@
 </div>
 
 <script src="engine.js"></script>
+
+<script>
+// Module nav: scroll-spy + mode visibility sync
+(function() {
+  function syncNavMode() {
+    const isCat = document.body.classList.contains('cat-other');
+    const isCC  = document.body.classList.contains('mode-cc');
+    const navCh29 = document.getElementById('navCh29');
+    const navCC   = document.getElementById('navCC');
+    const navMW   = document.getElementById('navMWFRS');
+    const navCCEwa= document.getElementById('navCCEwa');
+    if (navCh29)  navCh29.style.fontWeight  = isCat ? '700' : '';
+    if (navCC)    navCC.style.opacity    = isCC ? '1' : '0.45';
+    if (navMW)    navMW.style.opacity    = (!isCat && !isCC) ? '1' : '0.45';
+    if (navCCEwa) navCCEwa.style.opacity = isCC ? '1' : '0.45';
+  }
+
+  // Scroll spy
+  const navItems = document.querySelectorAll('.module-nav .nav-item[href^="#"]');
+  function onScroll() {
+    const scrollParent = document.querySelector('.module-inputs') || document.body;
+    let best = null, bestTop = -Infinity;
+    navItems.forEach(a => {
+      const id = a.getAttribute('href').slice(1);
+      const el = document.getElementById(id);
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      if (rect.top <= 120 && rect.top > bestTop) { bestTop = rect.top; best = a; }
+    });
+    navItems.forEach(a => a.classList.remove('active'));
+    if (best) best.classList.add('active');
+  }
+  window.addEventListener('scroll', onScroll, {passive: true, capture: true});
+
+  // Observe body class mutations for mode sync
+  const mo = new MutationObserver(syncNavMode);
+  mo.observe(document.body, {attributes: true, attributeFilter: ['class']});
+  syncNavMode();
+  setTimeout(onScroll, 200);
+})();
+</script>
+
 </body>
 </html>
