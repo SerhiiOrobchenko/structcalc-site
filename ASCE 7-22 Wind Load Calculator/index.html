@@ -1426,9 +1426,6 @@ footer.sources ul{padding-left:18px;}
 <script src="engine.js"></script>
 
 <script>
-// Module nav: scroll-spy + mode visibility sync
-
-<script>
 // ── Tab switching ──────────────────────────────────────────────────────
 (function() {
   var tabs = document.querySelectorAll('.mod-tab');
@@ -1512,4 +1509,7 @@ bodyObs.observe(document.body, {attributes:true, attributeFilter:['class']});
   if (el) el.addEventListener('click', function() { setTimeout(syncCompactMeta, 50); });
 });
 
-// Init
+// Initial sync
+setTimeout(syncCompactMeta, 200);
+
+// ── theta
