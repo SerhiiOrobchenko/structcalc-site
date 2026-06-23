@@ -14,7 +14,7 @@
 }
 *{box-sizing:border-box; margin:0; padding:0;}
 body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-  background:var(--bg); color:var(--ink); line-height:1.45; font-size:13px;}
+  background:var(--bg); color:var(--ink); line-height:1.45; font-size:14px;}
 
 /* ── PRINT ────────────────────────────────────────────────────────────── */
 .print-only{display:none;}
@@ -54,7 +54,7 @@ body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
 
 /* ── FORM FIELDS ──────────────────────────────────────────────────────── */
 .field{display:flex;flex-direction:column;gap:3px;}
-.field label{font-size:.78rem;font-weight:600;color:var(--muted);}
+.field label{font-size:.84rem;font-weight:600;color:var(--muted);}
 .field input,.field select{
   padding:5px 7px;border:1px solid var(--line);border-radius:5px;
   font-size:.84rem;color:var(--ink);background:#fff;width:100%;}
@@ -148,7 +148,7 @@ body.ch32-enabled #ch32Inputs,
 /* 3-column body */
 .mod-body{
   display:grid;
-  grid-template-columns:248px 1fr 204px;
+  grid-template-columns:300px 1fr 280px;
   min-height:0;flex:1;overflow:hidden;
 }
 
@@ -190,12 +190,12 @@ body.ch32-enabled #ch32Inputs,
 .view-btn.active{background:var(--brand);color:#fff;font-weight:600;}
 .icon-btn{padding:4px 8px;border:1px solid var(--line);border-radius:4px;
   background:#fff;cursor:pointer;font-size:.9rem;color:var(--muted);}
-.diagram-canvas{flex:1;overflow:hidden;display:flex;flex-direction:column;
+.diagram-canvas{flex:1;overflow:auto;display:flex;flex-direction:column;
   padding:10px;gap:8px;}
 #genericSchematicWrap{display:flex;flex-direction:column;gap:6px;flex:1;}
 .diag-label{font-size:.7rem;font-weight:600;color:var(--muted);margin-bottom:2px;}
 #elevSvg,#planSvg{
-  width:100%;flex:1;min-height:0;
+  width:100%;height:auto;flex:none;
   background:#fff;border:1px solid var(--line);border-radius:6px;display:block;}
 #planSvg{display:none;}
 #specialSchematicWrap{flex:1;display:none;flex-direction:column;}
@@ -208,7 +208,7 @@ body.ch32-enabled #ch32Inputs,
 
 /* RIGHT: compact results */
 .mod-results-compact{
-  border-left:1px solid var(--line);overflow-y:auto;background:#fff;font-size:.78rem;
+  border-left:1px solid var(--line);overflow-y:auto;background:#fff;font-size:.84rem;
 }
 .cres-section{border-bottom:1px solid var(--line);padding:8px 10px;}
 .cres-hdr{
@@ -219,9 +219,9 @@ body.ch32-enabled #ch32Inputs,
   display:flex;justify-content:space-between;align-items:center;
   padding:2px 0;gap:4px;
 }
-.cres-row span:first-child{color:var(--muted);font-size:.75rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.cres-val{font-weight:700;font-family:var(--mono);color:var(--ink);white-space:nowrap;font-size:.8rem;}
-.cres-row--key .cres-val{color:var(--brand);font-size:.88rem;}
+.cres-row span:first-child{color:var(--muted);font-size:.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cres-val{font-weight:700;font-family:var(--mono);color:var(--ink);white-space:nowrap;font-size:.86rem;}
+.cres-row--key .cres-val{color:var(--brand);font-size:.93rem;}
 .cres-row--pos .cres-val{color:var(--ok);}
 .cres-row--neg .cres-val{color:#1a6fa8;}
 .cres-row--crit{background:#fef2f2;border-radius:4px;padding:2px 4px;margin:0 -4px;}
@@ -280,6 +280,18 @@ footer.sources ul{padding-left:18px;}
 
 /* ch29 */
 .ch29-row{padding:6px 0;}
+/* Center-column overlay panels (Results / Report) */
+.center-panel{display:none;flex-direction:column;flex:1;overflow:hidden;}
+.center-panel.cpanel-active{display:flex;}
+#center-results{overflow-y:auto;padding:14px 18px;background:#fff;}
+#center-results .panel{margin-bottom:14px;}
+#center-report{flex-direction:column;}
+#report-preview-bar{
+  display:flex;align-items:center;gap:10px;padding:8px 14px;
+  background:#f7f8fa;border-bottom:1px solid var(--line);flex-shrink:0;
+}
+#reportPreviewFrame{flex:1;border:none;background:#fff;}
+
 </style>
 </head>
 <body>
@@ -1121,30 +1133,80 @@ footer.sources ul{padding-left:18px;}
 
       <!-- ── RESULTS TAB ── -->
       <div class="tab-panel" id="tab-results">
-        <div style="padding:10px 12px;">
-          <div id="minWindWarning" class="min-wind-warn"></div>
+        <!-- Results rendered in center column (#center-results) -->
+        <!-- Hidden seg controls for engine.js compatibility -->
+        <div style="display:none;">
+          <div id="mwfrsProcedureSeg"><button data-val="envelope" class="active">Envelope</button><button data-val="directional">Directional</button></div>
+          <div id="ccProcedureSeg"><button data-val="part1" class="active">Part 1</button><button data-val="part2">Part 2</button></div>
+        </div>
+      </div><!-- /tab-results -->
 
-          <div class="panel">
-            <h2>Results Summary</h2>
-            <div class="summary-cards">
-              <div class="scard"><div class="v" id="cardA">&ndash;</div><div class="k">Zone dim. a</div></div>
-              <div class="scard"><div class="v" id="cpCheckOkA">&ndash;</div><div class="k">Min. wind</div></div>
-              <div class="scard"><div class="v" id="cpCheckOkB">&ndash;</div><div class="k">h &le; 60 ft</div></div>
-            </div>
+      <!-- ── REPORT TAB ── -->
+      <div class="tab-panel" id="tab-report">
+        <div class="input-section">
+          <div class="sec-hdr">EXPORT &amp; PRINT</div>
+          <p class="muted" style="margin-bottom:10px;font-size:.8rem;">Fill in project details in the <strong>Location</strong> tab before exporting.</p>
+          <button type="button" id="printBtn" class="btn" style="width:100%;justify-content:center;margin-bottom:8px;">
+            &#10515; Export / Print Report
+          </button>
+          <p class="hint">Opens export dialog — choose PDF, Excel, Word, or RTF.</p>
+        </div>
+      </div><!-- /tab-report -->
+
+    </div><!-- /mod-inputs -->
+
+    <!-- ════════ CENTER: Diagram ════════ -->
+    <div class="mod-diagram">
+      <div class="diagram-topbar">
+        <span class="diagram-hint">Hover input &rarr; highlights on diagram &middot; Click callout &rarr; focuses input</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <div class="seg" style="font-size:.76rem;">
+            <button type="button" id="unitUS" class="active" title="US customary (ft, psf)">US</button>
+            <button type="button" id="unitSI" title="SI (m, kPa)">SI</button>
           </div>
-
-          <div class="panel">
-            <h2>Velocity Pressure &mdash; Step by Step <button type="button" class="info-btn" data-info="stepsInfo" aria-label="Learn more">i</button></h2>
-            <div id="stepsContainer" class="steps"></div>
+          <div class="view-btns">
+            <button class="view-btn active" data-view="elev">Elevation</button>
+            <button class="view-btn" data-view="plan">Plan</button>
           </div>
+        </div>
+      </div>
+      <div class="diagram-canvas">
+        <p class="muted" id="schematicIntro" style="font-size:.73rem;">Schematic updates live with inputs. Edge-zone width <strong>a</strong> per Notation, Figs. 28.3-1/30.3-1/30.3-2A.</p>
+        <div id="genericSchematicWrap" style="flex:1;display:flex;flex-direction:column;gap:6px;">
+          <svg id="elevSvg" viewBox="0 0 280 200"
+            style="width:100%;flex:1;min-height:0;background:#fff;border:1px solid var(--line);border-radius:6px;display:block;"></svg>
+          <svg id="planSvg" viewBox="0 0 280 200"
+            style="width:100%;flex:1;min-height:0;background:#fff;border:1px solid var(--line);border-radius:6px;display:none;"></svg>
+          <p class="muted" id="enclosureNote" style="margin:0;font-size:.73rem;"></p>
+          <p class="muted" id="ccZoneKey" style="margin:0;font-size:.73rem;"></p>
+        </div>
+        <div id="specialSchematicWrap" style="display:none;flex:1;flex-direction:column;">
+          <div class="muted" style="font-size:.75rem;font-weight:600;margin-bottom:4px;" id="specialSchematicLabel">Schematic</div>
+          <div id="specialSchematicSvg" style="background:#fff;border:1px solid var(--line);border-radius:6px;padding:6px;flex:1;overflow:hidden;"></div>
+        </div>
+      </div>
+      <div class="diagram-footer" id="diagramCaption">
+        Gable Roof &mdash; Envelope Procedure (Ch. 28) &mdash; Interactive preview
+      </div>
 
-          <!-- Hidden seg controls for engine.js compatibility -->
-          <div style="display:none;">
-            <div id="mwfrsProcedureSeg"><button data-val="envelope" class="active">Envelope</button><button data-val="directional">Directional</button></div>
-            <div id="ccProcedureSeg"><button data-val="part1" class="active">Part 1</button><button data-val="part2">Part 2</button></div>
-          </div>
+    <!-- ════════ CENTER OVERLAY: Full Results ════════ -->
+    <div id="center-results" class="center-panel">
+      <div id="minWindWarning" class="min-wind-warn"></div>
 
-          <div class="alert warn" id="ch28TallWarning" style="display:none;">
+      <div class="panel">
+        <h2>Results Summary</h2>
+        <div class="summary-cards">
+          <div class="scard"><div class="v" id="cardA">&ndash;</div><div class="k">Zone dim. a</div></div>
+          <div class="scard"><div class="v" id="cpCheckOkA">&ndash;</div><div class="k">Min. wind</div></div>
+          <div class="scard"><div class="v" id="cpCheckOkB">&ndash;</div><div class="k">h &le; 60 ft</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Velocity Pressure &mdash; Step by Step <button type="button" class="info-btn" data-info="stepsInfo" aria-label="Learn more">i</button></h2>
+        <div id="stepsContainer" class="steps"></div>
+      </div>
+<div class="alert warn" id="ch28TallWarning" style="display:none;">
             &starf; h &gt; 60 ft or h &gt; least horiz. dim. &mdash; Envelope Procedure (Ch.28) <strong>not applicable</strong>. Switch to Directional (Ch.27).
           </div>
           <div id="ccAutoInfo" class="alert info" style="display:none;"></div>
@@ -1261,55 +1323,16 @@ footer.sources ul{padding-left:18px;}
           <div class="panel" id="openRoofCCSection" style="display:none;"></div>
           <div class="panel" id="ch32ResultsSection" style="display:none;"></div>
         </div>
-      </div><!-- /tab-results -->
+    </div><!-- /center-results -->
 
-      <!-- ── REPORT TAB ── -->
-      <div class="tab-panel" id="tab-report">
-        <div class="input-section">
-          <div class="sec-hdr">EXPORT &amp; PRINT</div>
-          <p class="muted" style="margin-bottom:10px;font-size:.8rem;">Fill in project details in the <strong>Location</strong> tab before exporting.</p>
-          <button type="button" id="printBtn" class="btn" style="width:100%;justify-content:center;margin-bottom:8px;">
-            &#10515; Export / Print Report
-          </button>
-          <p class="hint">Opens export dialog — choose PDF, Excel, Word, or RTF.</p>
-        </div>
-      </div><!-- /tab-report -->
-
-    </div><!-- /mod-inputs -->
-
-    <!-- ════════ CENTER: Diagram ════════ -->
-    <div class="mod-diagram">
-      <div class="diagram-topbar">
-        <span class="diagram-hint">Hover input &rarr; highlights on diagram &middot; Click callout &rarr; focuses input</span>
-        <div style="display:flex;gap:6px;align-items:center;">
-          <div class="seg" style="font-size:.76rem;">
-            <button type="button" id="unitUS" class="active" title="US customary (ft, psf)">US</button>
-            <button type="button" id="unitSI" title="SI (m, kPa)">SI</button>
-          </div>
-          <div class="view-btns">
-            <button class="view-btn active" data-view="elev">Elevation</button>
-            <button class="view-btn" data-view="plan">Plan</button>
-          </div>
-        </div>
+    <!-- ════════ CENTER OVERLAY: Report Preview ════════ -->
+    <div id="center-report" class="center-panel">
+      <div id="report-preview-bar">
+        <button type="button" id="printBtn2" class="btn">&#10515; Export / Print Report</button>
+        <span class="muted" style="font-size:.8rem;">Print preview &mdash; fill project details in <strong>Location</strong> tab first</span>
       </div>
-      <div class="diagram-canvas">
-        <p class="muted" id="schematicIntro" style="font-size:.73rem;">Schematic updates live with inputs. Edge-zone width <strong>a</strong> per Notation, Figs. 28.3-1/30.3-1/30.3-2A.</p>
-        <div id="genericSchematicWrap" style="flex:1;display:flex;flex-direction:column;gap:6px;">
-          <svg id="elevSvg" viewBox="0 0 280 200"
-            style="width:100%;flex:1;min-height:0;background:#fff;border:1px solid var(--line);border-radius:6px;display:block;"></svg>
-          <svg id="planSvg" viewBox="0 0 280 200"
-            style="width:100%;flex:1;min-height:0;background:#fff;border:1px solid var(--line);border-radius:6px;display:none;"></svg>
-          <p class="muted" id="enclosureNote" style="margin:0;font-size:.73rem;"></p>
-          <p class="muted" id="ccZoneKey" style="margin:0;font-size:.73rem;"></p>
-        </div>
-        <div id="specialSchematicWrap" style="display:none;flex:1;flex-direction:column;">
-          <div class="muted" style="font-size:.75rem;font-weight:600;margin-bottom:4px;" id="specialSchematicLabel">Schematic</div>
-          <div id="specialSchematicSvg" style="background:#fff;border:1px solid var(--line);border-radius:6px;padding:6px;flex:1;overflow:hidden;"></div>
-        </div>
-      </div>
-      <div class="diagram-footer" id="diagramCaption">
-        Gable Roof &mdash; Envelope Procedure (Ch. 28) &mdash; Interactive preview
-      </div>
+      <iframe id="reportPreviewFrame"></iframe>
+    </div><!-- /center-report -->
     </div><!-- /mod-diagram -->
 
     <!-- ════════ RIGHT: Compact results ════════ -->
@@ -1430,6 +1453,22 @@ footer.sources ul{padding-left:18px;}
 (function() {
   var tabs = document.querySelectorAll('.mod-tab');
   var panels = document.querySelectorAll('.tab-panel');
+
+  function updateReportPreview() {
+    try {
+      var html = typeof buildReportHTML === 'function' ? buildReportHTML() : '';
+      var frame = document.getElementById('reportPreviewFrame');
+      if (frame && html) frame.srcdoc = html;
+    } catch(e) {}
+  }
+
+  // Wire printBtn2 to open export modal
+  var pb2 = document.getElementById('printBtn2');
+  if (pb2) pb2.addEventListener('click', function() {
+    var modal = document.getElementById('exportModal');
+    if (modal) modal.classList.add('open');
+  });
+
   tabs.forEach(function(tab) {
     tab.addEventListener('click', function() {
       var target = this.dataset.tab;
@@ -1438,6 +1477,34 @@ footer.sources ul{padding-left:18px;}
       this.classList.add('active');
       var panel = document.getElementById('tab-' + target);
       if (panel) panel.classList.add('active');
+
+      // Center column overlays for Results / Report tabs
+      var diagramCanvas = document.querySelector('.diagram-canvas');
+      var diagramCaption = document.getElementById('diagramCaption');
+      var diagramTopbar = document.querySelector('.diagram-topbar');
+      var centerResults = document.getElementById('center-results');
+      var centerReport  = document.getElementById('center-report');
+
+      if (target === 'results') {
+        if (diagramCanvas)  diagramCanvas.style.display  = 'none';
+        if (diagramCaption) diagramCaption.style.display = 'none';
+        if (diagramTopbar)  diagramTopbar.style.display  = 'none';
+        if (centerResults)  { centerResults.style.display = 'flex'; centerResults.classList.add('cpanel-active'); }
+        if (centerReport)   { centerReport.style.display  = 'none'; centerReport.classList.remove('cpanel-active'); }
+      } else if (target === 'report') {
+        if (diagramCanvas)  diagramCanvas.style.display  = 'none';
+        if (diagramCaption) diagramCaption.style.display = 'none';
+        if (diagramTopbar)  diagramTopbar.style.display  = 'none';
+        if (centerResults)  { centerResults.style.display = 'none'; centerResults.classList.remove('cpanel-active'); }
+        if (centerReport)   { centerReport.style.display  = 'flex'; centerReport.classList.add('cpanel-active'); }
+        updateReportPreview();
+      } else {
+        if (diagramCanvas)  diagramCanvas.style.display  = '';
+        if (diagramCaption) diagramCaption.style.display = '';
+        if (diagramTopbar)  diagramTopbar.style.display  = '';
+        if (centerResults)  { centerResults.style.display = 'none'; centerResults.classList.remove('cpanel-active'); }
+        if (centerReport)   { centerReport.style.display  = 'none'; centerReport.classList.remove('cpanel-active'); }
+      }
     });
   });
 })();
