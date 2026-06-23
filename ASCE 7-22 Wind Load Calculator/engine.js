@@ -8512,5 +8512,14 @@ if (document.readyState === 'loading') {
   renderResults = function () {
     origRender();
     postState();
+    // Expose report builder on window so tab-switching script can call it
+    // (engine.js runs in new Function() scope, not global scope)
+    window._scGetReportHTML = function() {
+      return lastResult ? buildReportHTML(lastResult) : null;
+    };
+  };
+  // Initial exposure (before first render)
+  window._scGetReportHTML = function() {
+    return lastResult ? buildReportHTML(lastResult) : null;
   };
 })();

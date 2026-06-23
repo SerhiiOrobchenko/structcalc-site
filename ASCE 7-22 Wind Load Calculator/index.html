@@ -292,6 +292,72 @@ footer.sources ul{padding-left:18px;}
 }
 #reportPreviewFrame{flex:1;border:none;background:#fff;}
 
+  /* ══ PRINT / REPORT STYLES ══════════════════════════════════════════════ */
+  /* Title block (Tedds-style repeating header, built by buildTitleBlockHTML) */
+  table.title-block{width:100%; border-collapse:collapse; font-size:.72rem; margin:0;}
+  table.title-block td{border:1px solid rgb(50,50,50); padding:3px 6px; vertical-align:middle;}
+  table.title-block .tb-logo{width:22%; border-right:1px solid rgb(50,50,50); text-align:center; padding:8px; vertical-align:middle;}
+  .tb-logo-placeholder{color:#aaa; font-size:.7rem; border:1px dashed #bbb; padding:24px 8px; letter-spacing:.06em; text-align:center;}
+  table.title-block .tb-fl{width:5%; font-size:.6rem; font-weight:700; color:#444; white-space:nowrap; vertical-align:top; padding:3px 4px;}
+  table.title-block .tb-fv{vertical-align:top; padding:3px 6px; font-size:.78rem;}
+  table.title-block .tb-fv-wide{font-weight:700;}
+  table.title-block .tb-company{font-weight:700; font-size:.78rem; vertical-align:middle;}
+  table.title-block .tb-signoff{font-size:.72rem; vertical-align:middle; padding:3px 6px;}
+  table.title-block .tb-label{font-size:.58rem; color:#555; text-transform:uppercase; letter-spacing:.04em; margin-right:3px; display:block;}
+
+  /* Cover page */
+  .cover-page{border:1px solid rgb(50,50,50); padding:1.5cm 2cm; box-sizing:border-box;
+              display:flex; flex-direction:column; min-height:9in;}
+  .cover-company{font-size:1rem; font-weight:700; color:var(--brand);}
+  .cover-section{font-size:.85rem; color:var(--muted); margin-top:2px;}
+  .cover-title{margin:3cm 0 1.5cm; text-align:center;}
+  .cover-title h1{font-size:1.5rem; color:var(--brand); margin:0 0 8px; border:none; padding:0;}
+  .cover-title .cover-subtitle{font-size:.95rem; color:var(--muted);}
+  .cover-signoff{display:flex; flex-wrap:wrap; gap:16px; font-size:.84rem; margin-top:1cm;}
+  .cover-signoff span strong{color:var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.03em;}
+  .report-cover-table td{padding:4px 12px; border:1px solid #ccc; font-size:.9rem;}
+
+  /* Report page (each section is a table so the title block repeats on print) */
+  table.report-page{width:100%; border-collapse:collapse;}
+  table.report-page thead{display:table-header-group;}
+  table.report-page > thead > tr > th{padding:0; border:1px solid rgb(50,50,50);}
+  table.report-page > tbody > tr > td{padding:10px 12px; border-left:1px solid rgb(50,50,50); border-right:1px solid rgb(50,50,50); border-bottom:1px solid rgb(50,50,50);}
+
+  /* Report sections */
+  .report-section{margin-bottom:14px;}
+  .report-section h2{font-size:.9rem; margin:14px 0 4px; color:rgb(50,50,50); border-bottom:1px solid rgb(50,50,50); padding-bottom:2px; font-weight:700; letter-spacing:.01em;}
+  .rpt-section{margin-bottom:14px;}
+  .rpt-section h2{font-size:.9rem; margin:14px 0 4px; color:rgb(50,50,50); border-bottom:1px solid rgb(50,50,50); padding-bottom:2px;}
+  .rpt-note{font-size:.83rem; padding:6px 10px; border-radius:4px; margin:6px 0;}
+  .rpt-note.warn{background:#fff8e6; border-left:4px solid #e6a817; color:#6b4200;}
+  .rpt-note.info{background:#e8f4ff; border-left:4px solid #1f4e79; color:#1a3a5c;}
+
+  /* Steps table (velocity pressure step-by-step) */
+  table.steps-table{border-collapse:collapse; width:100%;}
+  table.steps-table td, table.steps-table th{border:none; padding:2px 6px 2px 0; vertical-align:top;}
+  table.steps-table thead tr{border-bottom:1px solid rgb(50,50,50);}
+  table.steps-table .step-label{font-weight:600; font-size:.86rem; display:block;}
+  table.steps-table .formula{font-size:.84rem; color:#333; font-style:italic;}
+  table.steps-table td.ref-col{width:4%; white-space:nowrap; color:#888; font-size:.7rem; text-align:right; padding-right:0;}
+  table.steps-table th{color:rgb(50,50,50); font-weight:700;}
+  table.steps-table th:last-child{width:4%; white-space:nowrap; font-size:.7rem; text-align:right; padding-right:0;}
+
+  /* Report input table */
+  table.report-input-table{border-collapse:collapse; width:100%;}
+  table.report-input-table td, table.report-input-table th{border:none; padding:2px 6px; vertical-align:top;}
+  table.report-input-table thead tr{border-bottom:1px solid rgb(50,50,50);}
+  table.report-input-table td:nth-child(3), table.report-input-table th:nth-child(3){width:5%; white-space:nowrap;}
+
+  /* Generic result tables (rpt-table) */
+  table.rpt-table{border-collapse:collapse; width:100%; font-size:.83rem; margin:6px 0;}
+  table.rpt-table th{background:#D5E8F0; color:rgb(50,50,50); font-weight:700; padding:4px 8px; border:1px solid rgb(50,50,50); text-align:left;}
+  table.rpt-table td{padding:3px 8px; border:1px solid #ccc; vertical-align:top;}
+  table.rpt-table tr:nth-child(even) td{background:#f7f8fa;}
+
+  /* Min-wind warning (shows in report when min wind governs) */
+  .min-wind-warn{display:none; background:#fff8e6; border:1px solid #e6a817; border-left:4px solid #e6a817; border-radius:4px; padding:8px 12px; margin:8px 0; font-size:.82rem; color:#6b4200;}
+  .min-wind-warn.active{display:block;}
+
 </style>
 </head>
 <body>
@@ -1457,19 +1523,24 @@ footer.sources ul{padding-left:18px;}
     try {
       var frame = document.getElementById('reportPreviewFrame');
       if (!frame) return;
-      // #reportContent is a print-only div that engine.js populates on every render
-      var reportEl = document.getElementById('reportContent');
-      if (reportEl && reportEl.innerHTML.trim()) {
-        // Wrap in a minimal HTML shell with the module's styles
-        var styleEls = document.querySelectorAll('style');
+
+      // engine.js exposes window._scGetReportHTML() after its first render
+      var reportHTML = typeof window._scGetReportHTML === 'function'
+        ? window._scGetReportHTML() : null;
+
+      if (reportHTML) {
+        // Collect all <style> elements from the host document
         var styles = '';
-        styleEls.forEach(function(s) { styles += s.outerHTML; });
+        document.querySelectorAll('style').forEach(function(s) { styles += s.outerHTML; });
         frame.srcdoc = '<!DOCTYPE html><html><head><meta charset="utf-8">' + styles +
-          '<style>body{margin:0;padding:0;font-family:system-ui,sans-serif;}</style></head>' +
-          '<body>' + reportEl.innerHTML + '</body></html>';
+          '<style>body{margin:1.5cm 1.5cm 1.5cm 1.5cm;background:#e0e0e0;font-family:system-ui,sans-serif;}' +
+          '.print-only{display:block!important;}' +
+          'table.report-page{margin-bottom:1.5cm;}' +
+          '</style></head><body class="preview-mode">' +
+          reportHTML + '</body></html>';
       } else {
         frame.srcdoc = '<html><body style="font-family:system-ui;padding:40px;color:#666;">' +
-          '<p>Run a calculation first (fill inputs and wait for results), then switch to Report.</p>' +
+          '<p>Run a calculation first, then switch to Report tab.</p>' +
           '</body></html>';
       }
     } catch(e) {}
