@@ -8404,4 +8404,113 @@ if (document.readyState === 'loading') {
 
     // Circular Bins, Silos, and Tanks (Sec. 30.10) inputs
     const hasCircularTankEl2 = document.getElementById('hasCircularTank');
-    if (hasCircularTa
+    if (hasCircularTankEl2) hasCircularTankEl2.checked = !!state.hasCircularTank;
+    const tankDEl2 = document.getElementById('tankD');
+    if (tankDEl2) tankDEl2.value = fmtLenIn(state.tankD);
+    const tankHEl2 = document.getElementById('tankH');
+    if (tankHEl2) tankHEl2.value = fmtLenIn(state.tankH);
+    const tankOpenTopEl2 = document.getElementById('tankOpenTop');
+    if (tankOpenTopEl2) tankOpenTopEl2.checked = !!state.tankOpenTop;
+    const tankElevatedEl2 = document.getElementById('tankElevated');
+    if (tankElevatedEl2) tankElevatedEl2.checked = !!state.tankElevated;
+
+    // Stepped Roofs (Sec. 30.3.2.1, Fig. 30.3-3) inputs
+    const hasSteppedRoofEl2 = document.getElementById('hasSteppedRoof');
+    if (hasSteppedRoofEl2) hasSteppedRoofEl2.checked = !!state.hasSteppedRoof;
+    const steppedLowerHEl2 = document.getElementById('steppedLowerH');
+    if (steppedLowerHEl2) steppedLowerHEl2.value = fmtLenIn(state.steppedLowerH);
+    const steppedLowerWEl2 = document.getElementById('steppedLowerW');
+    if (steppedLowerWEl2) steppedLowerWEl2.value = fmtLenIn(state.steppedLowerW);
+
+    // Multispan Gable Roofs (Fig. 30.3-4) inputs
+    const hasMultispanRoofEl2 = document.getElementById('hasMultispanRoof');
+    if (hasMultispanRoofEl2) hasMultispanRoofEl2.checked = !!state.hasMultispanRoof;
+    const msModuleWEl2 = document.getElementById('msModuleW');
+    if (msModuleWEl2) msModuleWEl2.value = fmtLenIn(state.msModuleW);
+
+    // Sawtooth Roofs (Fig. 30.3-6) inputs
+    const hasSawtoothRoofEl2 = document.getElementById('hasSawtoothRoof');
+    if (hasSawtoothRoofEl2) hasSawtoothRoofEl2.checked = !!state.hasSawtoothRoof;
+    const swModuleWEl2 = document.getElementById('swModuleW');
+    if (swModuleWEl2) swModuleWEl2.value = fmtLenIn(state.swModuleW);
+
+    // Domed Roofs (Fig. 30.3-7) inputs
+    const hasDomeRoofEl2 = document.getElementById('hasDomeRoof');
+    if (hasDomeRoofEl2) hasDomeRoofEl2.checked = !!state.hasDomeRoof;
+    const domeDEl2 = document.getElementById('domeD');
+    if (domeDEl2) domeDEl2.value = fmtLenIn(state.domeD);
+    const domeFEl2 = document.getElementById('domeF');
+    if (domeFEl2) domeFEl2.value = fmtLenIn(state.domeF);
+    const domeHDEl2 = document.getElementById('domeHD');
+    if (domeHDEl2) domeHDEl2.value = fmtLenIn(state.domeHD);
+
+    // Monoslope Roofs (Fig. 30.3-5A/5B) toggle
+    const hasMonoslopeRoofEl2 = document.getElementById('hasMonoslopeRoof');
+    if (hasMonoslopeRoofEl2) hasMonoslopeRoofEl2.checked = !!state.hasMonoslopeRoof;
+
+    // Single-select special-structure dropdown — sync from the 6 booleans above
+    const specialRoofTypeEl2 = document.getElementById('specialRoofType');
+    if (specialRoofTypeEl2) specialRoofTypeEl2.value = specialRoofTypeFromState(state);
+    applySpecialRoofVisibility();
+    applyGenericRoofControlsVisibility();
+
+    // Open Building — Free Roof (Sec. 27.3.2) inputs
+    const openRoofShapeEl = document.getElementById('openRoofShape');
+    if (openRoofShapeEl) {
+      openRoofShapeEl.value = state.openRoofShape || 'monoslope';
+      state.openRoofShape = openRoofShapeEl.value;
+    }
+    const openWindFlowEl = document.getElementById('openWindFlow');
+    if (openWindFlowEl) {
+      openWindFlowEl.value = state.openWindFlow || 'clear';
+      state.openWindFlow = openWindFlowEl.value;
+    }
+    const openLEl = document.getElementById('openL');
+    if (openLEl) openLEl.value = fmtLenIn(state.openL || 40);
+
+    // Project Information (report header)
+    if (!state.projectDate) {
+      const d = new Date();
+      state.projectDate = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    document.getElementById('projectName').value = state.projectName || '';
+    document.getElementById('projectNumber').value = state.projectNumber || '';
+    document.getElementById('engineer').value = state.engineer || '';
+    document.getElementById('projectDate').value = state.projectDate;
+    document.getElementById('riskCategory').value = state.riskCategory || 'II';
+
+    // Print title block fields (Phase 3 / report header)
+    document.getElementById('companyName').value = state.companyName || '';
+    document.getElementById('jobRef').value = state.jobRef || '';
+    document.getElementById('chkdBy').value = state.chkdBy || '';
+    document.getElementById('chkdDate').value = state.chkdDate || '';
+    document.getElementById('appdBy').value = state.appdBy || '';
+    document.getElementById('appdDate').value = state.appdDate || '';
+
+    document.getElementById('unitSI').classList.toggle('active', state.unitSystem === 'SI');
+    document.getElementById('unitUS').classList.toggle('active', state.unitSystem === 'US');
+
+    applyModeVisibility();
+    applyRoofTypeVisibility();
+    applyEnclosureVisibility();
+    updateUnitLabels();
+    renderResults();
+  }
+
+  window.addEventListener('message', (event) => {
+    const msg = event.data;
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.type === 'loadState') {
+      applyState(msg.state);
+      if (msg.unitSystem) setUnitSystem(msg.unitSystem);
+    } else if (msg.type === 'requestState') {
+      postState();
+    }
+  });
+
+  const origRender = renderResults;
+  renderResults = function () {
+    origRender();
+    postState();
+  };
+})();
