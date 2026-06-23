@@ -911,7 +911,11 @@ function init() {
   renderResults();
 }
 
-document.addEventListener('DOMContentLoaded', init);
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
 
 /* =====================================================================
    STRUCTCALC SHELL BRIDGE
@@ -930,8 +934,8 @@ document.addEventListener('DOMContentLoaded', init);
   }
 
   function postState() {
-    if (window.parent === window) return; // not embedded
-    window.parent.postMessage({ type: 'stateChanged', module: 'snowASCE', state: snapshotState() }, '*');
+    const target = (window.parent !== window) ? window.parent : window;
+    target.postMessage({ type: 'stateChanged', module: 'snowASCE', state: snapshotState() }, '*');
   }
 
   function applyState(newState) {
@@ -988,5 +992,9 @@ document.addEventListener('DOMContentLoaded', init);
     postState();
   };
 
-  window.addEventListener('DOMContentLoaded', () => setTimeout(postState, 0));
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', () => setTimeout(postState, 0));
+  } else {
+    setTimeout(postState, 0);
+  }
 })();

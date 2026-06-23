@@ -1662,9 +1662,10 @@ function compute(s) {
 
   // --- C&C Roof ---
   // theta <= 7 deg: Fig. 30.3-2A, zones 1', 1, 2, 3.
-  // theta > 7 deg: Figs. 30.3-2B/2C (gable) or 2D-2G equivalent (hip), zones 1, 2, 3
-  // (no zone 1' on the sloped-roof figures). theta beyond the figures' range (27° gable,
-  // 45° hip) is capped at the last band's values and flagged via roofCapped.
+  // theta > 7 deg, roofShape gable/hip: Figs. 30.3-2B/2C (gable) or 2D-2G equivalent
+  // (hip), zones 1, 2, 3 (no zone 1' on the sloped-roof figures). theta beyond the
+  // figures' range (27° gable, 45° hip) is capped at the last band's values and
+  // flagged via roofCapped.
   // theta > 7 deg, roofShape monoslope: this generic gable/hip table does NOT apply
   // (a monoslope roof has no ridge) — left empty; the dedicated Fig. 30.3-5A/5B
   // calculation (hasMonoslopeRoof/monoslopeRoof below) is the sole source of roof
@@ -2498,7 +2499,7 @@ function reportCh32HTML(r32, r) {
     h += '</tbody></table>';
 
     if (r32.roofZones_mwfrs && r32.roofZones_mwfrs.length) {
-      h += '<p style="margin-top:10px;font-size:0.88em;color:#555">Roof zones (flat/low-slope, K<sub>vT</sub> = 1.1 uplift / 1.0 downward, Eq. 32.15-1):</p>';
+      h += '<p style="margin-top:10px;font-size:0.88em;color:#555">Roof zones (flat/low-slope, K<sub>vT</sub> = 1.1 uplift / 1.0 downward, Eq. 32.15-1):</p>';
       h += '<table class="rpt-table"><thead><tr><th>Zone</th><th>C<sub>p</sub></th><th>Uplift LC1</th><th>Uplift LC2</th><th>Down LC1</th><th>Down LC2</th></tr></thead><tbody>';
       r32.roofZones_mwfrs.forEach(function(z) {
         h += '<tr><td>' + z.label + '</td><td>' + f2(z.cp1) + '</td><td>' + pf(z.pT_up_lc1) + '</td><td>' + pf(z.pT_up_lc2) + '</td><td>' + pf(z.pT_dn_lc1) + '</td><td>' + pf(z.pT_dn_lc2) + '</td></tr>';
@@ -2817,8 +2818,8 @@ function renderResults() {
     const hDisp = fmt(state.unitSystem === 'SI' ? state.h * 0.3048 : state.h, 1) +
                   (state.unitSystem === 'SI' ? ' m' : ' ft');
     ccAutoInfo.innerHTML = isPart2
-      ? '<strong>Ch.30 Part 2 auto-selected</strong> &mdash; h = ' + hDisp + ' &gt; 60 ft (Sec. 30.4.1)'
-      : '<strong>Ch.30 Part 1 auto-selected</strong> &mdash; h = ' + hDisp + ' &le; 60 ft (Sec. 30.3.1)';
+      ? '<strong>Ch.30 Part 2 auto-selected</strong> &mdash; h = ' + hDisp + ' &gt; 60 ft (Sec. 30.4.1)'
+      : '<strong>Ch.30 Part 1 auto-selected</strong> &mdash; h = ' + hDisp + ' &le; 60 ft (Sec. 30.3.1)';
     ccAutoInfo.style.display = '';
   }
   if (isPart2 && r.cc30p2) {
@@ -4227,6 +4228,7 @@ function reportCh29HTML(r) {
   return html;
 }
 
+
 function reportCCHTML(r) {
   const s = state;
   let html = '<h3>Walls &mdash; Zones 4 &amp; 5 <span class="ref">Fig. 30.3-1</span></h3>' + zoneTableHTML(r.ccWall, true);
@@ -4940,7 +4942,7 @@ function buildTitleBlockHTML() {
 // the repeating title block (sheet no. = section index + 1; sheet 1 is the
 // cover page built by renderPrintCover()).
 function reportMinCheckHTML(r) {
-  const pFmtR = psf => fmt(pVal(psf), 2) + ' ' + pUnit();
+  const pFmtR = psf => fmt(pVal(psf), 2) + ' ' + pUnit();
   const F = 'rgb(50,50,50)';
   const warn = '<span style="color:#b85c00; font-weight:700;">&#9888; GOVERNS</span>';
   const ok   = '<span style="color:#2a7a2a;">&#10003; OK</span>';
@@ -4951,27 +4953,27 @@ function reportMinCheckHTML(r) {
     const status = c.governs
       ? '<td style="color:#b85c00; font-weight:700;">' + pFmtR(c.pMin) + ' ' + warn + '</td>'
       : '<td>' + pFmtR(c.pCalc) + ' ' + ok + '</td>';
-    return '<tr><td>Zone ' + c.zone + '</td><td>' + type + '</td><td>' + pFmtR(c.pCalc) + '</td><td>' + pFmtR(c.pMin) + '</td>' + status + '</tr>';
+    return '<tr><td>Zone ' + c.zone + '</td><td>' + type + '</td><td>' + pFmtR(c.pCalc) + '</td><td>' + pFmtR(c.pMin) + '</td>' + status + '</tr>';
   }).join('');
 
   const mwfrsNote = r.mwfrsMinGoverns
-    ? '<p style="color:#b85c00; margin:6px 0 0; font-size:.8rem;">&#9888; One or more MWFRS zones are governed by the Sec. 27.1.5 minimum. Use the minimum pressure for those zones in structural design.</p>'
-    : '<p style="color:#2a7a2a; margin:6px 0 0; font-size:.8rem;">&#10003; All MWFRS zones exceed the Sec. 27.1.5 minimum. Computed pressures govern.</p>';
+    ? '<p style="color:#b85c00; margin:6px 0 0; font-size:.8rem;">&#9888; One or more MWFRS zones are governed by the Sec. 27.1.5 minimum. Use the minimum pressure for those zones in structural design.</p>'
+    : '<p style="color:#2a7a2a; margin:6px 0 0; font-size:.8rem;">&#10003; All MWFRS zones exceed the Sec. 27.1.5 minimum. Computed pressures govern.</p>';
 
   // C&C table
   let ccRows = r.ccMinCheck.map(c => {
     const status = c.governs
       ? '<td style="color:#b85c00; font-weight:700;">' + pFmtR(c.pMin) + ' ' + warn + '</td>'
       : '<td>' + pFmtR(c.pCalc) + ' ' + ok + '</td>';
-    return '<tr><td>Zone ' + c.zone + '</td><td>' + pFmtR(c.pCalc) + '</td><td>' + pFmtR(c.pMin) + '</td>' + status + '</tr>';
+    return '<tr><td>Zone ' + c.zone + '</td><td>' + pFmtR(c.pCalc) + '</td><td>' + pFmtR(c.pMin) + '</td>' + status + '</tr>';
   }).join('');
 
   const ccNote = r.ccMinGoverns
-    ? '<p style="color:#b85c00; margin:6px 0 0; font-size:.8rem;">&#9888; One or more C&amp;C zones are governed by the Sec. 30.2.2 minimum. Use the minimum pressure for those zones in component design.</p>'
-    : '<p style="color:#2a7a2a; margin:6px 0 0; font-size:.8rem;">&#10003; All C&amp;C zones exceed the Sec. 30.2.2 minimum. Computed pressures govern.</p>';
+    ? '<p style="color:#b85c00; margin:6px 0 0; font-size:.8rem;">&#9888; One or more C&amp;C zones are governed by the Sec. 30.2.2 minimum. Use the minimum pressure for those zones in component design.</p>'
+    : '<p style="color:#2a7a2a; margin:6px 0 0; font-size:.8rem;">&#10003; All C&amp;C zones exceed the Sec. 30.2.2 minimum. Computed pressures govern.</p>';
 
   const thStyle = 'style="text-align:left;"';
-  return '<p style="font-size:.8rem; margin:0 0 8px;">Per Sec. 27.1.5, MWFRS net design pressures shall not be less than 16 psf (0.77 kN/m²) on wall zones and 8 psf (0.38 kN/m²) on roof zones. Per Sec. 30.2.2, C&amp;C net pressures shall not be less than 16 psf (0.77 kN/m²) acting in either direction normal to the surface.</p>' +
+  return '<p style="font-size:.8rem; margin:0 0 8px;">Per Sec. 27.1.5, MWFRS net design pressures shall not be less than 16 psf (0.77 kN/m²) on wall zones and 8 psf (0.38 kN/m²) on roof zones. Per Sec. 30.2.2, C&amp;C net pressures shall not be less than 16 psf (0.77 kN/m²) acting in either direction normal to the surface.</p>' +
     '<p style="font-weight:700; margin:8px 0 4px;">MWFRS — Sec. 27.1.5</p>' +
     '<table class="report-input-table"><thead><tr><th ' + thStyle + '>Zone</th><th ' + thStyle + '>Type</th><th ' + thStyle + '>Calculated |p|</th><th ' + thStyle + '>Minimum |p|</th><th ' + thStyle + '>Design Pressure</th></tr></thead><tbody>' + mwfrsRows + '</tbody></table>' +
     mwfrsNote +
@@ -5127,7 +5129,7 @@ function buildReportHTML(r) {
   }
 
   if (r.openRoof) {
-    html += section('Minimum Design Wind Load Check', 'Sec. 27.1.5 (MWFRS) / Sec. 30.2.2 (C&amp;C)', reportMinCheckHTML(r));
+    html += section('Minimum Design Wind Load Check', 'Sec. 27.1.5 (MWFRS) / Sec. 30.2.2 (C&amp;C)', reportMinCheckHTML(r));
   html += section('Open Building &mdash; Free Roof Pressures', 'Sec. 27.3.2, Eq. 27.3-2: p = q<sub>h</sub>K<sub>d</sub>GC<sub>N</sub>', reportOpenRoofHTML(r));
   }
 
@@ -5743,13 +5745,13 @@ function renderCCCombined(r) {
   var pU = pUnit();
   var isFlat = state.theta <= 7;
   var isMonoslope = !isFlat && state.roofShape === 'monoslope';
-  var roofRef = isFlat ? 'Fig. 30.3-2A, θ ≤ 7°' :
-    (state.roofShape === 'hip' ? 'Figs. 30.3-2D–G, θ > 7°' : 'Figs. 30.3-2B/2C, θ > 7°');
+  var roofRef = isFlat ? 'Fig. 30.3-2A, \u03b8 \u2264 7\u00b0' :
+    (state.roofShape === 'hip' ? 'Figs. 30.3-2D\u2013G, \u03b8 > 7\u00b0' : 'Figs. 30.3-2B/2C, \u03b8 > 7\u00b0');
   var html = '<table>';
   html += '<thead><tr><th>Zone</th><th>(GC<sub>p</sub>) range</th>';
   html += '<th>p<sub>min</sub> suction, ' + pU + '</th><th>p<sub>max</sub> positive, ' + pU + '</th></tr></thead>';
   html += '<tbody>';
-  html += '<tr><td colspan="4" class="cc-section-header">Walls — Zones 4 &amp; 5  <span class="ref">Fig. 30.3-1</span></td></tr>';
+  html += '<tr><td colspan="4" class="cc-section-header">Walls \u2014 Zones 4 &amp; 5  <span class="ref">Fig. 30.3-1</span></td></tr>';
   (r.ccWall||[]).forEach(function(row) {
     var gcStr = fmt(row.gcp.neg,2) + ' to ' + fmt(row.gcp.pos,2);
     html += '<tr><td>'+(ZONE_LABELS[row.zone]||row.zone)+'</td><td>'+gcStr+'</td>'+
@@ -5759,7 +5761,7 @@ function renderCCCombined(r) {
     html += '<tr><td colspan="4" class="cc-section-header">Roof &mdash; see Monoslope Roof section below <span class="ref">Figs. 30.3-5A/5B</span></td></tr>';
     html += '<tr><td colspan="4" class="muted" style="font-size:.82rem;">Figs. 30.3-2B/2C/2D&ndash;G (gable/hip) do not apply to a monoslope roof &mdash; pressures are calculated separately below.</td></tr>';
   } else {
-    html += '<tr><td colspan="4" class="cc-section-header">Roof — Zones ' +
+    html += '<tr><td colspan="4" class="cc-section-header">Roof \u2014 Zones ' +
       (isFlat ? '1&prime;, 1, 2, 3' : '1, 2, 3') +
       '  <span class="ref">' + roofRef + '</span></td></tr>';
     (r.ccRoof||[]).forEach(function(row) {
@@ -5775,8 +5777,8 @@ function renderCCCombined(r) {
     if (state.theta > 7 && r.roofCapped) {
       roofNote.style.display = '';
       roofNote.textContent = (state.roofShape === 'hip')
-        ? 'Roof angle θ > 45°: Figures 30.3-2D–G (hip) do not extend past θ = 45°. The θ = 45° coefficients are used as a capping value per engineering judgment.'
-        : 'Roof angle θ > 45°: Figure 30.3-2B/2C is capped at θ = 45° per engineering judgment.';
+        ? 'Roof angle \u03b8 > 45\u00b0: Figures 30.3-2D\u2013G (hip) do not extend past \u03b8 = 45\u00b0. The \u03b8 = 45\u00b0 coefficients are used as a capping value per engineering judgment.'
+        : 'Roof angle \u03b8 > 45\u00b0: Figure 30.3-2B/2C is capped at \u03b8 = 45\u00b0 per engineering judgment.';
     } else { roofNote.style.display = 'none'; }
   }
 }
@@ -6504,9 +6506,9 @@ function applyModeVisibility() {
   // Update hint text below the 3 buttons
   const hint = document.getElementById('procHint');
   if (hint) {
-    if (isEnv) hint.textContent = 'Ch.28 Envelope — low-rise buildings only: h ≤ 60 ft and h ≤ least horizontal dimension (Sec. 28.3.1).';
-    else if (isDir) hint.textContent = 'Ch.27 Directional — all building heights and geometries; required when h > 60 ft or h > least horizontal dimension (Sec. 27.1.2).';
-    else hint.textContent = 'Ch.30 C&C — pressures on individual cladding, fasteners, purlins. Part 1 (h ≤ 60 ft) or Part 2 (h > 60 ft) selected automatically.';
+    if (isEnv) hint.textContent = 'Ch.28 Envelope — low-rise buildings only: h ≤ 60 ft and h ≤ least horizontal dimension (Sec. 28.3.1).';
+    else if (isDir) hint.textContent = 'Ch.27 Directional — all building heights and geometries; required when h > 60 ft or h > least horizontal dimension (Sec. 27.1.2).';
+    else hint.textContent = 'Ch.30 C&C — pressures on individual cladding, fasteners, purlins. Part 1 (h ≤ 60 ft) or Part 2 (h > 60 ft) selected automatically.';
   }
   applyStructureCategoryVisibility();
 }
@@ -6571,13 +6573,16 @@ function applyStructureCategoryVisibility() {
   if (activeRow) activeRow.classList.add('active');
 }
 
-// Single-select "Special structure" dropdown (#specialRoofType) — replaces
-// the former 6 independent checkboxes (hasCircularTank, hasSteppedRoof,
-// hasMultispanRoof, hasSawtoothRoof, hasDomeRoof, hasMonoslopeRoof) with one
-// mutually-exclusive selector. The 6 underlying boolean state flags are kept
-// completely unchanged so no downstream compute()/report()/export() logic
-// needs modification — this dropdown is purely a UI-layer abstraction that
-// sets exactly one boolean true and the rest false.
+// ------------------------------------------------------------------
+// Single-select "Special roof / structure configuration" dropdown
+// (#specialRoofType) — replaces the former 6 independent checkboxes
+// (hasCircularTank/hasSteppedRoof/hasMultispanRoof/hasSawtoothRoof/
+// hasDomeRoof/hasMonoslopeRoof) with one mutually-exclusive selector.
+// The underlying state booleans are kept exactly as before (so every
+// downstream compute()/report/export function that already reads
+// s.hasXxx needs no changes) — this dropdown is just a UI layer that
+// sets exactly one of them true and the rest false.
+// ------------------------------------------------------------------
 function specialRoofTypeFromState(s) {
   if (s.hasCanopy)        return 'canopy';
   if (s.hasCircularTank)  return 'circTank';
@@ -6587,6 +6592,7 @@ function specialRoofTypeFromState(s) {
   if (s.hasDomeRoof)      return 'dome';
   return 'none';
 }
+
 function applySpecialRoofVisibility() {
   const el = document.getElementById('specialRoofType');
   const v = el ? el.value : 'none';
@@ -8164,6 +8170,7 @@ function init() {
   const hasMonoslopeRoofElInit = document.getElementById('hasMonoslopeRoof');
   if (hasMonoslopeRoofElInit) hasMonoslopeRoofElInit.checked = !!state.hasMonoslopeRoof;
 
+  // Single-select special-structure dropdown — sync from the 6 booleans above
   const specialRoofTypeElInit = document.getElementById('specialRoofType');
   if (specialRoofTypeElInit) specialRoofTypeElInit.value = specialRoofTypeFromState(state);
   applySpecialRoofVisibility();
@@ -8212,7 +8219,12 @@ function init() {
   renderResults();
 }
 
-document.addEventListener('DOMContentLoaded', init);
+// Support both standalone page load and dynamic injection by StructCalc shell
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
 
 /* =====================================================================
    STRUCTCALC SHELL BRIDGE
@@ -8227,8 +8239,9 @@ document.addEventListener('DOMContentLoaded', init);
   }
 
   function postState() {
-    if (window.parent === window) return; // not embedded
-    window.parent.postMessage({ type: 'stateChanged', module: 'windASCE', state: snapshotState() }, '*');
+    // Works both in iframe (legacy) and in shell's no-iframe fetch-inject mode
+    const target = (window.parent !== window) ? window.parent : window;
+    target.postMessage({ type: 'stateChanged', module: 'windASCE', state: snapshotState() }, '*');
   }
 
   function applyState(newState) {

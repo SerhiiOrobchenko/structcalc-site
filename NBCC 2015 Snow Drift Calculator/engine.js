@@ -824,7 +824,7 @@ function bindPrintButton() {
 }
 
 // ---- Init -------------------------------------------------------------------------
-document.addEventListener('DOMContentLoaded', () => {
+function initModule() {
   document.getElementById('unitSI').addEventListener('click', () => setUnits('SI'));
   document.getElementById('unitUS').addEventListener('click', () => setUnits('US'));
   bindMainInputs();
@@ -834,7 +834,12 @@ document.addEventListener('DOMContentLoaded', () => {
   bindInfoModal();
   bindPrintButton();
   update();
-});
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initModule);
+} else {
+  initModule();
+}
 
 /* =====================================================================
    STRUCTCALC SHELL BRIDGE
@@ -853,8 +858,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function postState() {
-    if (window.parent === window) return; // not embedded
-    window.parent.postMessage({
+    const target = (window.parent !== window) ? window.parent : window;
+    target.postMessage({
       type: 'stateChanged', module: 'snowDriftNBCC',
       state: snapshotState(), unitSystem: unitSystem
     }, '*');
@@ -894,8 +899,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const _update = update;
   update = function () {
     _update.apply(this, arguments);
-    postState();
+        postState();
   };
 
-  window.addEventListener('DOMContentLoaded', () => setTimeout(postState, 0));
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', () => setTimeout(postState, 0));
+  } else {
+    setTimeout(postState, 0);
+  }
 })();
