@@ -621,6 +621,8 @@ function scopeCSS(css) {
         s = s.trim(); if (!s) return '';
         if (s === 'body' || s === 'html') return '#module-host';
         if (s.startsWith(':root') || s.includes('#module-host')) return s;
+        // body.class-name → .mod-workspace.class-name (body classes set by engine on .mod-workspace)
+        if (s.startsWith('body.')) return s.replace(/^body/, '.mod-workspace');
         return '#module-host ' + s;
       }).filter(Boolean).join(',\n');
       out += scoped + '{' + body + '}\n';
@@ -1008,8 +1010,4 @@ function timeAgo(ts) {
 
 /* =====================================================================
    INIT
-   ===================================================================== */
-renderDashboard();
-const initials = 'SO';
-document.getElementById('dbAvatar').textContent = initials;
-document.getElementById('wsAvatar').textContent = initials;
+   ===================================================

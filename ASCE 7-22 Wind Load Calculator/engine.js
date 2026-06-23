@@ -2969,9 +2969,117 @@ function renderResults() {
     kztResultEl.innerHTML = 'K<sub>zt</sub> = <strong>' + fmt(ko.kzt, 3) + '</strong>' + (ko.note ? ' <span style="color:#888; font-size:.78rem;">(H/L<sub>h</sub> < 0.2)</span>' : '');
   }
 
+  populateCompact(r);
+
   lastResult = r;
   const reportEl = document.getElementById('reportContent');
   if (reportEl) reportEl.innerHTML = buildReportHTML(r);
+}
+
+/* =====================================================================
+   COMPACT RESULTS PANEL  (right column — always visible)
+   Writes governing pressures into the compact summary panel IDs.
+   Called at end of renderResults() every recalc.
+   ===================================================================== */
+function populateCompact(r) {
+  const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  const setHTML = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+  const s = state;
+  const pf = (v) => {
+    if (v == null || isNaN(v)) return '—';
+    const out = pVal(v);
+    return (out >= 0 ? '+' : '') + fmt(out, 1) + ' ' + pUnit();
+  };
+  const isCC = s.mwfrsProcedure === 'cc';
+  const isMWFRS = !isCC;
+
+  // Site & Risk
+  set('cpRC', s.riskCategory || '—');
+  set('cpExp', s.exposure || '—');
+  const encMap = { enclosed: 'Enclosed', partiallyEnclosed: 'Part.Enc.', partiallyOpen: 'Part.Open', open: 'Open' };
+  set('cpEnc', encMap[s.enclosure] || s.enclosure || '—');
+  const procMap = { envelope: 'Envelope', directional: 'Directional', cc: 'C&C' };
+  set('cpProc', procMap[s.mwfrsProcedure] || s.mwfrsProcedure || '—');
+
+  // MWFRS governing pressures (Envelope, most critical)
+  if (isMWFRS) {
+    const mwfrs = r.mwfrs;
+    if (mwfrs && mwfrs.lc1) {
+      // Use LC1 as governing (max suction case)
+      const ww = mwfrs.lc1.windwardWall;
+      const lw = mwfrs.lc1.leewardWall;
+      const rw = mwfrs.lc1.roofWindward;
+      const rl = mwfrs.lc1.roofLeeward;
+      set('cpWW', ww != null ? pf(ww) : '—');
+      set('cpLW', lw != null ? pf(lw) : '—');
+      set('cpRW', rw != null ? pf(rw) : '—');
+      set('cpRL', rl != null ? pf(rl) : '—');
+    } else if (r.ch27 && r.ch27.zones) {
+      // Ch.27 directional — pick windward wall at h and leeward
+      const z = r.ch27.zones;
+      const ww = z.find(zn => zn.label && zn.label.toLowerCase().includes('windward wall'));
+      const lw = z.find(zn => zn.label && zn.label.toLowerCase().includes('leeward wall'));
+      const rw = z.find(zn => zn.label && zn.label.toLowerCase().includes('roof windward'));
+      const rl = z.find(zn => zn.label && zn.label.toLowerCase().includes('roof leeward'));
+      set('cpWW', ww ? pf(ww.p_lc1 !== undefined ? ww.p_lc1 : ww.p) : '—');
+      set('cpLW', lw ? pf(lw.p_lc1 !== undefined ? lw.p_lc1 : lw.p) : '—');
+      set('cpRW', rw ? pf(rw.p_lc1 !== undefined ? rw.p_lc1 : rw.p) : '—');
+      set('cpRL', rl ? pf(rl.p_lc1 !== undefined ? rl.p_lc1 : rl.p) : '—');
+    } else {
+      ['cpWW','cpLW','cpRW','cpRL'].forEach(id => set(id, '—'));
+    }
+  }
+
+  // C&C governing pressures (most critical zone = most negative)
+  if (isCC && r.cc && r.cc.zones) {
+    const zones = r.cc.zones;
+    const byZone = {};
+    zones.forEach(z => {
+      if (!byZone[z.zone] || Math.abs(pVal(z.p_neg)) > Math.abs(pVal(byZone[z.zone].p_neg))) {
+        byZone[z.zone] = z;
+      }
+    });
+    const pz = (zone) => {
+      const z = byZone[zone];
+      if (!z) return '—';
+      return pf(z.p_neg !== undefined ? z.p_neg : z.p);
+    };
+    set('cpCC1', pz(1)); set('cpCC2', pz(2)); set('cpCC3', pz(3));
+    set('cpCC4', pz(4)); set('cpCC5', pz(5));
+  } else {
+    ['cpCC1','cpCC2','cpCC3','cpCC4','cpCC5'].forEach(id => set(id, '—'));
+  }
+
+  // Show/hide MWFRS vs C&C section in compact panel
+  const mwfrsS = document.getElementById('cpMWFRSSection');
+  const ccS = document.getElementById('cpCCSection');
+  if (mwfrsS) mwfrsS.style.display = isMWFRS ? '' : 'none';
+  if (ccS) ccS.style.display = isCC ? '' : 'none';
+
+  // Checks
+  const h = s.h || 0;
+  const minWin = r.mwfrsMinGoverns || r.ccMinGoverns;
+  const check1El = document.getElementById('cpCheck1');
+  if (check1El) {
+    check1El.textContent = minWin ? '⚠ Governs' : '✓ OK';
+    check1El.className = 'cres-val ' + (minWin ? 'check-warn' : 'check-ok');
+  }
+  const ch28ok = h <= 60;
+  const check2El = document.getElementById('cpCheck2');
+  if (check2El) {
+    check2El.textContent = ch28ok ? '✓ OK' : '⚠ > 60 ft';
+    check2El.className = 'cres-val ' + (ch28ok ? 'check-ok' : 'check-warn');
+  }
+  const ch32El = document.getElementById('cpCheck3');
+  if (ch32El) {
+    if (s.ch32Enabled) {
+      ch32El.textContent = '✓ Computed';
+      ch32El.className = 'cres-val check-ok';
+    } else {
+      ch32El.textContent = 'N/A';
+      ch32El.className = 'cres-val check-na';
+    }
+  }
 }
 
 /* =====================================================================
@@ -6444,6 +6552,7 @@ function bindInputs() {
     ch32EnabledEl.addEventListener('change', function(e) {
       state.ch32Enabled = e.target.checked;
       document.body.classList.toggle('ch32-enabled', state.ch32Enabled);
+      (document.querySelector('.mod-workspace') || document.body).classList.toggle('ch32-enabled', state.ch32Enabled);
       renderResults();
     });
   }
@@ -6488,6 +6597,10 @@ function setMode(mode) {
 function applyModeVisibility() {
   document.body.classList.toggle('mode-mwfrs', state.mode === 'mwfrs');
   document.body.classList.toggle('mode-cc', state.mode === 'cc');
+  // Also set on mod-workspace root so CSS works inside the shell (#module-host scoping)
+  const modRoot = document.querySelector('.mod-workspace') || document.body;
+  modRoot.classList.toggle('mode-mwfrs', state.mode === 'mwfrs');
+  modRoot.classList.toggle('mode-cc', state.mode === 'cc');
   // Legacy 2-button refs (may be absent after A2 redesign — null-guarded)
   const m = document.getElementById('modeMWFRS');
   const c = document.getElementById('modeCC');
@@ -6555,6 +6668,8 @@ function applyGenericRoofControlsVisibility() {
 function applyEnclosureVisibility() {
   const isOpen = state.enclosure === 'openFreeRoof';
   document.body.classList.toggle('enclosure-open', isOpen);
+  const modRoot = document.querySelector('.mod-workspace') || document.body;
+  modRoot.classList.toggle('enclosure-open', isOpen);
   const inputs = document.getElementById('openRoofInputs');
   if (inputs) inputs.style.display = isOpen ? '' : 'none';
 }
@@ -6562,6 +6677,8 @@ function applyEnclosureVisibility() {
 function applyStructureCategoryVisibility() {
   const isOther = state.structureCategory === 'otherStructure';
   document.body.classList.toggle('cat-other', isOther);
+  const modRoot = document.querySelector('.mod-workspace') || document.body;
+  modRoot.classList.toggle('cat-other', isOther);
   const bBtn = document.getElementById('catBuilding');
   const oBtn = document.getElementById('catOther');
   if (bBtn) bBtn.classList.toggle('active', !isOther);
@@ -8188,6 +8305,7 @@ function init() {
   const ch32Eni = document.getElementById('ch32Enabled'); if (ch32Eni) ch32Eni.checked = !!state.ch32Enabled;
   const ch32Esi = document.getElementById('ch32Essential'); if (ch32Esi) ch32Esi.checked = !!state.ch32Essential;
   document.body.classList.toggle('ch32-enabled', !!state.ch32Enabled);
+  (document.querySelector('.mod-workspace') || document.body).classList.toggle('ch32-enabled', !!state.ch32Enabled);
 
   // Project Information (report header)
   if (!state.projectDate) {
@@ -8286,113 +8404,4 @@ if (document.readyState === 'loading') {
 
     // Circular Bins, Silos, and Tanks (Sec. 30.10) inputs
     const hasCircularTankEl2 = document.getElementById('hasCircularTank');
-    if (hasCircularTankEl2) hasCircularTankEl2.checked = !!state.hasCircularTank;
-    const tankDEl2 = document.getElementById('tankD');
-    if (tankDEl2) tankDEl2.value = fmtLenIn(state.tankD);
-    const tankHEl2 = document.getElementById('tankH');
-    if (tankHEl2) tankHEl2.value = fmtLenIn(state.tankH);
-    const tankOpenTopEl2 = document.getElementById('tankOpenTop');
-    if (tankOpenTopEl2) tankOpenTopEl2.checked = !!state.tankOpenTop;
-    const tankElevatedEl2 = document.getElementById('tankElevated');
-    if (tankElevatedEl2) tankElevatedEl2.checked = !!state.tankElevated;
-
-    // Stepped Roofs (Sec. 30.3.2.1, Fig. 30.3-3) inputs
-    const hasSteppedRoofEl2 = document.getElementById('hasSteppedRoof');
-    if (hasSteppedRoofEl2) hasSteppedRoofEl2.checked = !!state.hasSteppedRoof;
-    const steppedLowerHEl2 = document.getElementById('steppedLowerH');
-    if (steppedLowerHEl2) steppedLowerHEl2.value = fmtLenIn(state.steppedLowerH);
-    const steppedLowerWEl2 = document.getElementById('steppedLowerW');
-    if (steppedLowerWEl2) steppedLowerWEl2.value = fmtLenIn(state.steppedLowerW);
-
-    // Multispan Gable Roofs (Fig. 30.3-4) inputs
-    const hasMultispanRoofEl2 = document.getElementById('hasMultispanRoof');
-    if (hasMultispanRoofEl2) hasMultispanRoofEl2.checked = !!state.hasMultispanRoof;
-    const msModuleWEl2 = document.getElementById('msModuleW');
-    if (msModuleWEl2) msModuleWEl2.value = fmtLenIn(state.msModuleW);
-
-    // Sawtooth Roofs (Fig. 30.3-6) inputs
-    const hasSawtoothRoofEl2 = document.getElementById('hasSawtoothRoof');
-    if (hasSawtoothRoofEl2) hasSawtoothRoofEl2.checked = !!state.hasSawtoothRoof;
-    const swModuleWEl2 = document.getElementById('swModuleW');
-    if (swModuleWEl2) swModuleWEl2.value = fmtLenIn(state.swModuleW);
-
-    // Domed Roofs (Fig. 30.3-7) inputs
-    const hasDomeRoofEl2 = document.getElementById('hasDomeRoof');
-    if (hasDomeRoofEl2) hasDomeRoofEl2.checked = !!state.hasDomeRoof;
-    const domeDEl2 = document.getElementById('domeD');
-    if (domeDEl2) domeDEl2.value = fmtLenIn(state.domeD);
-    const domeFEl2 = document.getElementById('domeF');
-    if (domeFEl2) domeFEl2.value = fmtLenIn(state.domeF);
-    const domeHDEl2 = document.getElementById('domeHD');
-    if (domeHDEl2) domeHDEl2.value = fmtLenIn(state.domeHD);
-
-    // Monoslope Roofs (Fig. 30.3-5A/5B) toggle
-    const hasMonoslopeRoofEl2 = document.getElementById('hasMonoslopeRoof');
-    if (hasMonoslopeRoofEl2) hasMonoslopeRoofEl2.checked = !!state.hasMonoslopeRoof;
-
-    // Single-select special-structure dropdown — sync from the 6 booleans above
-    const specialRoofTypeEl2 = document.getElementById('specialRoofType');
-    if (specialRoofTypeEl2) specialRoofTypeEl2.value = specialRoofTypeFromState(state);
-    applySpecialRoofVisibility();
-    applyGenericRoofControlsVisibility();
-
-    // Open Building — Free Roof (Sec. 27.3.2) inputs
-    const openRoofShapeEl = document.getElementById('openRoofShape');
-    if (openRoofShapeEl) {
-      openRoofShapeEl.value = state.openRoofShape || 'monoslope';
-      state.openRoofShape = openRoofShapeEl.value;
-    }
-    const openWindFlowEl = document.getElementById('openWindFlow');
-    if (openWindFlowEl) {
-      openWindFlowEl.value = state.openWindFlow || 'clear';
-      state.openWindFlow = openWindFlowEl.value;
-    }
-    const openLEl = document.getElementById('openL');
-    if (openLEl) openLEl.value = fmtLenIn(state.openL || 40);
-
-    // Project Information (report header)
-    if (!state.projectDate) {
-      const d = new Date();
-      state.projectDate = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-    }
-    document.getElementById('projectName').value = state.projectName || '';
-    document.getElementById('projectNumber').value = state.projectNumber || '';
-    document.getElementById('engineer').value = state.engineer || '';
-    document.getElementById('projectDate').value = state.projectDate;
-    document.getElementById('riskCategory').value = state.riskCategory || 'II';
-
-    // Print title block fields (Phase 3 / report header)
-    document.getElementById('companyName').value = state.companyName || '';
-    document.getElementById('jobRef').value = state.jobRef || '';
-    document.getElementById('chkdBy').value = state.chkdBy || '';
-    document.getElementById('chkdDate').value = state.chkdDate || '';
-    document.getElementById('appdBy').value = state.appdBy || '';
-    document.getElementById('appdDate').value = state.appdDate || '';
-
-    document.getElementById('unitSI').classList.toggle('active', state.unitSystem === 'SI');
-    document.getElementById('unitUS').classList.toggle('active', state.unitSystem === 'US');
-
-    applyModeVisibility();
-    applyRoofTypeVisibility();
-    applyEnclosureVisibility();
-    updateUnitLabels();
-    renderResults();
-  }
-
-  window.addEventListener('message', (event) => {
-    const msg = event.data;
-    if (!msg || typeof msg !== 'object') return;
-    if (msg.type === 'loadState') {
-      applyState(msg.state);
-      if (msg.unitSystem) setUnitSystem(msg.unitSystem);
-    } else if (msg.type === 'requestState') {
-      postState();
-    }
-  });
-
-  const origRender = renderResults;
-  renderResults = function () {
-    origRender();
-    postState();
-  };
-})();
+    if (hasCircularTa
