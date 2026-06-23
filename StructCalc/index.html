@@ -9,94 +9,218 @@
 </head>
 <body>
 
-  <header class="topbar">
+<!-- ===================================================================
+     SCREEN: DASHBOARD  (project manager / personal cabinet)
+     =================================================================== -->
+<div id="screen-dashboard">
+  <header class="db-header">
     <div class="brand">
-      <span class="brand-name">StructCalc</span>
-      <span class="brand-sub">Structural load workspace — ASCE 7-22 &amp; NBCC 2015</span>
+      <div class="brand-mark">SC</div>
+      <div class="brand-name">Struct<span>Calc</span></div>
     </div>
-
-    <div class="project-bar">
-      <label for="projectSelect" class="sr-only">Project</label>
-      <select id="projectSelect" title="Active project"></select>
-      <button id="btnNewProject" class="btn" title="Create a new project">+ New</button>
-      <button id="btnDuplicateProject" class="btn" title="Duplicate the active project">Duplicate</button>
-      <button id="btnRenameProject" class="btn" title="Rename the active project">Rename</button>
-      <button id="btnDeleteProject" class="btn btn-danger" title="Delete the active project">Delete</button>
-      <span class="sep"></span>
-      <button id="btnExportProject" class="btn" title="Download the active project as a .json file">Export .json</button>
-      <button id="btnImportProject" class="btn" title="Load a project from a .json file">Import .json</button>
-      <input type="file" id="importFile" accept="application/json" style="display:none">
-      <span class="sep"></span>
-      <label for="codeSelect" class="bar-label">Code</label>
-      <select id="codeSelect" title="Design code — switches the engine used by every calculation in this project">
-        <option value="ASCE 7-22">ASCE 7-22 (USA)</option>
-        <option value="NBCC 2015">NBCC 2015 (Canada)</option>
-      </select>
-      <label for="unitsSelect" class="bar-label">Units</label>
-      <select id="unitsSelect" title="Unit system for new/unsaved calculations">
-        <option value="US">US / Imperial</option>
-        <option value="SI">SI</option>
-      </select>
+    <div class="db-search">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input type="text" id="dbSearch" placeholder="Search projects, addresses, job numbers…">
+    </div>
+    <div class="db-header-right">
+      <button class="btn btn-ghost-dark" id="btnHelp">
+        <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>
+        Help
+      </button>
+      <div class="avatar" id="dbAvatar">?</div>
     </div>
   </header>
 
-  <div class="shell-body">
-    <nav class="sidebar" id="sidebar"></nav>
+  <div class="db-body">
+    <nav class="db-rail" id="dbRail">
+      <div class="rail-item active" data-filter="all">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        All Projects <span class="rail-count" id="railCountAll">0</span>
+      </div>
+      <div class="rail-item" data-filter="recent">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        Recent
+      </div>
+      <div class="rail-sep"></div>
+      <div class="rail-section-label">Workspace</div>
+      <div class="rail-item" data-filter="settings">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </div>
+    </nav>
 
-    <main class="content">
-      <iframe id="moduleFrame" title="Calculation module"></iframe>
-      <div id="modulePlaceholder" class="placeholder" style="display:none"></div>
+    <main class="db-main">
+      <div class="db-toolbar">
+        <div class="db-title">My Projects <small id="dbSubtitle"></small></div>
+        <div class="db-toolbar-right">
+          <select class="sort-select" id="dbSort">
+            <option value="modified">Sort: Last modified</option>
+            <option value="name">Sort: Name (A–Z)</option>
+            <option value="created">Sort: Date created</option>
+          </select>
+          <button class="btn btn-primary" id="btnNewProject">
+            <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            New Project
+          </button>
+        </div>
+      </div>
+      <div class="proj-grid" id="projGrid"></div>
     </main>
   </div>
+</div>
 
-  <footer class="statusbar" id="statusbar"></footer>
+<!-- ===================================================================
+     SCREEN: WORKSPACE  (calculator)
+     =================================================================== -->
+<div id="screen-workspace" class="hidden">
 
-  <!-- New project dialog: pick design code + unit system upfront (stored in project settings) -->
-  <div class="modal-overlay" id="newProjectModal">
-    <div class="modal-box">
-      <button type="button" class="modal-close" id="newProjectClose" aria-label="Close">&times;</button>
-      <h3>New project</h3>
-      <div class="field">
-        <label for="npName">Project name</label>
-        <input type="text" id="npName" placeholder="Project name">
+  <header class="ws-header">
+    <button class="ws-back" id="wsBack">
+      <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      My Projects
+    </button>
+    <div class="ws-crumb">
+      <b id="wsCrumbProject">—</b>
+      <span class="sep">/</span>
+      <span id="wsCrumbCalc">—</span>
+    </div>
+    <div class="save-pill" id="wsSavePill">
+      <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+      Saved
+    </div>
+    <div class="ws-header-actions">
+      <button class="btn btn-ghost-dark" id="btnAddCalc">
+        <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        Add Calculation
+      </button>
+      <button class="btn btn-ghost-dark" id="btnExport">
+        <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3m0 12l-4-4m4 4l4-4M4 21h16"/></svg>
+        Export
+      </button>
+      <input type="file" id="importFile" accept="application/json" class="hidden">
+      <div class="avatar" id="wsAvatar">?</div>
+    </div>
+  </header>
+
+  <div class="ws-body">
+
+    <!-- Sidebar: project tree -->
+    <nav class="ws-sidebar" id="wsSidebar">
+      <div class="sidebar-resize-handle" id="sidebarResizeHandle"></div>
+      <div class="tree-toolbar">
+        <div class="tree-search">
+          <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input type="text" id="treeSearch" placeholder="Filter…">
+        </div>
+        <button class="tree-add-btn" id="treeAddBtn" title="Add calculation">
+          <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
       </div>
-      <div class="field">
-        <label for="npCode">Design code / standard</label>
-        <select id="npCode">
-          <option value="ASCE 7-22">ASCE 7-22 (United States)</option>
-          <option value="NBCC 2015">NBCC 2015 (Canada)</option>
-        </select>
-      </div>
-      <div class="field">
-        <label for="npUnits">Unit system</label>
-        <select id="npUnits">
-          <option value="US">US / Imperial (psf, ft)</option>
-          <option value="SI">SI (kPa, m)</option>
-        </select>
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn-primary" id="npCreate">Create project</button>
+      <div class="tree-list" id="treeList"></div>
+    </nav>
+
+    <!-- Main content area -->
+    <div class="ws-content">
+      <div id="module-host" class="hidden"></div>
+      <div id="module-placeholder" class="hidden"></div>
+      <div id="project-settings-view" class="hidden"></div>
+      <div id="module-loading" class="module-loading hidden">
+        <div class="spinner"></div>
+        <span>Loading…</span>
       </div>
     </div>
+
   </div>
 
-  <!-- Add calculation dialog: pick a module type (Snow, Wind, Seismic, ...) to add
-       to the active project. The engine used depends on the Code selector above. -->
-  <div class="modal-overlay" id="addCalcModal">
-    <div class="modal-box modal-box-wide">
-      <button type="button" class="modal-close" id="addCalcClose" aria-label="Close">&times;</button>
-      <h3>Add calculation</h3>
-      <div class="calc-type-grid" id="calcTypeGrid"></div>
-      <div class="field">
-        <label for="acDescription">Description (optional)</label>
-        <input type="text" id="acDescription" placeholder="e.g. left canopy, grid A">
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn-primary" id="acAdd" disabled>Add to project</button>
-      </div>
+  <footer class="ws-statusbar" id="wsStatusbar">
+    <div class="status-pill" id="statusCode">
+      <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+      ASCE 7-22
+    </div>
+    <div class="status-pill" id="statusUnits">US / Imperial</div>
+    <div class="sep"></div>
+    <span id="statusMsg" class="status-ok">
+      <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+      Ready
+    </span>
+    <div class="ws-statusbar-right">
+      <span id="statusDetail"></span>
+    </div>
+  </footer>
+</div>
+
+<!-- ===================================================================
+     MODALS
+     =================================================================== -->
+
+<!-- New Project -->
+<div class="modal-overlay" id="newProjectModal">
+  <div class="modal-box">
+    <button type="button" class="modal-close" id="newProjectClose">&times;</button>
+    <h3>New Project</h3>
+    <div class="modal-field">
+      <label for="npName">Project name</label>
+      <input type="text" id="npName" placeholder="e.g. COE-26003 — 20 Gitzel Street">
+    </div>
+    <div class="modal-field">
+      <label for="npAddress">Address / location <span style="font-weight:400;color:var(--slate-400)">(optional)</span></label>
+      <input type="text" id="npAddress" placeholder="City, Province / State">
+    </div>
+    <div class="modal-field">
+      <label for="npCode">Design code</label>
+      <select id="npCode">
+        <option value="ASCE 7-22">ASCE 7-22 (United States)</option>
+        <option value="NBCC 2015">NBCC 2015 (Canada)</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label for="npUnits">Unit system</label>
+      <select id="npUnits">
+        <option value="US">US / Imperial (psf, ft, mph)</option>
+        <option value="SI">SI (kPa, m, m/s)</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn" id="newProjectCancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="npCreate">Create project</button>
     </div>
   </div>
+</div>
 
-  <script src="shell.js"></script>
+<!-- Add Calculation -->
+<div class="modal-overlay" id="addCalcModal">
+  <div class="modal-box modal-box-wide">
+    <button type="button" class="modal-close" id="addCalcClose">&times;</button>
+    <h3>Add Calculation</h3>
+    <div class="calc-type-grid" id="calcTypeGrid"></div>
+    <div class="modal-field">
+      <label for="acDescription">Description <span style="font-weight:400;color:var(--slate-400)">(optional)</span></label>
+      <input type="text" id="acDescription" placeholder="e.g. main roof, left canopy, Grid A">
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn" id="addCalcCancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="acAdd" disabled>Add to project</button>
+    </div>
+  </div>
+</div>
+
+<!-- Context menu (⋮ on tree items) -->
+<div id="ctx-menu" class="hidden">
+  <div class="ctx-item" id="ctx-rename">
+    <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+    Rename
+  </div>
+  <div class="ctx-item" id="ctx-duplicate">
+    <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    Duplicate
+  </div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item danger" id="ctx-delete">
+    <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg>
+    Delete
+  </div>
+</div>
+
+<script src="shell.js"></script>
 </body>
 </html>
