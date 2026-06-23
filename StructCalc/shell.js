@@ -590,6 +590,46 @@ async function openCalc(calcId) {
   }
 }
 
+
+/* ── CSS scoper ─────────────────────────────────────────────────────────
+   Prefixes all module CSS selectors with #module-host so that module
+   rules (body, main, header.topbar, etc.) cannot bleed into shell layout.
+   :root blocks are kept global so module CSS variables still resolve.
+   ──────────────────────────────────────────────────────────────────────── */
+function scopeCSS(css) {
+  css = css.replace(/\/\*[\s\S]*?\*\//g, ''); // strip comments
+  let out = '', i = 0;
+  while (i < css.length) {
+    const brace = css.indexOf('{', i);
+    if (brace === -1) break;
+    const sel = css.slice(i, brace).trim();
+    let depth = 1, j = brace + 1;
+    while (j < css.length && depth > 0) {
+      if (css[j] === '{') depth++;
+      else if (css[j] === '}') depth--;
+      j++;
+    }
+    const body = css.slice(brace + 1, j - 1);
+    if (sel.startsWith('@keyframes') || sel.startsWith('@font-face') ||
+        sel.startsWith('@charset')   || sel.startsWith('@import')    ||
+        sel.startsWith('@namespace')) {
+      out += sel + '{' + body + '}\n';
+    } else if (sel.startsWith('@media') || sel.startsWith('@supports') || sel.startsWith('@layer')) {
+      out += sel + '{\n' + scopeCSS(body) + '}\n';
+    } else {
+      const scoped = sel.split(',').map(s => {
+        s = s.trim(); if (!s) return '';
+        if (s === 'body' || s === 'html') return '#module-host';
+        if (s.startsWith(':root') || s.includes('#module-host')) return s;
+        return '#module-host ' + s;
+      }).filter(Boolean).join(',\n');
+      out += scoped + '{' + body + '}\n';
+    }
+    i = j;
+  }
+  return out;
+}
+
 async function loadModule(variant, proj, calc) {
   // Fetch the module HTML
   const resp = await fetch(variant.path);
@@ -604,7 +644,7 @@ async function loadModule(variant, proj, calc) {
   if (oldStyle) oldStyle.remove();
   const styleEl = document.createElement('style');
   styleEl.id = 'module-injected-style';
-  doc.querySelectorAll('style').forEach(s => { styleEl.textContent += s.textContent + '\n'; });
+  doc.querySelectorAll('style').forEach(s => { styleEl.textContent += scopeCSS(s.textContent) + '\n'; });
   document.head.appendChild(styleEl);
 
   // ── Inject module body HTML ──
