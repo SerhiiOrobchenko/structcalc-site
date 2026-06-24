@@ -1231,18 +1231,26 @@ function renderWindResults(r, s) {
   }
 
   if (s.mode === 'cc') {
-    if (r.ccWall) {
+    // r.ccWall and r.ccRoof are arrays: [{zone, gcp, p:{neg,pos}}, ...]
+    if (r.ccWall && r.ccWall.length) {
+      const wallLabel = { '4': 'Zone 4 — field', '5': 'Zone 5 — corner' };
+      const wallCls   = { '4': 'zone-low', '5': 'zone-high' };
       html += '<div class="result-card"><div class="result-card-head">C&amp;C — Walls (Ch. 30)</div>';
-      if (r.ccWall.zone4) html += '<div class="result-row zone-low"><span class="k">Zone 4 — field</span><span class="v">' + fmt(r.ccWall.zone4.neg) + ' / +' + fmt(r.ccWall.zone4.pos) + ' psf</span></div>';
-      if (r.ccWall.zone5) html += '<div class="result-row zone-high"><span class="k">Zone 5 — corner</span><span class="v">' + fmt(r.ccWall.zone5.neg) + ' / +' + fmt(r.ccWall.zone5.pos) + ' psf</span></div>';
+      r.ccWall.forEach(function(z) {
+        const cl = wallCls[z.zone] || 'zone-mid';
+        const lb = wallLabel[z.zone] || ('Zone ' + z.zone);
+        html += '<div class="result-row ' + cl + '"><span class="k">' + lb + '</span><span class="v">' + fmt(z.p.neg) + ' / +' + fmt(z.p.pos) + ' psf</span></div>';
+      });
       html += '</div>';
     }
-    if (r.ccRoof) {
+    if (r.ccRoof && r.ccRoof.length) {
+      const roofLabel = { '1p': 'Zone 1′ — field (low)', '1': 'Zone 1 — field', '2': 'Zone 2 — edge', '3': 'Zone 3 — corner' };
+      const roofCls   = { '1p': 'zone-low', '1': 'zone-low', '2': 'zone-mid', '3': 'zone-high' };
       html += '<div class="result-card"><div class="result-card-head">C&amp;C — Roof (Ch. 30)</div>';
-      [['zone1','zone-mid'],['zone2','zone-high'],['zone3','zone-crit']].forEach(([zk,cl]) => {
-        const zd = r.ccRoof[zk];
-        if (!zd) return;
-        html += '<div class="result-row ' + cl + '"><span class="k">' + zk.replace('zone','Zone ') + '</span><span class="v">' + fmt(zd.neg) + ' / +' + fmt(zd.pos) + ' psf</span></div>';
+      r.ccRoof.forEach(function(z) {
+        const cl = roofCls[z.zone] || 'zone-mid';
+        const lb = roofLabel[z.zone] || ('Zone ' + z.zone);
+        html += '<div class="result-row ' + cl + '"><span class="k">' + lb + '</span><span class="v">' + fmt(z.p.neg) + ' / +' + fmt(z.p.pos) + ' psf</span></div>';
       });
       html += '</div>';
     }
