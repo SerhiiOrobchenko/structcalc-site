@@ -1019,6 +1019,16 @@ function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+function timeAgo(ts) {
+  if (!ts) return '';
+  const secs = Math.floor((Date.now() - ts) / 1000);
+  if (secs < 60)    return 'just now';
+  if (secs < 3600)  return `${Math.floor(secs / 60)}m ago`;
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
+  if (secs < 604800) return `${Math.floor(secs / 86400)}d ago`;
+  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 function calcLabel(calc) {
   return calc.description ? `${calc.title} — ${calc.description}` : calc.title;
 }
@@ -1278,19 +1288,3 @@ async function openWindWorkspace(proj, calc) {
     windSavedState = savedEntry.state;
     restoreWindInputs(savedEntry.state);
   } else {
-    windSavedState = null;
-  }
-
-  if (windRenderer) {
-    try { windRenderer.dispose(); } catch(e) {}
-    windRenderer = null;
-  }
-  await new Promise(res => setTimeout(res, 60));
-  try { windRenderer = new Wind3DRenderer('threejs-container'); } catch(e) { console.error('Wind3DRenderer init:', e); }
-
-  if (!elWsMain._inputsWired) {
-    wireWindInputs();
-    elWsMain._inputsWired = true;
-  }
-  recalcWind();
-}
