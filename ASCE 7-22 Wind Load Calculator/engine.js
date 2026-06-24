@@ -8338,10 +8338,13 @@ function init() {
 }
 
 // Support both standalone page load and dynamic injection by StructCalc shell
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
+// _wsShellMode is set by shell.js before loading this engine to skip UI init
+if (!window._wsShellMode) {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 }
 
 /* =====================================================================
@@ -8518,8 +8521,4 @@ if (document.readyState === 'loading') {
       return lastResult ? buildReportHTML(lastResult) : null;
     };
   };
-  // Initial exposure (before first render)
-  window._scGetReportHTML = function() {
-    return lastResult ? buildReportHTML(lastResult) : null;
-  };
-})();
+  // Initial exposure (before first re

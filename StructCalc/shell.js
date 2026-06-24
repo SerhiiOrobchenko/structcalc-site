@@ -1069,6 +1069,8 @@ async function loadWindScripts() {
 
 async function loadWindEngine() {
   if (windEngineLoaded) return;
+  // Tell engine.js to skip its UI init() — we only need compute()
+  window._wsShellMode = true;
   await loadScriptTag('../ASCE 7-22 Wind Load Calculator/engine.js');
   windEngineLoaded = true;
 }
@@ -1298,9 +1300,4 @@ async function openWindWorkspace(proj, calc) {
   await new Promise(res => setTimeout(res, 60));
   try { windRenderer = new Wind3DRenderer('threejs-container'); } catch(e) { console.error('Wind3DRenderer init:', e); }
 
-  if (!elWsMain._inputsWired) {
-    wireWindInputs();
-    elWsMain._inputsWired = true;
-  }
-  recalcWind();
-}
+  if (!elWs
