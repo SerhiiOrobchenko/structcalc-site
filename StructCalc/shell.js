@@ -1294,4 +1294,3 @@ async function openWindWorkspace(proj, calc) {
   }
   recalcWind();
 }
-          
