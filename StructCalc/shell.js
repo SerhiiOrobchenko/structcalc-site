@@ -1131,8 +1131,12 @@ function restoreWindInputs(saved) {
     const inp = document.getElementById(revMap[key]);
     if (inp) inp.value = val;
   });
-  if (saved.mode === 'cc') setWindProc('cc');
-  else if (saved.mwfrsProcedure) setWindProc(saved.mwfrsProcedure);
+  if (saved.mode === 'cc') {
+    setWindProc('cc');
+    activateInputTab('cc');
+  } else if (saved.mwfrsProcedure) {
+    setWindProc(saved.mwfrsProcedure);
+  }
 }
 
 function setWindProc(proc) {
@@ -1259,6 +1263,15 @@ function renderWindResults(r, s) {
   host.innerHTML = html;
 }
 
+function activateInputTab(tabName) {
+  document.querySelectorAll('.input-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector('.input-tabs .tab-btn[data-tab="' + tabName + '"]');
+  if (btn) btn.classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(c => {
+    c.classList.toggle('hidden', c.id !== 'tab-' + tabName);
+  });
+}
+
 function wireWindInputs() {
   let debounce = null;
   const onInput = () => { clearTimeout(debounce); debounce = setTimeout(recalcWind, 250); };
@@ -1270,7 +1283,20 @@ function wireWindInputs() {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#windProcToggle button').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+      // Auto-switch to C&C tab when C&C procedure is selected
+      if (btn.dataset.proc === 'cc') activateInputTab('cc');
       recalcWind();
+    });
+  });
+  // Input section tab switching (Site / Geometry / C&C)
+  document.querySelectorAll('.input-tabs .tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.input-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const targetTab = btn.dataset.tab;
+      document.querySelectorAll('.tab-content').forEach(c => {
+        c.classList.toggle('hidden', c.id !== 'tab-' + targetTab);
+      });
     });
   });
   document.querySelectorAll('#windViewToggle button').forEach(btn => {

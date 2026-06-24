@@ -477,6 +477,35 @@ input, select, textarea { font-family: inherit; }
 .proc-toggle button:hover { background: var(--slate-100); color: var(--navy-900); }
 .proc-toggle button.active { background: var(--navy-900); color: #fff; }
 
+/* Input section tabs (Site / Geometry / C&C) — dark strip inside left column */
+.input-tabs {
+  display: flex;
+  width: calc(100% + 36px);
+  margin-left: -18px;
+  margin-right: -18px;
+  margin-top: 12px;
+  margin-bottom: 16px;
+  background: var(--navy-900);
+  border-top: 1px solid var(--navy-700);
+  border-bottom: 1px solid var(--navy-700);
+  overflow-x: auto;
+  flex: none;
+}
+.input-tabs .tab-btn {
+  flex: 1; background: none; border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 6px; color: var(--slate-400);
+  font-size: .7rem; font-weight: 700; cursor: pointer;
+  text-align: center; white-space: nowrap; transition: .12s;
+  letter-spacing: .06em; text-transform: uppercase;
+}
+.input-tabs .tab-btn:hover { color: #fff; background: var(--navy-800); }
+.input-tabs .tab-btn.active {
+  color: var(--cyan-400);
+  border-bottom-color: var(--cyan-400);
+  background: var(--navy-800);
+}
+
 /* panel sections */
 .panel-section { margin-bottom: 20px; }
 .panel-section-head {
@@ -664,23 +693,4 @@ input, select, textarea { font-family: inherit; }
 .results-section-hdr {
   font-size: .8rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
   color: var(--slate-500); padding: 12px 4px 6px; margin-top: 4px;
-  border-bottom: 1px solid var(--slate-150); margin-bottom: 8px;
-}
-
-/* ── Step-by-step trace block (terminal window) ───────────────────────── */
-.trace-block {
-  background: var(--slate-50); border: 1px solid var(--slate-200);
-  border-radius: 6px; padding: 12px 14px; margin-bottom: 8px;
-  font-family: 'JetBrains Mono', monospace; font-size: .78rem;
-  color: var(--slate-600); line-height: 1.75;
-  white-space: pre-wrap; overflow-x: auto;
-}
-.trace-block .trace-label {
-  font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--slate-400); margin-bottom: 8px; display: block;
-}
-.trace-block .trace-num { color: var(--cyan-600); font-weight: 600; }
-.trace-block .trace-result { color: var(--navy-900); font-weight: 700; }
-
-/* dim-line highlight sync (3D ↔ inputs) */
-.result-row.dim-active { background: #e0faff !important; transition: background .4s; }
+  border-bottom: 1px solid var(--slate-150); mar

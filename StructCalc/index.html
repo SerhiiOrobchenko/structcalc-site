@@ -173,116 +173,129 @@
             <button data-proc="cc">C&amp;C</button>
           </div>
 
-          <!-- Section: Building Geometry -->
-          <div class="panel-section">
-            <div class="panel-section-head">
-              <h4>Building Geometry</h4>
-              <span class="panel-section-note">§26.2</span>
-            </div>
-
-            <div class="field-row">
-              <div class="field">
-                <label>h — eave height <span class="unit">(ft)</span></label>
-                <input class="num" id="wind-h" value="20" min="1" max="500">
-              </div>
-              <div class="field">
-                <label>Width, B <span class="unit">(ft)</span></label>
-                <input class="num" id="wind-B" value="40" min="1">
-              </div>
-            </div>
-
-            <div class="field-row">
-              <div class="field">
-                <label>Length, L <span class="unit">(ft)</span></label>
-                <input class="num" id="wind-L" value="60" min="1">
-              </div>
-              <div class="field">
-                <label>Roof pitch, θ <span class="unit">(°)</span></label>
-                <input class="num" id="wind-theta" value="18" min="0" max="45">
-              </div>
-            </div>
-
-            <div class="field">
-              <label>Roof type</label>
-              <select id="wind-roofShape">
-                <option value="gable">Gable</option>
-                <option value="hip">Hip</option>
-                <option value="flat">Flat (≤ 7°)</option>
-                <option value="monoslope">Monoslope</option>
-              </select>
-            </div>
+          <!-- Input section tabs -->
+          <div class="input-tabs">
+            <button class="tab-btn active" data-tab="site">Site</button>
+            <button class="tab-btn" data-tab="geometry">Geometry</button>
+            <button class="tab-btn" data-tab="cc">C&amp;C</button>
           </div>
 
-          <!-- Section: Basic Wind Parameters -->
-          <div class="panel-section">
-            <div class="panel-section-head">
-              <h4>Basic Wind Parameters</h4>
-              <span class="panel-section-note">Ch. 26</span>
-            </div>
-
-            <div class="field-row">
-              <div class="field">
-                <label>V, wind speed <span class="unit">(mph)</span></label>
-                <input class="num" id="wind-V" value="115" min="85" max="200">
+          <!-- Tab: Site (Basic Wind Parameters) -->
+          <div class="tab-content" id="tab-site">
+            <div class="panel-section">
+              <div class="panel-section-head">
+                <h4>Basic Wind Parameters</h4>
+                <span class="panel-section-note">Ch. 26</span>
               </div>
+
+              <div class="field-row">
+                <div class="field">
+                  <label>V, wind speed <span class="unit">(mph)</span></label>
+                  <input class="num" id="wind-V" value="115" min="85" max="200">
+                </div>
+                <div class="field">
+                  <label>Exposure</label>
+                  <select id="wind-exposure">
+                    <option value="B">B</option>
+                    <option value="C" selected>C</option>
+                    <option value="D">D</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="field-row">
+                <div class="field">
+                  <label>K<sub>zt</sub></label>
+                  <input class="num" id="wind-kzt" value="1.00" min="1" max="3.5">
+                </div>
+                <div class="field">
+                  <label>Ground elev. <span class="unit">(ft)</span></label>
+                  <input class="num" id="wind-groundElev" value="0" min="0">
+                </div>
+              </div>
+
               <div class="field">
-                <label>Exposure</label>
-                <select id="wind-exposure">
-                  <option value="B">B</option>
-                  <option value="C" selected>C</option>
-                  <option value="D">D</option>
+                <label>Enclosure</label>
+                <select id="wind-enclosure">
+                  <option value="enclosed">Enclosed</option>
+                  <option value="partiallyEnclosed">Partially Enclosed</option>
+                  <option value="open">Open</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label>Risk Category</label>
+                <select id="wind-riskCategory">
+                  <option value="I">I</option>
+                  <option value="II" selected>II</option>
+                  <option value="III">III</option>
+                  <option value="IV">IV</option>
                 </select>
               </div>
             </div>
+          </div>
 
-            <div class="field-row">
-              <div class="field">
-                <label>K<sub>zt</sub></label>
-                <input class="num" id="wind-kzt" value="1.00" min="1" max="3.5">
+          <!-- Tab: Geometry (Building Geometry) -->
+          <div class="tab-content hidden" id="tab-geometry">
+            <div class="panel-section">
+              <div class="panel-section-head">
+                <h4>Building Geometry</h4>
+                <span class="panel-section-note">§26.2</span>
               </div>
-              <div class="field">
-                <label>Ground elev. <span class="unit">(ft)</span></label>
-                <input class="num" id="wind-groundElev" value="0" min="0">
+
+              <div class="field-row">
+                <div class="field">
+                  <label>h — eave height <span class="unit">(ft)</span></label>
+                  <input class="num" id="wind-h" value="20" min="1" max="500">
+                </div>
+                <div class="field">
+                  <label>Width, B <span class="unit">(ft)</span></label>
+                  <input class="num" id="wind-B" value="40" min="1">
+                </div>
               </div>
-            </div>
 
-            <div class="field">
-              <label>Enclosure</label>
-              <select id="wind-enclosure">
-                <option value="enclosed">Enclosed</option>
-                <option value="partiallyEnclosed">Partially Enclosed</option>
-                <option value="open">Open</option>
-              </select>
-            </div>
+              <div class="field-row">
+                <div class="field">
+                  <label>Length, L <span class="unit">(ft)</span></label>
+                  <input class="num" id="wind-L" value="60" min="1">
+                </div>
+                <div class="field">
+                  <label>Roof pitch, θ <span class="unit">(°)</span></label>
+                  <input class="num" id="wind-theta" value="18" min="0" max="45">
+                </div>
+              </div>
 
-            <div class="field">
-              <label>Risk Category</label>
-              <select id="wind-riskCategory">
-                <option value="I">I</option>
-                <option value="II" selected>II</option>
-                <option value="III">III</option>
-                <option value="IV">IV</option>
-              </select>
+              <div class="field">
+                <label>Roof type</label>
+                <select id="wind-roofShape">
+                  <option value="gable">Gable</option>
+                  <option value="hip">Hip</option>
+                  <option value="flat">Flat (≤ 7°)</option>
+                  <option value="monoslope">Monoslope</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          <!-- Section: C&C Areas -->
-          <div class="panel-section" id="windCCSection">
-            <div class="panel-section-head">
-              <h4>Components &amp; Cladding</h4>
-              <span class="panel-section-note">Ch. 30</span>
-            </div>
-            <div class="field-row">
-              <div class="field">
-                <label>Wall area <span class="unit">(ft&#xB2;)</span></label>
-                <input class="num" id="wind-areaWall" value="20" min="1">
+          <!-- Tab: C&C (Components & Cladding areas) -->
+          <div class="tab-content hidden" id="tab-cc">
+            <div class="panel-section" id="windCCSection">
+              <div class="panel-section-head">
+                <h4>Components &amp; Cladding</h4>
+                <span class="panel-section-note">Ch. 30</span>
               </div>
-              <div class="field">
-                <label>Roof area <span class="unit">(ft&#xB2;)</span></label>
-                <input class="num" id="wind-areaRoof" value="50" min="1">
+              <div class="field-row">
+                <div class="field">
+                  <label>Wall area <span class="unit">(ft&#xB2;)</span></label>
+                  <input class="num" id="wind-areaWall" value="20" min="1">
+                </div>
+                <div class="field">
+                  <label>Roof area <span class="unit">(ft&#xB2;)</span></label>
+                  <input class="num" id="wind-areaRoof" value="50" min="1">
+                </div>
               </div>
+              <div class="hint-row">Effective wind area governs (GC<sub>p</sub>) in Figs. 30.3-1/2A-G.</div>
             </div>
-            <div class="hint-row">Effective wind area governs (GC<sub>p</sub>) in Figs. 30.3-1/2A-G.</div>
           </div>
 
         </div><!-- /col-input -->
@@ -412,17 +425,4 @@
     Rename
   </div>
   <div class="ctx-item" id="ctx-duplicate">
-    <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-    Duplicate
-  </div>
-  <div class="ctx-sep"></div>
-  <div class="ctx-item danger" id="ctx-delete">
-    <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg>
-    Delete
-  </div>
-</div>
-
-<link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/three.js/r12<link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" as="script">
-<script src="shell.js" defer></script>
-</body>
-</html>
+    <svg class="ic-sm" viewBox="0 0 24 24" fill="no
