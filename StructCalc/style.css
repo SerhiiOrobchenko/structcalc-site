@@ -486,11 +486,7 @@ input, select, textarea { font-family: inherit; }
   display: flex;
   width: 100%;
   background: var(--navy-900);
-  border-top: 1px solid var(--navy-700);
-  border-bottom: 1px solid var(--navy-700);
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  border-bottom: 2px solid var(--navy-700);
   overflow-x: auto;
   flex: none;
 }
