@@ -13,7 +13,6 @@ const LS_ACTIVE_PROJECT = 'structcalc.activeProject.v2';
 const LS_ACTIVE_CALC    = 'structcalc.activeCalc.v2';
 const DEFAULT_UNITS     = { 'ASCE 7-22': 'US', 'NBCC 2015': 'SI' };
 /* ── DIAGNOSTIC checkpoints (remove after debug) ─────────────────── */
-console.log('[SC] 1/5 constants OK');
 
 
 /* ── Module registry ────────────────────────────────────────────────── */
@@ -190,7 +189,6 @@ function tryMigrateV1() {
 
 /* ── State ──────────────────────────────────────────────────────────── */
 let projects = loadProjects();
-console.log('[SC] 2/5 loadProjects OK — count:', Object.keys(projects).length);
 
 if (Object.keys(projects).length === 0) {
   tryMigrateV1();
@@ -228,7 +226,6 @@ const elCtxMenu      = document.getElementById('ctx-menu');
 const elWsContent    = document.getElementById('wsContent');
 const elWsMain       = document.getElementById('wsWindWorkspace');
 
-console.log('[SC] 3/5 DOM refs OK');
 /* ── Current workspace state ─────────────────────────────────────────── */
 let activeCalcId   = null;  // currently shown calc
 let loadedScripts  = {};    // { path: true } to avoid double-loading
@@ -240,9 +237,7 @@ let ctxTargetId    = null;  // calc id for context menu
 function goDashboard() {
   elWorkspace.classList.add('hidden');
   elDashboard.classList.remove('hidden');
-  console.log('[SC] 4/5 reaching INIT');
-renderDashboard();
-console.log('[SC] 5/5 renderDashboard done');
+  renderDashboard();
 }
 
 function goWorkspace(projectId, calcId) {
