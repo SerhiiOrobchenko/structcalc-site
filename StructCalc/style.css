@@ -460,8 +460,12 @@ input, select, textarea { font-family: inherit; }
 .col-input {
   flex: none; width: 360px; min-width: 0; box-sizing: border-box;
   background: #fff; border-right: 1px solid var(--slate-200);
-  overflow-y: auto; overflow-x: hidden; padding: 16px 18px;
+  overflow-y: auto; padding: 0;
 }
+/* Restore horizontal padding on direct children (not on full-bleed .input-tabs) */
+.col-input > .proj-banner { margin: 16px 18px; }
+.col-input > .proc-toggle { margin: 0 18px 0; }
+.tab-content { padding: 16px 18px; }
 
 /* procedure toggle (MWFRS Env / Dir / C&C) */
 .proc-toggle {
@@ -477,26 +481,26 @@ input, select, textarea { font-family: inherit; }
 .proc-toggle button:hover { background: var(--slate-100); color: var(--navy-900); }
 .proc-toggle button.active { background: var(--navy-900); color: #fff; }
 
-/* Input section tabs (Site / Geometry / C&C) — dark strip inside left column */
+/* Input section tabs (Site / Geometry / C&C) — full-bleed dark strip, sticky */
 .input-tabs {
   display: flex;
-  width: calc(100% + 36px);
-  margin-left: -18px;
-  margin-right: -18px;
-  margin-top: 12px;
-  margin-bottom: 16px;
+  width: 100%;
   background: var(--navy-900);
   border-top: 1px solid var(--navy-700);
   border-bottom: 1px solid var(--navy-700);
+  position: sticky;
+  top: 0;
+  z-index: 10;
   overflow-x: auto;
   flex: none;
 }
 .input-tabs .tab-btn {
-  flex: 1; background: none; border: none;
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  background: none; border: none;
   border-bottom: 2px solid transparent;
   padding: 10px 6px; color: var(--slate-400);
   font-size: .7rem; font-weight: 700; cursor: pointer;
-  text-align: center; white-space: nowrap; transition: .12s;
+  white-space: nowrap; transition: .12s;
   letter-spacing: .06em; text-transform: uppercase;
 }
 .input-tabs .tab-btn:hover { color: #fff; background: var(--navy-800); }
@@ -691,6 +695,4 @@ input, select, textarea { font-family: inherit; }
 }
 
 .results-section-hdr {
-  font-size: .8rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--slate-500); padding: 12px 4px 6px; margin-top: 4px;
-  border-bottom: 1px solid var(--slate-150); mar
+  font-size: .8rem; font-w
