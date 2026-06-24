@@ -8521,4 +8521,8 @@ if (!window._wsShellMode) {
       return lastResult ? buildReportHTML(lastResult) : null;
     };
   };
-  // Initial exposure (before first re
+  // Initial exposure (before first render)
+  window._scGetReportHTML = function() {
+    return lastResult ? buildReportHTML(lastResult) : null;
+  };
+})();
