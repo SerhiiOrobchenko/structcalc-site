@@ -1306,3 +1306,11 @@ async function openWindWorkspace(proj, calc) {
   }
   recalcWind();
 }
+
+/* =====================================================================
+   INIT
+   ===================================================================== */
+renderDashboard();
+const initials = 'SO';
+document.getElementById('dbAvatar').textContent = initials;
+document.getElementById('wsAvatar').textContent = initials;
