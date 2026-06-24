@@ -119,8 +119,8 @@
       <div class="tree-list" id="treeList"></div>
     </nav>
 
-    <!-- Main content area -->
-    <div class="ws-content">
+    <!-- Main content area (Snow, Seismic and other modules) -->
+    <div class="ws-content" id="wsContent">
       <div id="module-host" class="hidden"></div>
       <div id="module-placeholder" class="hidden"></div>
       <div id="project-settings-view" class="hidden"></div>
@@ -130,7 +130,208 @@
       </div>
     </div>
 
-  </div>
+    <!-- ================================================================
+         WIND WORKSPACE — 3-column layout
+         LOCKED STRUCTURE: col-input(320px) | col-diagram(1fr) | col-results(380px)
+         Do NOT modify this structure without explicit user request.
+         ================================================================ -->
+    <div class="ws-main hidden" id="wsWindWorkspace">
+
+      <div class="tab-strip">
+        <button class="tab-btn active" data-wtab="calc">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>
+          Wind Loads
+        </button>
+        <button class="tab-btn" data-wtab="report">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>
+          Report
+        </button>
+        <div class="tab-strip-actions">
+          <button class="btn" id="wsBtnReport" style="font-size:.8rem;padding:6px 12px;">
+            <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3m0 12l-4-4m4 4l4-4M4 21h16"/></svg>
+            Export PDF
+          </button>
+        </div>
+      </div>
+
+      <div class="workspace-cols">
+
+        <!-- ============================================================
+             LEFT: INPUT PANEL — fixed 320px
+             ============================================================ -->
+        <div class="col-input" id="windColInput">
+
+          <div class="proj-banner" id="windProjBanner">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V9l9-6 9 6v12H3z"/></svg>
+            <div id="windBannerText">ASCE 7-22 · Wind Load</div>
+          </div>
+
+          <!-- Procedure toggle -->
+          <div class="proc-toggle" id="windProcToggle">
+            <button class="active" data-proc="envelope">MWFRS Env.</button>
+            <button data-proc="directional">MWFRS Dir.</button>
+            <button data-proc="cc">C&amp;C</button>
+          </div>
+
+          <!-- Section: Building Geometry -->
+          <div class="panel-section">
+            <div class="panel-section-head">
+              <h4>Building Geometry</h4>
+              <span class="panel-section-note">§26.2</span>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label>h — eave height <span class="unit">(ft)</span></label>
+                <input class="num" id="wind-h" value="20" min="1" max="500">
+              </div>
+              <div class="field">
+                <label>Width, B <span class="unit">(ft)</span></label>
+                <input class="num" id="wind-B" value="40" min="1">
+              </div>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label>Length, L <span class="unit">(ft)</span></label>
+                <input class="num" id="wind-L" value="60" min="1">
+              </div>
+              <div class="field">
+                <label>Roof pitch, θ <span class="unit">(°)</span></label>
+                <input class="num" id="wind-theta" value="18" min="0" max="45">
+              </div>
+            </div>
+
+            <div class="field">
+              <label>Roof type</label>
+              <select id="wind-roofShape">
+                <option value="gable">Gable</option>
+                <option value="hip">Hip</option>
+                <option value="flat">Flat (≤ 7°)</option>
+                <option value="monoslope">Monoslope</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Section: Basic Wind Parameters -->
+          <div class="panel-section">
+            <div class="panel-section-head">
+              <h4>Basic Wind Parameters</h4>
+              <span class="panel-section-note">Ch. 26</span>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label>V, wind speed <span class="unit">(mph)</span></label>
+                <input class="num" id="wind-V" value="115" min="85" max="200">
+              </div>
+              <div class="field">
+                <label>Exposure</label>
+                <select id="wind-exposure">
+                  <option value="B">B</option>
+                  <option value="C" selected>C</option>
+                  <option value="D">D</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label>K<sub>zt</sub></label>
+                <input class="num" id="wind-kzt" value="1.00" min="1" max="3.5">
+              </div>
+              <div class="field">
+                <label>Ground elev. <span class="unit">(ft)</span></label>
+                <input class="num" id="wind-groundElev" value="0" min="0">
+              </div>
+            </div>
+
+            <div class="field">
+              <label>Enclosure</label>
+              <select id="wind-enclosure">
+                <option value="enclosed">Enclosed</option>
+                <option value="partiallyEnclosed">Partially Enclosed</option>
+                <option value="open">Open</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Risk Category</label>
+              <select id="wind-riskCategory">
+                <option value="I">I</option>
+                <option value="II" selected>II</option>
+                <option value="III">III</option>
+                <option value="IV">IV</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Section: C&C Areas -->
+          <div class="panel-section" id="windCCSection">
+            <div class="panel-section-head">
+              <h4>Components &amp; Cladding</h4>
+              <span class="panel-section-note">Ch. 30</span>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label>Wall area <span class="unit">(ft&#xB2;)</span></label>
+                <input class="num" id="wind-areaWall" value="20" min="1">
+              </div>
+              <div class="field">
+                <label>Roof area <span class="unit">(ft&#xB2;)</span></label>
+                <input class="num" id="wind-areaRoof" value="50" min="1">
+              </div>
+            </div>
+            <div class="hint-row">Effective wind area governs (GC<sub>p</sub>) in Figs. 30.3-1/2A-G.</div>
+          </div>
+
+        </div><!-- /col-input -->
+
+        <!-- ============================================================
+             CENTER: 3D DIAGRAM
+             ============================================================ -->
+        <div class="col-diagram">
+          <div class="diagram-toolbar">
+            <div class="view-toggle" id="windViewToggle">
+              <button class="active" data-view="3d">3D</button>
+              <button data-view="elev">Elevation</button>
+              <button data-view="plan">Plan</button>
+            </div>
+            <span style="font-size:.74rem;color:var(--slate-400);margin-left:10px;">Drag to orbit · Scroll to zoom</span>
+            <div class="diagram-toolbar-right">
+              <button class="icon-btn" id="windBtnReset" title="Reset camera">
+                <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7M3 3v6h6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="diagram-canvas" id="threejs-container">
+            <div id="wind-label-V">V = <span id="wind-V-display">115</span> mph</div>
+            <div id="wind-zone-legend">
+              <div><span class="zone-legend-dot" style="background:#ef4444"></span>Zone 3 &#8212; Corners</div>
+              <div><span class="zone-legend-dot" style="background:#f59e0b"></span>Zone 2 &#8212; Edges / Ridge</div>
+              <div><span class="zone-legend-dot" style="background:#22d3ee"></span>Zone 1 &#8212; Interior</div>
+            </div>
+          </div>
+          <div class="diagram-caption" id="windDiagramCaption">Gable Roof &#8212; Envelope Procedure (Ch. 28)</div>
+        </div><!-- /col-diagram -->
+
+        <!-- ============================================================
+             RIGHT: LIVE RESULTS — fixed 380px
+             ============================================================ -->
+        <div class="col-results" id="windColResults">
+          <div id="windResultsContent">
+            <div class="result-card">
+              <div class="result-card-head">Loading&hellip;</div>
+            </div>
+          </div>
+        </div><!-- /col-results -->
+
+      </div><!-- /workspace-cols -->
+
+    </div><!-- /wsWindWorkspace -->
+
+  </div><!-- /ws-body -->
 
   <footer class="ws-statusbar" id="wsStatusbar">
     <div class="status-pill" id="statusCode">
@@ -147,7 +348,7 @@
       <span id="statusDetail"></span>
     </div>
   </footer>
-</div>
+</div><!-- /screen-workspace -->
 
 <!-- ===================================================================
      MODALS
@@ -204,7 +405,7 @@
   </div>
 </div>
 
-<!-- Context menu (⋮ on tree items) -->
+<!-- Context menu -->
 <div id="ctx-menu" class="hidden">
   <div class="ctx-item" id="ctx-rename">
     <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
@@ -221,6 +422,7 @@
   </div>
 </div>
 
-<script src="shell.js"></script>
+<link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/three.js/r12<link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" as="script">
+<script src="shell.js" defer></script>
 </body>
 </html>

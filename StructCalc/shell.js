@@ -221,6 +221,8 @@ const elStatusUnits  = document.getElementById('statusUnits');
 const elStatusMsg    = document.getElementById('statusMsg');
 const elStatusDetail = document.getElementById('statusDetail');
 const elCtxMenu      = document.getElementById('ctx-menu');
+const elWsContent    = document.getElementById('wsContent');
+const elWsMain       = document.getElementById('wsWindWorkspace');
 
 /* ── Current workspace state ─────────────────────────────────────────── */
 let activeCalcId   = null;  // currently shown calc
@@ -550,7 +552,15 @@ function showOnly(which) {
   elModulePh.classList.add('hidden');
   elProjSettings.classList.add('hidden');
   elModuleLoading.classList.add('hidden');
+  // ws-content vs ws-main
+  elWsContent.classList.remove('hidden');
+  elWsMain.classList.add('hidden');
   if (which) which.classList.remove('hidden');
+}
+
+function showWindWorkspace() {
+  elWsContent.classList.add('hidden');
+  elWsMain.classList.remove('hidden');
 }
 
 async function openCalc(calcId) {
@@ -577,6 +587,19 @@ async function openCalc(calcId) {
 
   if (!variant || variant.status !== 'ready') {
     renderPlaceholder(calc, code);
+    return;
+  }
+
+  // Wind module — use new 3-column workspace for any ready wind variant
+  if (calc.type === 'wind') {
+    showWindWorkspace();
+    try {
+      await openWindWorkspace(proj, calc);
+    } catch (err) {
+      console.error('StructCalc: wind workspace error', err);
+      showOnly(elModulePh);
+      elModulePh.innerHTML = `<h2>Wind workspace error</h2><p class="ph-sub">${escHtml(err.message)}</p>`;
+    }
     return;
   }
 
@@ -990,6 +1013,7 @@ function el(tag, className, html) {
   return e;
 }
 
+
 function escHtml(s) {
   if (s == null) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -999,19 +1023,275 @@ function calcLabel(calc) {
   return calc.description ? `${calc.title} — ${calc.description}` : calc.title;
 }
 
-function timeAgo(ts) {
-  if (!ts) return '—';
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 60)   return 'Just now';
-  if (s < 3600) return Math.floor(s/60) + ' min ago';
-  if (s < 86400)return Math.floor(s/3600) + ' hr ago';
-  return Math.floor(s/86400) + ' day' + (Math.floor(s/86400)!==1?'s':'') + ' ago';
+/* =====================================================================
+   WIND WORKSPACE — 3-column layout with Three.js 3D renderer
+   LOCKED STRUCTURE: col-input(320px) | col-diagram(1fr) | col-results(380px)
+   ===================================================================== */
+
+let windScriptsLoaded = false;
+let windEngineLoaded  = false;
+let windRenderer      = null;
+let windActiveProj    = null;
+let windActiveCalc    = null;
+let windSavedState    = null;
+
+function loadScriptTag(src) {
+  return new Promise((resolve, reject) => {
+    for (const s of document.scripts) {
+      if (s.src === src || s.src.endsWith('/' + src.split('/').pop())) { resolve(); return; }
+    }
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload  = resolve;
+    script.onerror = () => reject(new Error('Script load failed: ' + src));
+    document.head.appendChild(script);
+  });
 }
 
-/* =====================================================================
-   INIT
-   ===================================================================== */
-renderDashboard();
-const initials = 'SO';
-document.getElementById('dbAvatar').textContent = initials;
-document.getElementById('wsAvatar').textContent = initials;
+async function loadWindScripts() {
+  if (windScriptsLoaded) return;
+  await loadScriptTag('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js');
+  await loadScriptTag('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js');
+  await loadScriptTag('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js');
+  await loadScriptTag('renderer.js');
+  windScriptsLoaded = true;
+}
+
+async function loadWindEngine() {
+  if (windEngineLoaded) return;
+  await loadScriptTag('../ASCE 7-22 Wind Load Calculator/engine.js');
+  windEngineLoaded = true;
+}
+
+const WIND_INPUT_MAP = {
+  'wind-h':          'h',
+  'wind-B':          'minDim',
+  'wind-L':          'buildingL',
+  'wind-theta':      'theta',
+  'wind-roofShape':  'roofShape',
+  'wind-V':          'V',
+  'wind-exposure':   'exposure',
+  'wind-kzt':        'kzt',
+  'wind-groundElev': 'groundElev',
+  'wind-enclosure':  'enclosure',
+  'wind-riskCategory': 'riskCategory',
+  'wind-areaWall':   'areaWall',
+  'wind-areaRoof':   'areaRoof',
+};
+
+function gatherWindState(base) {
+  const s = Object.assign({}, base || {});
+  const defs = {
+    unitSystem:'US', mode:'mwfrs', roofType:'sloped',
+    h:20, minDim:40, buildingL:60, theta:18, roofShape:'gable',
+    V:115, exposure:'C', kzt:1.0, kztMode:'manual',
+    groundElev:0, enclosure:'enclosed', riskCategory:'II',
+    areaWall:20, areaRoof:50,
+    mwfrsProcedure:'envelope', ccProcedure:'part1',
+    hasOverhang:false, hasParapet:false, hasCanopy:false,
+    hasCircularTank:false, hasSteppedRoof:false, hasMultispanRoof:false,
+    hasSawtoothRoof:false, hasDomeRoof:false, hasMonoslopeRoof:false,
+    ch32Enabled:false, structureCategory:'building',
+  };
+  Object.keys(defs).forEach(k => { if (s[k] === undefined) s[k] = defs[k]; });
+  Object.entries(WIND_INPUT_MAP).forEach(([elId, key]) => {
+    const inp = document.getElementById(elId);
+    if (!inp) return;
+    const num = parseFloat(inp.value);
+    s[key] = isNaN(num) ? inp.value : num;
+  });
+  const activeProc = document.querySelector('#windProcToggle button.active');
+  if (activeProc) {
+    const proc = activeProc.dataset.proc;
+    if (proc === 'cc') { s.mode = 'cc'; }
+    else { s.mode = 'mwfrs'; s.mwfrsProcedure = proc; }
+  }
+  s.roofType = (s.theta <= 7 || s.roofShape === 'flat') ? 'flat' : 'sloped';
+  if (s.roofShape === 'flat') s.theta = 0;
+  return s;
+}
+
+function restoreWindInputs(saved) {
+  const revMap = Object.fromEntries(
+    Object.entries(WIND_INPUT_MAP).map(([e,k]) => [k, e])
+  );
+  Object.entries(saved).forEach(([key, val]) => {
+    const inp = document.getElementById(revMap[key]);
+    if (inp) inp.value = val;
+  });
+  if (saved.mode === 'cc') setWindProc('cc');
+  else if (saved.mwfrsProcedure) setWindProc(saved.mwfrsProcedure);
+}
+
+function setWindProc(proc) {
+  document.querySelectorAll('#windProcToggle button').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.proc === proc);
+  });
+}
+
+function recalcWind() {
+  if (!windActiveProj || !windActiveCalc) return;
+  const s = gatherWindState(windSavedState || {});
+  let r = null;
+  try { r = window.compute(s); } catch(e) { console.warn('Wind compute error', e); }
+
+  const B = s.minDim || 40;
+  const L = s.buildingL || 60;
+  const hE = s.h || 20;
+  const th = s.theta || 0;
+  const hR = (s.roofType === 'flat') ? hE : hE + (B / 2) * Math.tan(th * Math.PI / 180);
+  const za = r && r.a ? r.a : Math.min(0.1 * Math.min(B, L), Math.min(0.4 * hE, 0.04 * Math.min(B, L)));
+
+  if (windRenderer) windRenderer.update3DModel(B, L, hE, hR, za);
+
+  const vDisp = document.getElementById('wind-V-display');
+  if (vDisp) vDisp.textContent = s.V;
+
+  const cap = document.getElementById('windDiagramCaption');
+  if (cap) {
+    const sh = {gable:'Gable Roof',hip:'Hip Roof',flat:'Flat Roof',monoslope:'Monoslope Roof'};
+    const pr = {envelope:'Envelope (Ch. 28)',directional:'Directional (Ch. 27)',cc:'C&C (Ch. 30)'};
+    const pk = s.mode === 'cc' ? 'cc' : s.mwfrsProcedure;
+    cap.textContent = (sh[s.roofShape] || 'Building') + ' — ' + (pr[pk] || '');
+  }
+
+  renderWindResults(r, s);
+
+  if (!windActiveCalc.state) windActiveCalc.state = {};
+  windActiveCalc.state['ASCE 7-22'] = { state: s, unitSystem: s.unitSystem };
+  windActiveProj.updatedAt = Date.now();
+  scheduleSave();
+  windSavedState = s;
+}
+
+function renderWindResults(r, s) {
+  const host = document.getElementById('windResultsContent');
+  if (!host) return;
+  if (!r) {
+    host.innerHTML = '<div class="result-card"><div class="result-card-head">Error</div>' +
+      '<div class="result-row"><span class="k">Calculation error — check inputs</span></div></div>';
+    return;
+  }
+  const fmt = (v, d) => (typeof v === 'number' ? v.toFixed(d != null ? d : 2) : '—');
+  const psf = v => fmt(v) + ' psf';
+  let html = '';
+
+  html += '<div class="result-card"><div class="result-card-head">Site &amp; Parameters</div>' +
+    '<div class="result-row"><span class="k">Risk Category</span><span class="v"><span class="badge-risk">' + escHtml(s.riskCategory) + '</span></span></div>' +
+    '<div class="result-row"><span class="k">Exposure</span><span class="v">' + escHtml(s.exposure) + '</span></div>' +
+    '<div class="result-row"><span class="k">Enclosure</span><span class="v">' + escHtml({enclosed:'Enclosed',partiallyEnclosed:'Part. Enclosed',open:'Open'}[s.enclosure] || s.enclosure) + '</span></div>' +
+    '<div class="result-row"><span class="k">Procedure</span><span class="v">' + escHtml(s.mode === 'cc' ? 'C&C Ch.30' : (s.mwfrsProcedure === 'envelope' ? 'MWFRS Env Ch.28' : 'MWFRS Dir Ch.27')) + '</span></div>' +
+    '</div>';
+
+  const gcpiVal = r.gcpi && typeof r.gcpi === 'object' ? r.gcpi.pos : r.gcpi;
+  html += '<div class="result-card"><div class="result-card-head">Velocity Pressure</div>' +
+    '<div class="result-row"><span class="k">K<sub>h</sub></span><span class="v">' + fmt(r.kh, 3) + '</span></div>' +
+    '<div class="result-row"><span class="k">K<sub>e</sub></span><span class="v">' + fmt(r.ke, 3) + '</span></div>' +
+    '<div class="result-row"><span class="k">K<sub>d</sub></span><span class="v">' + fmt(r.kd, 2) + '</span></div>' +
+    '<div class="result-row"><span class="k">q<sub>h</sub></span><span class="v">' + psf(r.qh) + '</span></div>' +
+    '<div class="result-row"><span class="k">(GC<sub>pi</sub>)</span><span class="v">±' + fmt(gcpiVal, 2) + '</span></div>' +
+    '<div class="result-row"><span class="k">Zone a</span><span class="v">' + fmt(r.a, 2) + ' ft</span></div>' +
+    '</div>';
+
+  if (s.mode === 'mwfrs' && s.mwfrsProcedure === 'envelope' && r.mwfrsLC1 && r.mwfrsLC1.length) {
+    const all = [...(r.mwfrsLC1 || []), ...(r.mwfrsLC2 || [])];
+    const seen = new Set();
+    const uniq = all.filter(z => !seen.has(z.zone) && seen.add(z.zone));
+    html += '<div class="result-card"><div class="result-card-head">MWFRS — Envelope (Ch. 28)</div>';
+    uniq.forEach(z => {
+      const ma = Math.max(Math.abs(z.pos || 0), Math.abs(z.neg || 0));
+      const cl = ma > 30 ? 'zone-crit' : ma > 20 ? 'zone-high' : ma > 12 ? 'zone-mid' : 'zone-low';
+      const vstr = (z.pos != null ? '+' + fmt(z.pos) : '') + (z.neg != null ? ' / ' + fmt(z.neg) : '') + ' psf';
+      html += '<div class="result-row ' + cl + '"><span class="k">' + escHtml(z.zone) + '</span><span class="v">' + vstr + '</span></div>';
+    });
+    html += '</div>';
+  }
+
+  if (s.mode === 'mwfrs' && s.mwfrsProcedure === 'directional' && r.ch27) {
+    const d = r.ch27;
+    html += '<div class="result-card"><div class="result-card-head">MWFRS — Directional (Ch. 27)</div>';
+    if (d.pWW != null) html += '<div class="result-row zone-mid"><span class="k">Windward wall</span><span class="v">+' + fmt(d.pWW) + ' psf</span></div>';
+    if (d.pLW != null) html += '<div class="result-row zone-low"><span class="k">Leeward wall</span><span class="v">' + fmt(d.pLW) + ' psf</span></div>';
+    if (Array.isArray(d.roof)) d.roof.forEach(rz => {
+      html += '<div class="result-row zone-mid"><span class="k">' + escHtml(rz.label || 'Roof') + '</span><span class="v">' + fmt(rz.p) + ' psf</span></div>';
+    });
+    html += '</div>';
+  }
+
+  if (s.mode === 'cc') {
+    if (r.ccWall) {
+      html += '<div class="result-card"><div class="result-card-head">C&amp;C — Walls (Ch. 30)</div>';
+      if (r.ccWall.zone4) html += '<div class="result-row zone-low"><span class="k">Zone 4 — field</span><span class="v">' + fmt(r.ccWall.zone4.neg) + ' / +' + fmt(r.ccWall.zone4.pos) + ' psf</span></div>';
+      if (r.ccWall.zone5) html += '<div class="result-row zone-high"><span class="k">Zone 5 — corner</span><span class="v">' + fmt(r.ccWall.zone5.neg) + ' / +' + fmt(r.ccWall.zone5.pos) + ' psf</span></div>';
+      html += '</div>';
+    }
+    if (r.ccRoof) {
+      html += '<div class="result-card"><div class="result-card-head">C&amp;C — Roof (Ch. 30)</div>';
+      [['zone1','zone-mid'],['zone2','zone-high'],['zone3','zone-crit']].forEach(([zk,cl]) => {
+        const zd = r.ccRoof[zk];
+        if (!zd) return;
+        html += '<div class="result-row ' + cl + '"><span class="k">' + zk.replace('zone','Zone ') + '</span><span class="v">' + fmt(zd.neg) + ' / +' + fmt(zd.pos) + ' psf</span></div>';
+      });
+      html += '</div>';
+    }
+  }
+
+  host.innerHTML = html;
+}
+
+function wireWindInputs() {
+  let debounce = null;
+  const onInput = () => { clearTimeout(debounce); debounce = setTimeout(recalcWind, 250); };
+  Object.keys(WIND_INPUT_MAP).forEach(id => {
+    const inp = document.getElementById(id);
+    if (inp) inp.addEventListener('input', onInput);
+  });
+  document.querySelectorAll('#windProcToggle button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#windProcToggle button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      recalcWind();
+    });
+  });
+  document.querySelectorAll('#windViewToggle button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#windViewToggle button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+  const btnReset = document.getElementById('windBtnReset');
+  if (btnReset) btnReset.addEventListener('click', () => windRenderer && windRenderer.resetCamera && windRenderer.resetCamera());
+}
+
+async function openWindWorkspace(proj, calc) {
+  windActiveProj = proj;
+  windActiveCalc = calc;
+
+  const banner = document.getElementById('windBannerText');
+  if (banner) banner.innerHTML = '<strong>' + escHtml(proj.name) + '</strong> · ASCE 7-22 · ' + escHtml(proj.settings && proj.settings.units === 'SI' ? 'SI' : 'US') + ' Units';
+
+  await loadWindScripts();
+  await loadWindEngine();
+
+  const savedEntry = calc.state && calc.state['ASCE 7-22'];
+  if (savedEntry && savedEntry.state) {
+    windSavedState = savedEntry.state;
+    restoreWindInputs(savedEntry.state);
+  } else {
+    windSavedState = null;
+  }
+
+  if (windRenderer) {
+    try { windRenderer.dispose(); } catch(e) {}
+    windRenderer = null;
+  }
+  await new Promise(res => setTimeout(res, 60));
+  try { windRenderer = new Wind3DRenderer('threejs-container'); } catch(e) { console.error('Wind3DRenderer init:', e); }
+
+  if (!elWsMain._inputsWired) {
+    wireWindInputs();
+    elWsMain._inputsWired = true;
+  }
+  recalcWind();
+}
+          

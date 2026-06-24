@@ -22,12 +22,13 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
   height: 100%; font-family: 'Inter', system-ui, sans-serif;
-  color: var(--slate-800); background: var(--slate-50);
+  color: #ffffff; background: var(--navy-950);
   -webkit-font-smoothing: antialiased; font-size: 15px;
 }
 button { font-family: inherit; cursor: pointer; }
 input, select, textarea { font-family: inherit; }
 .num, .mono { font-family: 'JetBrains Mono', monospace; font-feature-settings: 'tnum'; letter-spacing: -.01em; }
+.mono-num { font-family: 'JetBrains Mono', monospace; font-feature-settings: 'tnum'; letter-spacing: -.01em; }
 .hidden { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
 .ic    { width: 18px; height: 18px; flex: none; display: inline-block; vertical-align: -4px; }
@@ -236,8 +237,8 @@ input, select, textarea { font-family: inherit; }
 .tree-root .ic { color: var(--amber-400); }
 
 .tree-group-hdr {
-  font-size: .64rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase;
-  color: var(--slate-500); padding: 14px 8px 4px; display: flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--slate-400); padding: 14px 8px 4px; display: flex; align-items: center; gap: 8px;
 }
 .tree-group-hdr::after { content: ''; flex: 1; height: 1px; background: var(--navy-700); }
 
@@ -418,3 +419,235 @@ input, select, textarea { font-family: inherit; }
 
 /* Keep Print/Export button visible */
 #module-host #printBtn { display: inline-flex !important; }
+
+/* =====================================================================
+   WIND WORKSPACE — 3-COLUMN LAYOUT
+   LOCKED: col-input(360px) | col-diagram(flex:1) | col-results(420px)
+   Do NOT modify without explicit user request.
+   ===================================================================== */
+
+/* ws-main: full-height flex column that replaces ws-content for Wind */
+.ws-main {
+  flex: 1; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column;
+  background: var(--slate-50); overflow: hidden;
+}
+
+/* tab strip */
+.tab-strip {
+  display: flex; align-items: center; gap: 2px;
+  padding: 0 16px; background: var(--navy-900);
+  border-bottom: 1px solid var(--navy-700); flex: none;
+}
+.tab-btn {
+  padding: 13px 14px; font-size: .84rem; font-weight: 600; color: var(--slate-400);
+  border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 7px;
+  background: none; border-left: none; border-right: none; border-top: none; white-space: nowrap;
+  cursor: pointer;
+}
+.tab-btn .ic { width: 16px; height: 16px; }
+.tab-btn:hover { color: #e2eaf5; }
+.tab-btn.active { color: var(--cyan-400); border-bottom-color: var(--cyan-400); }
+.tab-strip-actions { margin-left: auto; display: flex; gap: 8px; padding: 8px 0; }
+
+/* three-column skeleton */
+.workspace-cols {
+  flex: 1; min-height: 0;
+  display: flex; overflow: hidden;
+}
+
+/* LEFT — input column */
+.col-input {
+  flex: none; width: 360px; min-width: 0; box-sizing: border-box;
+  background: var(--navy-900); border-right: 1px solid var(--navy-700);
+  overflow-y: auto; overflow-x: hidden; padding: 16px 18px;
+}
+
+/* procedure toggle (MWFRS Env / Dir / C&C) */
+.proc-toggle {
+  display: flex; border: 1px solid var(--navy-600); border-radius: 8px;
+  overflow: hidden; margin-bottom: 16px; flex: none;
+}
+.proc-toggle button {
+  flex: 1; padding: 8px 6px; font-size: .76rem; font-weight: 700;
+  color: var(--slate-400); background: var(--navy-800); border: none; cursor: pointer;
+  border-right: 1px solid var(--navy-600); transition: .12s; white-space: nowrap;
+}
+.proc-toggle button:last-child { border-right: none; }
+.proc-toggle button:hover { background: var(--navy-700); color: #e2eaf5; }
+.proc-toggle button.active { background: var(--navy-600); color: var(--cyan-400); }
+
+/* panel sections */
+.panel-section { margin-bottom: 20px; }
+.panel-section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--navy-700);
+}
+.panel-section h4 {
+  font-size: 11px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--slate-400);
+}
+.panel-section-note { font-size: .7rem; color: var(--slate-500); font-weight: 500; }
+
+/* fields */
+.field { margin-bottom: 10px; }
+.field label {
+  display: flex; align-items: center; font-size: .79rem; font-weight: 600;
+  color: var(--slate-400); margin-bottom: 5px; line-height: 1.3;
+}
+.field label .unit { color: var(--slate-500); font-weight: 500; margin-left: 3px; }
+.field input, .field select {
+  width: 100%; border: 1px solid var(--navy-600); border-radius: 7px;
+  padding: 8px 10px; font-size: .86rem; background: var(--navy-800);
+  color: #e2eaf5; font-family: inherit; transition: .15s; box-sizing: border-box;
+}
+.field input.num { font-family: 'JetBrains Mono', monospace; }
+.field input:focus, .field select:focus {
+  outline: none; border-color: var(--cyan-400); background: var(--navy-700);
+  box-shadow: 0 0 0 3px rgba(34,211,238,.15);
+}
+.field input.dim-active {
+  border-color: var(--cyan-400); background: rgba(34,211,238,.08);
+  box-shadow: 0 0 0 3px rgba(34,211,238,.18);
+}
+.field-row   { display: grid; grid-template-columns: 1fr 1fr;     gap: 10px; align-items: end; }
+.field-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;  align-items: end; }
+.hint-row  { font-size: .73rem; color: var(--slate-400); margin-top: 3px; line-height: 1.4; }
+.chk-field {
+  display: flex; align-items: center; gap: 8px;
+  font-size: .83rem; font-weight: 600; color: var(--slate-400); margin-bottom: 10px;
+}
+.chk-field input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--cyan-500); }
+
+/* project banner */
+.proj-banner {
+  background: linear-gradient(135deg, var(--navy-900), var(--navy-800));
+  border: 1px solid var(--navy-600); border-radius: var(--radius-sm, 6px);
+  padding: 12px 14px; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 10px;
+  color: #cfe4ec; font-size: .8rem;
+}
+.proj-banner .ic  { color: var(--cyan-400); }
+.proj-banner strong { color: #fff; }
+
+/* CENTER — diagram column */
+.col-diagram {
+  flex: 1; min-width: 0; min-height: 0; box-sizing: border-box;
+  display: flex; flex-direction: column;
+  position: relative; overflow: hidden;
+  border-right: 1px solid var(--slate-200);
+}
+
+.diagram-toolbar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px; background: var(--navy-900);
+  border-bottom: 1px solid var(--navy-700); flex: none;
+}
+.diagram-toolbar-right { margin-left: auto; display: flex; gap: 4px; }
+
+.view-toggle {
+  display: flex; border: 1px solid var(--navy-600);
+  border-radius: 7px; overflow: hidden;
+}
+.view-toggle button {
+  border: none; background: var(--navy-800); padding: 6px 12px;
+  font-size: .78rem; font-weight: 600; color: var(--slate-400); cursor: pointer;
+}
+.view-toggle button.active { background: var(--navy-600); color: var(--cyan-400); }
+
+.icon-btn {
+  width: 30px; height: 30px; border-radius: 7px;
+  border: 1px solid var(--navy-600); background: var(--navy-800);
+  color: var(--slate-400); display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.icon-btn:hover { background: var(--navy-700); color: #e2eaf5; }
+
+/* Three.js container — fills remaining column height */
+#threejs-container {
+  flex: 1; min-height: 0;
+  position: relative; overflow: hidden;
+  background: #f8fbff;
+  background-image:
+    linear-gradient(rgba(6,182,212,.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(6,182,212,.06) 1px, transparent 1px);
+  background-size: 30px 30px;
+}
+#threejs-container canvas {
+  display: block; width: 100% !important; height: 100% !important;
+}
+
+/* Wind speed label overlay */
+#wind-label-V {
+  position: absolute; top: 12px; left: 14px;
+  font-size: .82rem; font-weight: 700; color: var(--navy-900);
+  background: rgba(255,255,255,.88); border: 1px solid var(--slate-200);
+  border-radius: 6px; padding: 4px 10px; pointer-events: none;
+}
+
+/* Zone legend overlay */
+#wind-zone-legend {
+  position: absolute; bottom: 44px; right: 14px;
+  background: rgba(255,255,255,.9); border: 1px solid var(--slate-200);
+  border-radius: 8px; padding: 8px 12px; font-size: .72rem;
+  line-height: 1.8; pointer-events: none; min-width: 140px;
+}
+#wind-zone-legend .legend-row { display: flex; align-items: center; gap: 7px; }
+#wind-zone-legend .legend-swatch {
+  width: 12px; height: 12px; border-radius: 2px; flex: none;
+}
+
+.diagram-caption {
+  position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+  font-size: .76rem; color: var(--slate-500);
+  background: rgba(255,255,255,.9); padding: 4px 12px;
+  border-radius: 999px; border: 1px solid var(--slate-200); white-space: nowrap;
+}
+
+/* RIGHT — results column */
+.col-results {
+  flex: none; width: 420px; min-width: 0; box-sizing: border-box;
+  background: var(--navy-900); overflow-y: auto; overflow-x: hidden; padding: 14px;
+  border-left: 1px solid var(--navy-700);
+}
+
+/* ── Result cards (dark "blueprint" zone cards) ──────────────────────── */
+.result-card {
+  background: var(--navy-800); border: 1px solid var(--navy-700);
+  border-radius: 6px; margin-bottom: 8px; overflow: hidden;
+}
+
+/* Zone accent: left marker (4px) */
+.result-card.zone-1 { border-left: 4px solid var(--cyan-400); }
+.result-card.zone-2 { border-left: 4px solid var(--amber-400); }
+.result-card.zone-3 { border-left: 4px solid var(--red-400); }
+
+.result-card-head {
+  font-size: .7rem; font-weight: 800; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--cyan-400);
+  background: rgba(34,211,238,.06); padding: 8px 14px;
+  border-bottom: 1px solid var(--navy-700);
+}
+
+/* Main result value row */
+.result-card-body { padding: 12px 16px; }
+.result-value {
+  font-family: 'JetBrains Mono', monospace; font-feature-settings: 'tnum';
+  font-size: 24px; font-weight: 700; color: var(--cyan-400); line-height: 1.2;
+}
+.result-unit {
+  font-family: 'JetBrains Mono', monospace; font-size: .72rem;
+  color: var(--slate-400); margin-left: 5px; font-weight: 500;
+}
+
+/* Detail rows inside a card */
+.result-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 6px 14px; font-size: .81rem;
+  border-bottom: 1px solid rgba(28,44,74,.8);
+}
+.result-row:last-child { border-bottom: none; }
+.result-row .k { color: var(--slate-400); }
+.result-row .v {
+  font-fa
