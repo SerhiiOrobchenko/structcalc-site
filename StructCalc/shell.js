@@ -1065,7 +1065,7 @@ async function loadWindScripts() {
   await loadScriptTag('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js');
   await loadScriptTag('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js');
   await loadScriptTag('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js');
-  await loadScriptTag('renderer.js?v=2');
+  await loadScriptTag('renderer.js?v=4');
   windScriptsLoaded = true;
 }
 

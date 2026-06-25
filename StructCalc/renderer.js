@@ -45,6 +45,24 @@ const THEME = {
 };
 
 /* =========================================================================
+   HELPERS
+   ========================================================================= */
+function disposeGroup(group) {
+  if (!group) return;
+  group.traverse(obj => {
+    if (obj.geometry) obj.geometry.dispose();
+    if (obj.material) {
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      mats.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); });
+    }
+    // CSS2DObject: remove label DOM node
+    if (obj.element && obj.element.parentNode) {
+      obj.element.parentNode.removeChild(obj.element);
+    }
+  });
+}
+
+/* =========================================================================
    Wind3DRenderer CLASS
    ========================================================================= */
 class Wind3DRenderer {
@@ -658,7 +676,8 @@ class Wind3DRenderer {
     }
   }
 
-  /* ── cleanup ────────────────────────────────────────────────────────────── */
+  /* ── cleanup ─────────────────────────────────────────────────────── */
+
   dispose() {
     cancelAnimationFrame(this._animId);
     window.removeEventListener('resize', this._onResize);
@@ -666,7 +685,8 @@ class Wind3DRenderer {
     this._renderer.dispose();
     [this._renderer.domElement, this._labelRenderer?.domElement]
       .filter(Boolean).forEach(el => el.parentNode?.removeChild(el));
-    [this._building, this._zones, this._dimGroup, this._labelGroup]      .filter(Boolean).forEach(g => { this._scene.remove(g); disposeGroup(g); });
+    [this._building, this._zones, this._dimGroup, this._labelGroup]
+      .filter(Boolean).forEach(g => { this._scene.remove(g); disposeGroup(g); });
     this._container.innerHTML = '';
   }
 
