@@ -695,4 +695,47 @@ class Wind3DRenderer {
   }
 
   _hitZones(ndc) {
-    this._raycaster.setFromCamera(ndc, this._c
+    this._raycaster.setFromCamera(ndc, this._camera, ndc);
+    return this._raycaster.intersectObjects(this._zoneMeshes);
+  }
+
+  _handleClick(e) {
+    const hits = this._hitZones(this._ndc(e));
+    if (hits.length > 0 && this._clickCB) {
+      this._clickCB(hits[0].object.userData.zoneType);
+    }
+  }
+
+  _handleHover(e) {
+    const hits = this._hitZones(this._ndc(e));
+    const zone = hits.length > 0 ? hits[0].object.userData.zoneType : null;
+    if (zone === this._hoverZone) return;
+    if (this._hoverZone) {
+      this._zoneMeshes.filter(m => m.userData.zoneType === this._hoverZone)
+        .forEach(m => { m.material.opacity *= 0.65; });
+    }
+    this._hoverZone = zone;
+    if (zone) {
+      this._zoneMeshes.filter(m => m.userData.zoneType === zone)
+        .forEach(m => { m.material.opacity = Math.min(0.9, m.material.opacity / 0.65); });
+      this._renderer.domElement.style.cursor = 'pointer';
+    } else {
+      this._renderer.domElement.style.cursor = '';
+    }
+  }
+
+  /* ── cleanup ─────────────────────────────────────────────────────── */
+
+  dispose() {
+    cancelAnimationFrame(this._animId);
+    window.removeEventListener('resize', this._onResize);
+    if (this._ro) { this._ro.disconnect(); this._ro = null; }
+    this._renderer.dispose();
+    [this._renderer.domElement, this._labelRenderer?.domElement]
+      .filter(Boolean).forEach(el => el.parentNode?.removeChild(el));
+    [this._building, this._zones, this._dimGroup, this._labelGroup]
+      .filter(Boolean).forEach(g => { this._scene.remove(g); disposeGroup(g); });
+    this._container.innerHTML = '';
+  }
+
+} // end Wind3DRenderer

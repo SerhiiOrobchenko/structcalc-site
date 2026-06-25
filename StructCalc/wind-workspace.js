@@ -287,4 +287,25 @@ async function openWindWorkspace(proj, calc) {
   await loadWindScripts();
   await loadWindEngine();
 
-  var savedEntry = calc.state && calc
+  var savedEntry = calc.state && calc.state['ASCE 7-22'];
+  if (savedEntry && savedEntry.state) {
+    windSavedState = savedEntry.state;
+    restoreWindInputs(savedEntry.state);
+  } else {
+    windSavedState = null;
+  }
+
+  if (windRenderer) {
+    try { windRenderer.dispose(); } catch(e) {}
+    windRenderer = null;
+  }
+  await new Promise(function(res){ setTimeout(res, 60); });
+  try { windRenderer = new Wind3DRenderer('threejs-container'); }
+  catch(e) { console.error('Wind3DRenderer init:', e); }
+
+  if (!elWsMain._inputsWired) {
+    wireWindInputs();
+    elWsMain._inputsWired = true;
+  }
+  recalcWind();
+}
