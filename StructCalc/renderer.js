@@ -13,35 +13,35 @@
  */
 
 /* =========================================================================
-   COLOUR PALETTE — engineering blueprint on dark background
+   COLOUR PALETTE — light architectural background
    ========================================================================= */
 const THEME = {
-  bg         : 0x0f1626,   // navy-900  — scene background
-  fog        : 0x0f1626,
-  grid1      : 0x1c2c4a,   // navy-700  — major grid lines
-  grid2      : 0x16213a,   // navy-800  — minor grid lines
-  gnd        : 0x111827,   // ground plane
+  bg         : 0xeef3f8,   // light blue-grey — scene background
+  fog        : 0xeef3f8,
+  grid1      : 0xc4d4e6,   // subtle blue-grey major grid lines
+  grid2      : 0xd8e5f0,   // very light minor grid lines
+  gnd        : 0xe2ecf5,   // ground plane, slightly darker than bg
 
-  wallFill   : 0xdceef8,   // pale blue — wall faces (near-opaque blocks back edges)
-  wallEdge   : 0x7bafd4,   // edge outlines on dark bg
-  roofFill   : 0x38bdf8,   // sky blue
-  roofEdge   : 0x7dd3fc,
-  gableFill  : 0x93c5fd,
-  gableEdge  : 0x7bafd4,
-  ridge      : 0xe2e8f0,   // bright ridge line
+  wallFill   : 0xbdd4e8,   // medium-pale blue — wall faces
+  wallEdge   : 0x2d6a9f,   // strong blue edges to define shape on light bg
+  roofFill   : 0x38bdf8,   // sky blue roof
+  roofEdge   : 0x0ea5e9,
+  gableFill  : 0x7bb8e0,
+  gableEdge  : 0x2d6a9f,
+  ridge      : 0x1e4a7a,   // dark navy ridge — visible on light bg
 
-  dimLine    : 0x475569,   // default dim colour
-  dimActive  : 0x06b6d4,   // cyan highlight on hover/focus
-  dimExt     : 0x334155,   // extension line (dashed, darker)
-  dimText    : '#e2e8f0',
-  dimBg      : 'rgba(15,22,38,0.88)',
+  dimLine    : 0x5b7fa8,   // muted blue-grey dim lines
+  dimActive  : 0x0284c7,   // strong cyan/blue for hover
+  dimExt     : 0x8aa5c2,   // light extension lines
+  dimText    : '#1e3a5f',  // dark navy text — readable on light bg
+  dimBg      : 'rgba(255,255,255,0.92)',
 
   zone1      : 0x22d3ee,   // cyan   — interior field
   zone2      : 0xf59e0b,   // amber  — edges
   zone3      : 0xef4444,   // red    — corners
-  zoneLabel1 : { bg:'rgba(6,182,212,0.82)',  fg:'#fff' },
-  zoneLabel2 : { bg:'rgba(217,119,6,0.85)',  fg:'#fff' },
-  zoneLabel3 : { bg:'rgba(220,38,38,0.85)',  fg:'#fff' },
+  zoneLabel1 : { bg:'rgba(6,182,212,0.85)',  fg:'#fff' },
+  zoneLabel2 : { bg:'rgba(217,119,6,0.88)',  fg:'#fff' },
+  zoneLabel3 : { bg:'rgba(220,38,38,0.88)',  fg:'#fff' },
 };
 
 /* =========================================================================
@@ -358,7 +358,7 @@ class Wind3DRenderer {
     return grp;
   }
 
-  _buildAllDims(B, L, hEave, hRidge, zone_a) {
+  _buildAllDims(B, L, hEave, hRidge, zone_a, hLabel = null) {
     const hB = B/2, hL = L/2;
     const grp = new THREE.Group();
     const D   = Math.max(10, Math.max(B, L) * 0.12); // offset from building face
@@ -402,7 +402,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(-hB, 0,      -hL), new THREE.Vector3(hX, 0,      hZv)],
         [new THREE.Vector3(-hB, hRidge,   0), new THREE.Vector3(hX, hRidge, hZv)],
       ],
-      `h = ${hRidge.toFixed(1)} ft`, 'dim-h', 'inp-h'
+      `h = ${(hLabel ?? hRidge).toFixed(1)} ft`, 'dim-h', 'inp-h'
     ));
     this._dimHighlight['dim-h'] = grp.children[grp.children.length - 1];
 
@@ -518,10 +518,13 @@ class Wind3DRenderer {
   update3DModel(B, L, h, theta, zone_a) {
     B = +B||48; L = +L||80; h = +h||22; theta = +theta||10; zone_a = +zone_a||4;
 
-    const th    = THREE.MathUtils.degToRad(theta);
-    const hB    = B/2, hL = L/2;
-    const hEave = Math.max(1, h - hB * Math.tan(th));
-    const hRidge = h;
+    const H_SCALE  = 1.8;  // vertical exaggeration — keeps proportions readable
+    const th       = THREE.MathUtils.degToRad(theta);
+    const hB       = B/2, hL = L/2;
+    const hEave_ft = Math.max(1, h - hB * Math.tan(th));  // actual eave height, ft
+    const hRidge_ft = h;                                   // actual ridge height, ft
+    const hEave    = hEave_ft  * H_SCALE;  // scaled for rendering
+    const hRidge   = hRidge_ft * H_SCALE;
 
     // clear
     for (const g of [this._building, this._zones, this._dimGroup, this._labelGroup]) {
@@ -537,8 +540,8 @@ class Wind3DRenderer {
     // building
     this._building = this._buildStructure(B, L, hEave, hRidge);
 
-    // dim lines
-    this._dimGroup = this._buildAllDims(B, L, hEave, hRidge, zone_a);
+    // dim lines (pass hRidge_ft so label shows real engineering value, not scaled)
+    this._dimGroup = this._buildAllDims(B, L, hEave, hRidge, zone_a, hRidge_ft);
 
     // zones
     const u_zone = Math.min(zone_a / hB, 0.45);
@@ -664,16 +667,3 @@ class Wind3DRenderer {
     [this._renderer.domElement, this._labelRenderer?.domElement]
       .filter(Boolean).forEach(el => el.parentNode?.removeChild(el));
     [this._building, this._zones, this._dimGroup, this._labelGroup]
-      .filter(Boolean).forEach(disposeGroup);
-  }
-}
-
-/* ── utility ──────────────────────────────────────────────────────────────── */
-function disposeGroup(g) {
-  g.traverse(o => {
-    if (o.geometry) o.geometry.dispose();
-    if (o.material) {
-      (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose());
-    }
-  });
-}

@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
 <title>StructCalc — Structural Load Workspace</title>
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 
@@ -177,15 +177,16 @@
             <div id="windBannerText">ASCE 7-22 · Wind Load</div>
           </div>
 
-          <!-- Procedure toggle -->
-          <div class="proc-toggle" id="windProcToggle">
-            <button class="active" data-proc="envelope">MWFRS Env.</button>
-            <button data-proc="directional">MWFRS Dir.</button>
-            <button data-proc="cc">C&amp;C</button>
-          </div>
-
-          <!-- Tab: Site (Basic Wind Parameters) -->
+          <!-- Tab: Site (Calculation procedure + Basic Wind Parameters) -->
           <div class="tab-content" id="tab-site">
+
+            <!-- Procedure toggle — lives inside Site tab -->
+            <div class="proc-toggle" id="windProcToggle">
+              <button class="active" data-proc="envelope">MWFRS Env.</button>
+              <button data-proc="directional">MWFRS Dir.</button>
+              <button data-proc="cc">C&amp;C</button>
+            </div>
+
             <div class="panel-section">
               <div class="panel-section-head">
                 <h4>Basic Wind Parameters</h4>
@@ -440,6 +441,4 @@
 </div>
 
 <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" as="script">
-<script src="shell.js?v=6" defer onerror="console.error('[SC] FATAL: shell.js failed to load')"></script>
-</body>
-</html>
+<script src="shell.js?v=7" defer onerror="console.error('[S
