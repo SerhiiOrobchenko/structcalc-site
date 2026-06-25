@@ -482,28 +482,17 @@ input, select, textarea { font-family: inherit; }
 .proc-toggle button.active { background: var(--navy-900); color: #fff; }
 
 /* Input section tabs (Site / Geometry / C&C) — full-bleed dark strip, sticky */
+/* tab-strip vertical separator */
+.tab-strip-sep {
+  width: 1px; height: 22px; background: var(--slate-200); margin: 0 6px; flex: none;
+}
+
+/* input-tabs group inside tab-strip — inherits tab-btn light styles */
 .input-tabs {
-  display: flex;
-  width: 100%;
-  background: var(--navy-900);
-  border-bottom: 2px solid var(--navy-700);
-  overflow-x: auto;
-  flex: none;
+  display: flex; align-items: stretch; flex: none;
 }
 .input-tabs .tab-btn {
-  flex: 1; display: flex; align-items: center; justify-content: center;
-  background: none; border: none;
-  border-bottom: 2px solid transparent;
-  padding: 10px 6px; color: var(--slate-400);
-  font-size: .7rem; font-weight: 700; cursor: pointer;
-  white-space: nowrap; transition: .12s;
-  letter-spacing: .06em; text-transform: uppercase;
-}
-.input-tabs .tab-btn:hover { color: #fff; background: var(--navy-800); }
-.input-tabs .tab-btn.active {
-  color: var(--cyan-400);
-  border-bottom-color: var(--cyan-400);
-  background: var(--navy-800);
+  /* uses .tab-btn base styles defined above */
 }
 
 /* panel sections */
