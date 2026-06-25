@@ -1,0 +1,40 @@
+/* =====================================================================
+   StructCalc — layout.css
+   Responsibility: grid skeleton — column widths, workspace dimensions.
+   LOCKED: do not change without explicit user approval.
+   ===================================================================== */
+
+/* ws-main: full-height flex column that replaces ws-content for Wind */
+.ws-main {
+  flex: 1; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column;
+  background: var(--slate-50); overflow: hidden;
+}
+
+/* three-column skeleton — LOCKED widths */
+.workspace-cols {
+  flex: 1; min-height: 0;
+  display: flex; overflow: hidden;
+}
+
+/* LEFT — input column */
+.col-input {
+  flex: none; width: 360px; min-width: 0; box-sizing: border-box;
+  background: #fff; border-right: 1px solid var(--slate-200);
+  overflow-y: auto; padding: 0;
+}
+
+/* CENTER — diagram column */
+.col-diagram {
+  flex: 1; min-width: 0; min-height: 0; box-sizing: border-box;
+  display: flex; flex-direction: column;
+  position: relative; overflow: hidden;
+  border-right: 1px solid var(--slate-200);
+}
+
+/* RIGHT — results column */
+.col-results {
+  flex: none; width: 420px; min-width: 0; box-sizing: border-box;
+  background: #fff; overflow-y: auto; overflow-x: hidden; padding: 14px;
+  border-left: 1px solid var(--slate-200);
+}

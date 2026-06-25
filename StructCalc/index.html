@@ -8,7 +8,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
 <title>StructCalc — Structural Load Workspace</title>
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="theme.css?v=1">
+<link rel="stylesheet" href="layout.css?v=1">
+<link rel="stylesheet" href="components.css?v=1">
 </head>
 <body>
 
@@ -441,6 +443,10 @@
 </div>
 
 <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" as="script">
-<script src="shell.js?v=7" defer onerror="console.error('[SC] FATAL: shell.js failed to load')"></script>
+<script src="projects.js" defer onerror="console.error('[SC] FATAL: projects.js failed')"></script>
+<script src="dashboard.js" defer onerror="console.error('[SC] FATAL: dashboard.js failed')"></script>
+<script src="workspace.js" defer onerror="console.error('[SC] FATAL: workspace.js failed')"></script>
+<script src="wind-workspace.js" defer onerror="console.error('[SC] FATAL: wind-workspace.js failed')"></script>
+<script src="shell-init.js" defer onerror="console.error('[SC] FATAL: shell-init.js failed')"></script>
 </body>
 </html>

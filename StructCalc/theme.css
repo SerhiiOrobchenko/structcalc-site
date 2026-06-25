@@ -1,0 +1,35 @@
+/* =====================================================================
+   StructCalc — "Blueprint" Design System
+   ===================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --navy-950:#0a0f1c; --navy-900:#0f1626; --navy-800:#16213a;
+  --navy-700:#1c2c4a; --navy-600:#243757; --navy-500:#2d4568;
+  --cyan-300:#67e8f9; --cyan-400:#22d3ee; --cyan-500:#06b6d4; --cyan-600:#0891b2;
+  --amber-400:#f59e0b; --amber-500:#d97706;
+  --green-500:#22c55e; --red-500:#ef4444; --red-400:#f87171;
+  --slate-50:#f5f7fb;  --slate-100:#eef1f7; --slate-150:#e7ebf2;
+  --slate-200:#dde3ec; --slate-300:#c7cfdb; --slate-400:#94a3b8;
+  --slate-500:#6b7888; --slate-600:#4b5768; --slate-700:#323d4d;
+  --slate-800:#1e2533; --white:#ffffff;
+  --radius:10px; --radius-sm:6px;
+  --shadow-sm:0 1px 3px rgba(15,22,38,.07);
+  --shadow-md:0 4px 16px rgba(15,22,38,.10);
+  --shadow-pop:0 8px 32px rgba(15,22,38,.22);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%; font-family: 'Inter', system-ui, sans-serif;
+  color: var(--slate-800); background: var(--slate-50);
+  -webkit-font-smoothing: antialiased; font-size: 16px;
+}
+button { font-family: inherit; cursor: pointer; }
+input, select, textarea { font-family: inherit; }
+.num, .mono { font-family: 'JetBrains Mono', monospace; font-feature-settings: 'tnum'; letter-spacing: -.01em; }
+.mono-num { font-family: 'JetBrains Mono', monospace; font-feature-settings: 'tnum'; letter-spacing: -.01em; }
+.hidden { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+.ic    { width: 18px; height: 18px; flex: none; display: inline-block; vertical-align: -4px; }
+.ic-sm { width: 14px; height: 14px; vertical-align: -3px; }
