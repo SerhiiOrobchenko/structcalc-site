@@ -64,7 +64,7 @@ function gatherWindState(base) {
   var s = Object.assign({}, base || {});
   var defs = {
     unitSystem:'US', mode:'mwfrs', roofType:'sloped',
-    h:20, minDim:40, buildingL:60, theta:18, roofShape:'gable',
+    h:60, minDim:40, buildingL:72, theta:15, roofShape:'gable',
     V:115, exposure:'C', kzt:1.0, kztMode:'manual',
     groundElev:0, enclosure:'enclosed', riskCategory:'II',
     areaWall:20, areaRoof:50,
@@ -125,7 +125,8 @@ function recalcWind() {
   var hR = (s.roofType === 'flat') ? hE : hE + (B / 2) * Math.tan(th * Math.PI / 180);
   var za = (r && r.a) ? r.a : Math.min(0.1 * Math.min(B, L), Math.min(0.4 * hE, 0.04 * Math.min(B, L)));
 
-  if (windRenderer) windRenderer.update3DModel(B, L, hE, hR, za);
+  // Renderer signature: update3DModel(B, L, ridgeHeight, thetaDegrees, zone_a)
+  if (windRenderer) windRenderer.update3DModel(B, L, hR, th, za);
 
   var vDisp = document.getElementById('wind-V-display');
   if (vDisp) vDisp.textContent = s.V;
@@ -296,7 +297,7 @@ async function openWindWorkspace(proj, calc) {
   try { windRenderer = new Wind3DRenderer('threejs-container'); }
   catch(e) { console.error('Wind3DRenderer init:', e); }
 
-  if (!elWsMain._inputsWired) {
+  if (!elWsMain._inputsWired)  {
     wireWindInputs();
     elWsMain._inputsWired = true;
   }

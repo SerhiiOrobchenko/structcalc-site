@@ -534,7 +534,7 @@ class Wind3DRenderer {
    * @param {number} zone_a  ASCE 7-22 §26.2 edge dimension, ft
    */
   update3DModel(B, L, h, theta, zone_a) {
-    B = +B||48; L = +L||80; h = +h||22; theta = +theta||10; zone_a = +zone_a||4;
+    B = +B||48; L = +L||96; h = +h||66; theta = +theta||15; zone_a = +zone_a||4;
 
     const H_SCALE  = 1.8;  // vertical exaggeration — keeps proportions readable
     const th       = THREE.MathUtils.degToRad(theta);
