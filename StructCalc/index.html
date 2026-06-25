@@ -138,26 +138,23 @@
     <!-- ================================================================
          WIND WORKSPACE — 3-column layout
          LOCKED STRUCTURE: col-input(320px) | col-diagram(1fr) | col-results(380px)
-         Do NOT modify this structure without explicit user request.
          ================================================================ -->
     <div class="ws-main hidden" id="wsWindWorkspace">
 
       <div class="tab-strip">
-        <!-- Module tabs -->
         <button class="tab-btn active" data-wtab="calc">
           <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>
           Wind Loads
         </button>
-        <button class="tab-btn" data-wtab="report">
-          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>
-          Report
-        </button>
         <div class="tab-strip-sep"></div>
-        <!-- Input section tabs: Site / Geometry / C&C -->
+        <!-- 6 input section tabs -->
         <div class="input-tabs">
           <button class="tab-btn active" data-tab="site">Site</button>
           <button class="tab-btn" data-tab="geometry">Geometry</button>
-          <button class="tab-btn" data-tab="cc">C&amp;C</button>
+          <button class="tab-btn" data-tab="enclosure">Enclosure</button>
+          <button class="tab-btn" data-tab="elements">Elements</button>
+          <button class="tab-btn" data-tab="results">Results</button>
+          <button class="tab-btn" data-tab="report">Report</button>
         </div>
         <div class="tab-strip-actions">
           <button class="btn" id="wsBtnReport" style="font-size:.8rem;padding:6px 12px;">
@@ -179,139 +176,436 @@
             <div id="windBannerText">ASCE 7-22 · Wind Load</div>
           </div>
 
-          <!-- Tab: Site (Calculation procedure + Basic Wind Parameters) -->
+          <!-- ── TAB 1: SITE DATA ── -->
           <div class="tab-content" id="tab-site">
 
-            <!-- Procedure toggle — lives inside Site tab -->
-            <div class="proc-toggle" id="windProcToggle">
-              <button class="active" data-proc="envelope">MWFRS Env.</button>
-              <button data-proc="directional">MWFRS Dir.</button>
-              <button data-proc="cc">C&amp;C</button>
+            <div class="panel-section">
+              <div class="panel-section-head">
+                <h4>Project Location</h4>
+                <span class="panel-section-note">§26.5</span>
+              </div>
+              <div class="address-row">
+                <input type="text" id="wind-address" placeholder="Search address…" autocomplete="off">
+                <button class="icon-btn" id="windGeoBtn" title="Use my location">
+                  <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.5-8 14-8 14S4 15.5 4 10a8 8 0 0 1 8-8z"/></svg>
+                </button>
+              </div>
+              <div id="wind-addr-result" class="addr-result"></div>
+              <input type="hidden" id="wind-lat">
+              <input type="hidden" id="wind-lng">
             </div>
 
             <div class="panel-section">
               <div class="panel-section-head">
-                <h4>Basic Wind Parameters</h4>
-                <span class="panel-section-note">Ch. 26</span>
+                <h4>Risk Category</h4>
+                <span class="panel-section-note">Table 1.5-1</span>
               </div>
+              <div class="rc-btns" id="windRCBtns">
+                <button class="rc-btn" data-rc="I">I</button>
+                <button class="rc-btn active" data-rc="II">II</button>
+                <button class="rc-btn" data-rc="III">III</button>
+                <button class="rc-btn" data-rc="IV">IV</button>
+              </div>
+              <input type="hidden" id="wind-riskCategory" value="II">
+            </div>
 
+            <div class="panel-section">
+              <div class="panel-section-head">
+                <h4>Wind Parameters</h4>
+                <span class="panel-section-note">§26.5.1</span>
+              </div>
+              <div class="field">
+                <label>Basic Wind Speed, V <span class="unit">(mph)</span></label>
+                <input class="num" id="wind-V" value="115" min="85" max="200">
+                <div class="field-hint">&#8594; <a href="https://ascehazardtool.org/" target="_blank" class="hint-link">ASCE Hazard Tool</a> to look up V by location &amp; RC</div>
+              </div>
+              <div class="field">
+                <label>Exposure Category</label>
+                <select id="wind-exposure">
+                  <option value="B">B — Suburban / wooded</option>
+                  <option value="C" selected>C — Open terrain</option>
+                  <option value="D">D — Flat open coast</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="panel-section">
+              <div class="panel-section-head">
+                <h4>Ground Elevation Factor, K<sub>e</sub></h4>
+                <span class="panel-section-note">§26.9</span>
+              </div>
               <div class="field-row">
                 <div class="field">
-                  <label>V, wind speed <span class="unit">(mph)</span></label>
-                  <input class="num" id="wind-V" value="115" min="85" max="200">
+                  <label>Elevation <span class="unit">(ft asl)</span></label>
+                  <input class="num" id="wind-groundElev" value="0" min="0">
                 </div>
                 <div class="field">
-                  <label>Exposure</label>
-                  <select id="wind-exposure">
-                    <option value="B">B</option>
-                    <option value="C" selected>C</option>
-                    <option value="D">D</option>
+                  <label>K<sub>e</sub> (auto)</label>
+                  <input class="num" id="wind-ke-display" value="1.000" readonly tabindex="-1">
+                </div>
+              </div>
+              <div class="field-hint">K<sub>e</sub> = e<sup>&#8722;0.0000362·z</sup> per Table 26.9-1</div>
+            </div>
+
+            <div class="panel-section">
+              <div class="panel-section-head">
+                <h4>Topographic Factor, K<sub>zt</sub></h4>
+                <span class="panel-section-note">§26.8 / Fig. 26.8-1</span>
+              </div>
+              <label class="toggle-label">
+                <input type="checkbox" id="wind-kztCalcMode"> Calculate from hill geometry
+              </label>
+              <div id="kztManualBlock" style="margin-top:8px;">
+                <div class="field">
+                  <label>K<sub>zt</sub></label>
+                  <input class="num" id="wind-kzt" value="1.00" min="1.00" max="3.5">
+                </div>
+              </div>
+              <div id="kztCalcBlock" class="kzt-sub-block hidden">
+                <div class="field">
+                  <label>Hill / ridge shape</label>
+                  <select id="wind-kztShape">
+                    <option value="2dRidge">2D Ridge or Escarpment</option>
+                    <option value="3dHill">3D Axisymmetric Hill</option>
+                  </select>
+                </div>
+                <div class="field-row">
+                  <div class="field">
+                    <label>H <span class="unit">(ft)</span></label>
+                    <input class="num" id="wind-kztH" value="50" min="0">
+                  </div>
+                  <div class="field">
+                    <label>L<sub>h</sub> <span class="unit">(ft)</span></label>
+                    <input class="num" id="wind-kztLh" value="200" min="1">
+                  </div>
+                </div>
+                <div class="field-row">
+                  <div class="field">
+                    <label>x — dist from crest <span class="unit">(ft)</span></label>
+                    <input class="num" id="wind-kztX" value="0" min="0">
+                  </div>
+                  <div class="field">
+                    <label>z — bldg height <span class="unit">(ft)</span></label>
+                    <input class="num" id="wind-kztZ" value="20" min="0">
+                  </div>
+                </div>
+                <div class="kzt-result" id="kztCalcResult">K<sub>zt</sub> = <span id="kztCalcVal">—</span></div>
+              </div>
+            </div>
+
+            <!-- Tornado Hazard Assessment — hidden until RC III or IV selected -->
+            <div class="tornado-alert hidden" id="tornadoAlert">
+              <div class="tornado-alert-head">
+                <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                Tornado Hazard Assessment
+                <span class="panel-section-note">Ch. 32 / §32.1.1</span>
+              </div>
+              <label class="toggle-label" style="margin:10px 0 0;">
+                <input type="checkbox" id="wind-tornadoProne">
+                In Tornado-Prone Region? (Fig. 32.1-1)
+              </label>
+              <div class="tornado-vt-block hidden" id="tornadoVtBlock">
+                <div class="field" style="margin-top:10px;">
+                  <label>V<sub>T</sub> — tornado wind speed <span class="unit">(mph)</span></label>
+                  <input class="num" id="wind-Vt" value="0" min="0" max="250">
+                  <div class="field-hint">&#8594; <a href="https://ascehazardtool.org/" target="_blank" class="hint-link">ASCE Hazard Tool</a> &#8594; Ch. 32 tornado map</div>
+                </div>
+                <div class="tornado-status" id="tornadoStatus"></div>
+              </div>
+            </div>
+
+          </div><!-- /tab-site -->
+
+          <!-- ── TAB 2: GEOMETRY & PROCEDURE ── -->
+          <div class="tab-content hidden" id="tab-geometry">
+
+            <div class="panel-section">
+              <div class="panel-section-head">
+                <h4>Structure Type</h4>
+              </div>
+              <div class="struct-type-btns">
+                <button class="struct-btn active" data-struct="building">
+                  <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="13" rx="1"/><path d="M3 12h18M7 8V5l5-3 5 3v3"/></svg>
+                  Building
+                </button>
+                <button class="struct-btn" data-struct="other">
+                  <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg>
+                  Other Structure
+                </button>
+              </div>
+              <input type="hidden" id="wind-structureCategory" value="building">
+            </div>
+
+            <!-- Building branch -->
+            <div id="geomBuildingBlock">
+
+              <div class="panel-section">
+                <div class="panel-section-head">
+                  <h4>Calculation Procedure</h4>
+                  <span class="panel-section-note">Ch. 27–30</span>
+                </div>
+                <div class="proc-toggle" id="windProcToggle">
+                  <button class="active" data-proc="envelope">MWFRS Env.</button>
+                  <button data-proc="directional">MWFRS Dir.</button>
+                  <button data-proc="cc">C&amp;C</button>
+                </div>
+                <div class="proc-lock-notice hidden" id="procLockNotice">
+                  &#9432; h &gt; 60 ft — Directional Procedure only (Ch. 27 §27.1)
+                </div>
+              </div>
+
+              <div class="panel-section">
+                <div class="panel-section-head">
+                  <h4>Building Geometry</h4>
+                  <span class="panel-section-note">§26.2</span>
+                </div>
+
+                <div class="field">
+                  <label>Roof Profile</label>
+                  <select id="wind-roofShape">
+                    <option value="gable">Gable</option>
+                    <option value="hip">Hip</option>
+                    <option value="flat">Flat (&#8804; 7&#176;)</option>
+                    <option value="monoslope">Monoslope</option>
+                  </select>
+                </div>
+
+                <div class="field-row">
+                  <div class="field">
+                    <label>Width, B <span class="unit">(ft)</span></label>
+                    <input class="num" id="wind-B" value="40" min="1" data-dim="B">
+                  </div>
+                  <div class="field">
+                    <label>Length, L <span class="unit">(ft)</span></label>
+                    <input class="num" id="wind-L" value="60" min="1" data-dim="L">
+                  </div>
+                </div>
+
+                <div class="field-row">
+                  <div class="field">
+                    <label>Eave height, h <span class="unit">(ft)</span></label>
+                    <input class="num" id="wind-h" value="20" min="1" max="500" data-dim="h">
+                  </div>
+                  <div class="field">
+                    <label>Roof pitch, &#952; <span class="unit">(&#176;)</span></label>
+                    <input class="num" id="wind-theta" value="18" min="0" max="45" data-dim="theta">
+                  </div>
+                </div>
+
+                <div class="computed-row" id="hMeanRow">
+                  <span class="computed-label">Mean roof height, h&#772;</span>
+                  <span class="computed-val" id="hMeanDisplay">—</span>
+                  <span class="computed-unit">ft</span>
+                </div>
+              </div>
+
+              <div class="panel-section">
+                <div class="panel-section-head">
+                  <h4>Gust Factor, G</h4>
+                  <span class="panel-section-note">§26.11</span>
+                </div>
+                <div class="g-mode-row">
+                  <button class="g-btn active" data-g="rigid">Rigid (G = 0.85)</button>
+                  <button class="g-btn" data-g="flexible">Flexible</button>
+                </div>
+                <input type="hidden" id="wind-gMode" value="rigid">
+                <div class="field-hint" id="gHint">Natural frequency &#8805; 1 Hz per §26.11.1</div>
+              </div>
+
+              <div class="panel-section">
+                <div class="panel-section-head">
+                  <h4>Roof Appurtenances</h4>
+                </div>
+                <label class="toggle-label">
+                  <input type="checkbox" id="wind-hasParapet"> Parapet
+                </label>
+                <div class="appurt-sub hidden" id="parapetSub">
+                  <div class="field" style="margin-top:8px;">
+                    <label>Parapet height, h<sub>p</sub> <span class="unit">(ft)</span></label>
+                    <input class="num" id="wind-hp" value="3" min="0">
+                  </div>
+                </div>
+                <label class="toggle-label" style="margin-top:8px;">
+                  <input type="checkbox" id="wind-hasOverhang"> Roof Overhang
+                </label>
+                <div class="appurt-sub hidden" id="overhangSub">
+                  <div class="field" style="margin-top:8px;">
+                    <label>Overhang width, w<sub>o</sub> <span class="unit">(ft)</span></label>
+                    <input class="num" id="wind-wo" value="2" min="0">
+                  </div>
+                  <div class="field-hint">Uplift added per §30.7</div>
+                </div>
+              </div>
+
+            </div><!-- /geomBuildingBlock -->
+
+            <!-- Other Structure branch (Ch. 29) -->
+            <div id="geomOtherBlock" class="hidden">
+              <div class="panel-section">
+                <div class="panel-section-head">
+                  <h4>Structure Category</h4>
+                  <span class="panel-section-note">Ch. 29</span>
+                </div>
+                <div class="field">
+                  <label>Type</label>
+                  <select id="wind-otherType">
+                    <option value="solidSign">Solid Sign / Freestanding Wall</option>
+                    <option value="rooftopEquip">Rooftop Structures &amp; Equipment (§30.8)</option>
+                    <option value="groundSolar">Ground-Mounted Solar (§29.4.5)</option>
+                    <option value="circularTank">Circular Bin / Silo / Tank (§30.10)</option>
                   </select>
                 </div>
               </div>
-
-              <div class="field-row">
-                <div class="field">
-                  <label>K<sub>zt</sub></label>
-                  <input class="num" id="wind-kzt" value="1.00" min="1" max="3.5">
-                </div>
-                <div class="field">
-                  <label>Ground elev. <span class="unit">(ft)</span></label>
-                  <input class="num" id="wind-groundElev" value="0" min="0">
-                </div>
-              </div>
-
-              <div class="field">
-                <label>Enclosure</label>
-                <select id="wind-enclosure">
-                  <option value="enclosed">Enclosed</option>
-                  <option value="partiallyEnclosed">Partially Enclosed</option>
-                  <option value="open">Open</option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label>Risk Category</label>
-                <select id="wind-riskCategory">
-                  <option value="I">I</option>
-                  <option value="II" selected>II</option>
-                  <option value="III">III</option>
-                  <option value="IV">IV</option>
-                </select>
-              </div>
             </div>
-          </div>
 
-          <!-- Tab: Geometry (Building Geometry) -->
-          <div class="tab-content hidden" id="tab-geometry">
+          </div><!-- /tab-geometry -->
+
+          <!-- ── TAB 3: OPENINGS & ENCLOSURE ── -->
+          <div class="tab-content hidden" id="tab-enclosure">
             <div class="panel-section">
               <div class="panel-section-head">
-                <h4>Building Geometry</h4>
-                <span class="panel-section-note">§26.2</span>
+                <h4>Enclosure Classification</h4>
+                <span class="panel-section-note">§26.12 / Table 26.13-1</span>
               </div>
 
-              <div class="field-row">
-                <div class="field">
-                  <label>h — eave height <span class="unit">(ft)</span></label>
-                  <input class="num" id="wind-h" value="20" min="1" max="500">
-                </div>
-                <div class="field">
-                  <label>Width, B <span class="unit">(ft)</span></label>
-                  <input class="num" id="wind-B" value="40" min="1">
-                </div>
+              <div class="enclosure-btns" id="enclosureBtns">
+                <button class="enc-btn active" data-enc="enclosed">
+                  <span class="enc-label">Enclosed</span>
+                  <span class="enc-gcpi">GC<sub>pi</sub> = ±0.18</span>
+                </button>
+                <button class="enc-btn" data-enc="partiallyEnclosed">
+                  <span class="enc-label">Partially Enclosed</span>
+                  <span class="enc-gcpi">GC<sub>pi</sub> = ±0.55</span>
+                </button>
+                <button class="enc-btn" data-enc="open">
+                  <span class="enc-label">Open</span>
+                  <span class="enc-gcpi">GC<sub>pi</sub> = 0.00</span>
+                </button>
               </div>
+              <input type="hidden" id="wind-enclosure" value="enclosed">
 
-              <div class="field-row">
-                <div class="field">
-                  <label>Length, L <span class="unit">(ft)</span></label>
-                  <input class="num" id="wind-L" value="60" min="1">
-                </div>
-                <div class="field">
-                  <label>Roof pitch, θ <span class="unit">(°)</span></label>
-                  <input class="num" id="wind-theta" value="18" min="0" max="45">
-                </div>
-              </div>
+              <label class="toggle-label" style="margin-top:14px;">
+                <input type="checkbox" id="wind-calcOpenings"> Calculate from opening areas
+              </label>
 
-              <div class="field">
-                <label>Roof type</label>
-                <select id="wind-roofShape">
-                  <option value="gable">Gable</option>
-                  <option value="hip">Hip</option>
-                  <option value="flat">Flat (≤ 7°)</option>
-                  <option value="monoslope">Monoslope</option>
-                </select>
+              <div class="openings-table hidden" id="openingsTable">
+                <div class="field-hint" style="margin:8px 0;">§26.12.1 — all three conditions checked automatically</div>
+                <div class="field-row">
+                  <div class="field">
+                    <label>A<sub>o</sub> <span class="unit">(ft&#xB2;)</span></label>
+                    <div class="field-sublabel">Windward openings</div>
+                    <input class="num" id="wind-Ao" value="0" min="0">
+                  </div>
+                  <div class="field">
+                    <label>A<sub>oi</sub> <span class="unit">(ft&#xB2;)</span></label>
+                    <div class="field-sublabel">All other openings</div>
+                    <input class="num" id="wind-Aoi" value="0" min="0">
+                  </div>
+                </div>
+                <div class="field-row">
+                  <div class="field">
+                    <label>A<sub>g</sub> <span class="unit">(ft&#xB2;)</span></label>
+                    <div class="field-sublabel">Windward wall gross area</div>
+                    <input class="num" id="wind-Ag" value="0" min="0">
+                  </div>
+                  <div class="field">
+                    <label>A<sub>gi</sub> <span class="unit">(ft&#xB2;)</span></label>
+                    <div class="field-sublabel">Other wall gross areas</div>
+                    <input class="num" id="wind-Agi" value="0" min="0">
+                  </div>
+                </div>
+                <div class="enclosure-calc-result" id="enclosureCalcResult"></div>
               </div>
             </div>
-          </div>
+          </div><!-- /tab-enclosure -->
 
-          <!-- Tab: C&C (Components & Cladding areas) -->
-          <div class="tab-content hidden" id="tab-cc">
-            <div class="panel-section" id="windCCSection">
+          <!-- ── TAB 4: ELEMENTS & AREA ── -->
+          <div class="tab-content hidden" id="tab-elements">
+            <div class="panel-section">
               <div class="panel-section-head">
                 <h4>Components &amp; Cladding</h4>
-                <span class="panel-section-note">Ch. 30</span>
+                <span class="panel-section-note">Ch. 30 / §26.2</span>
               </div>
-              <div class="field-row">
-                <div class="field">
-                  <label>Wall area <span class="unit">(ft&#xB2;)</span></label>
-                  <input class="num" id="wind-areaWall" value="20" min="1">
-                </div>
-                <div class="field">
-                  <label>Roof area <span class="unit">(ft&#xB2;)</span></label>
-                  <input class="num" id="wind-areaRoof" value="50" min="1">
-                </div>
+
+              <div class="surface-toggle" id="surfaceToggle">
+                <button class="surf-btn active" data-surface="roof">Roof</button>
+                <button class="surf-btn" data-surface="wall">Wall</button>
               </div>
-              <div class="hint-row">Effective wind area governs (GC<sub>p</sub>) in Figs. 30.3-1/2A-G.</div>
+              <input type="hidden" id="wind-surface" value="roof">
+
+              <div class="field" style="margin-top:12px;">
+                <label>Effective Wind Area, A <span class="unit">(ft&#xB2;)</span></label>
+                <input class="num" id="wind-areaEff" value="20" min="1">
+                <div class="field-hint">Per §26.2: trib. area &#8805; span &#215; span/3</div>
+              </div>
+
+              <div class="field" id="zoneSelectField">
+                <label>Pressure Zone</label>
+                <select id="wind-zone">
+                  <option value="1">Zone 1 — Interior field</option>
+                  <option value="2">Zone 2 — Edge / ridge</option>
+                  <option value="3">Zone 3 — Corner</option>
+                </select>
+              </div>
+
+              <!-- Hidden inputs for engine compat -->
+              <input type="hidden" id="wind-areaWall" value="20">
+              <input type="hidden" id="wind-areaRoof" value="50">
+
+              <div class="hint-row">Smaller A &#8594; higher peak GC<sub>p</sub> per Figs. 30.3-1/2A–G</div>
             </div>
-          </div>
+          </div><!-- /tab-elements -->
+
+          <!-- ── TAB 5: RESULTS ── -->
+          <div class="tab-content hidden" id="tab-results">
+            <div class="panel-section" style="padding:0;border:none;">
+              <div class="panel-section-head" style="padding:10px 14px 8px;">
+                <h4>Step-by-Step Calculation</h4>
+                <span class="panel-section-note">ASCE 7-22</span>
+              </div>
+              <div class="step-trace" id="windStepTrace">
+                <div class="trace-placeholder">Run a calculation to see the step-by-step trace.</div>
+              </div>
+            </div>
+          </div><!-- /tab-results -->
+
+          <!-- ── TAB 6: REPORT ── -->
+          <div class="tab-content hidden" id="tab-report">
+            <div class="panel-section">
+              <div class="panel-section-head">
+                <h4>Print Report</h4>
+              </div>
+              <div class="report-actions">
+                <button class="btn btn-primary" id="windBtnPrintReport" style="width:100%;margin-bottom:6px;">
+                  <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>
+                  Print / Save PDF
+                </button>
+              </div>
+              <div class="report-preview" id="windReportPreview">
+                <div class="trace-placeholder">Enter inputs and calculate to generate report.</div>
+              </div>
+            </div>
+          </div><!-- /tab-report -->
 
         </div><!-- /col-input -->
 
         <!-- ============================================================
-             CENTER: 3D DIAGRAM
+             CENTER: MAP + 3D DIAGRAM
              ============================================================ -->
-        <div class="col-diagram">
-          <div class="diagram-toolbar">
+        <div class="col-diagram" id="windColDiagram">
+
+          <!-- Map toolbar (active on Site tab) -->
+          <div class="diagram-toolbar hidden" id="mapToolbar">
+            <span style="font-size:.74rem;color:var(--slate-400);">Click map to place building location</span>
+            <div class="diagram-toolbar-right">
+              <button class="icon-btn hidden" id="windBtnMapReset" title="Reset map view">
+                <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7M3 3v6h6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- 3D toolbar (active on Geometry / Enclosure / Elements tabs) -->
+          <div class="diagram-toolbar" id="diagramToolbar">
             <div class="view-toggle" id="windViewToggle">
               <button class="active" data-view="3d">3D</button>
               <button data-view="elev">Elevation</button>
@@ -325,11 +619,15 @@
             </div>
           </div>
 
+          <!-- Leaflet map container -->
+          <div class="diagram-canvas hidden" id="map-container"></div>
+
+          <!-- Three.js container -->
           <div class="diagram-canvas" id="threejs-container">
             <div id="wind-label-V">V = <span id="wind-V-display">115</span> mph</div>
             <div id="wind-zone-legend">
               <div><span class="zone-legend-dot" style="background:#ef4444"></span>Zone 3 &#8212; Corners</div>
-              <div><span class="zone-legend-dot" style="background:#f59e0b"></span>Zone 2 &#8212; Edges / Ridge</div>
+              <div><span class="zone-legend-dot" style="background:#f59e0b"></span>Zone 2 &#8212; Edges</div>
               <div><span class="zone-legend-dot" style="background:#22d3ee"></span>Zone 1 &#8212; Interior</div>
             </div>
           </div>
