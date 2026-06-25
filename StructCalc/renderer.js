@@ -23,12 +23,12 @@ const THEME = {
   gnd        : 0xe2ecf5,   // ground plane, slightly darker than bg
 
   wallFill   : 0xbdd4e8,   // medium-pale blue — wall faces
-  wallEdge   : 0x2d6a9f,   // strong blue edges to define shape on light bg
+  wallEdge   : 0x323232,   // near-black contour
   roofFill   : 0x38bdf8,   // sky blue roof
-  roofEdge   : 0x0ea5e9,
+  roofEdge   : 0x323232,
   gableFill  : 0x7bb8e0,
-  gableEdge  : 0x2d6a9f,
-  ridge      : 0x1e4a7a,   // dark navy ridge — visible on light bg
+  gableEdge  : 0x323232,
+  ridge      : 0x323232,   // near-black ridge
 
   dimLine    : 0x5b7fa8,   // muted blue-grey dim lines
   dimActive  : 0x0284c7,   // strong cyan/blue for hover
@@ -75,6 +75,7 @@ class Wind3DRenderer {
     this._labelGroup  = null;   // CSS2D zone labels
     this._zoneMeshes  = [];
     this._dimHighlight = {};    // dimId → { lines, labelEl }
+    this._lineMats    = [];     // all LineMaterial instances — need resolution update on resize
     this._clickCB     = null;
     this._raycaster   = new THREE.Raycaster();
     this._animId      = null;
@@ -171,6 +172,8 @@ class Wind3DRenderer {
         this._camera.updateProjectionMatrix();
         this._renderer.setSize(w, h);
         if (this._labelRenderer) this._labelRenderer.setSize(w, h);
+        // Update resolution for all fat-line LineMaterials
+        this._lineMats.forEach(m => m.resolution && m.resolution.set(w, h));
       });
     };
     if (typeof ResizeObserver !== 'undefined') {
@@ -196,6 +199,52 @@ class Wind3DRenderer {
     this._controls.update();
     this._renderer.render(this._scene, this._camera);
     if (this._labelRenderer) this._labelRenderer.render(this._scene, this._camera);
+  }
+
+  /* ── fat line helpers (Line2 / LineSegments2 — real pixel-width lines) ──── */
+
+  /**
+   * Create a LineSegments2 from an EdgesGeometry position array.
+   * Falls back to THREE.LineSegments if Line2 libs not loaded.
+   */
+  _fatSegs(geo, color, lw) {
+    if (THREE.LineSegments2 && THREE.LineSegmentsGeometry && THREE.LineMaterial) {
+      const segsGeo = new THREE.LineSegmentsGeometry();
+      segsGeo.setPositions(geo.attributes.position.array);
+      const mat = new THREE.LineMaterial({
+        color,
+        linewidth : lw,
+        resolution: new THREE.Vector2(this._size().w, this._size().h),
+      });
+      this._lineMats.push(mat);
+      return new THREE.LineSegments2(segsGeo, mat);
+    }
+    // Fallback
+    return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color }));
+  }
+
+  /**
+   * Create a Line2 between an array of THREE.Vector3 points.
+   */
+  _fatLine(points, color, lw) {
+    if (THREE.Line2 && THREE.LineGeometry && THREE.LineMaterial) {
+      const positions = [];
+      points.forEach(p => positions.push(p.x, p.y, p.z));
+      const lineGeo = new THREE.LineGeometry();
+      lineGeo.setPositions(positions);
+      const mat = new THREE.LineMaterial({
+        color,
+        linewidth : lw,
+        resolution: new THREE.Vector2(this._size().w, this._size().h),
+      });
+      this._lineMats.push(mat);
+      return new THREE.Line2(lineGeo, mat);
+    }
+    // Fallback
+    return new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(points),
+      new THREE.LineBasicMaterial({ color })
+    );
   }
 
   /* ── geometry primitives ────────────────────────────────────────────────── */
@@ -242,7 +291,7 @@ class Wind3DRenderer {
     const solidMat = c => new THREE.MeshStandardMaterial({
       color:c, transparent:true, opacity:0.96, side:THREE.FrontSide,
     });
-    const edgeMat = c => new THREE.LineBasicMaterial({ color:c });
+    const EDGE_W = 5; // fat line width in pixels
 
     // -- walls (solid near-opaque: depth buffer hides back edges)
     const boxGeo = new THREE.BoxGeometry(B, hEave, L);
@@ -250,7 +299,7 @@ class Wind3DRenderer {
     const wall = new THREE.Mesh(boxGeo, solidMat(THEME.wallFill));
     wall.castShadow = true;
     grp.add(wall);
-    grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), edgeMat(THEME.wallEdge)));
+    grp.add(this._fatSegs(new THREE.EdgesGeometry(boxGeo), THEME.wallEdge, EDGE_W));
 
     // -- gable triangles
     for (const zs of [-1, 1]) {
@@ -261,7 +310,7 @@ class Wind3DRenderer {
       ]), 3));
       geo.computeVertexNormals();
       grp.add(new THREE.Mesh(geo, solidMat(THEME.gableFill)));
-      grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMat(THEME.gableEdge)));
+      grp.add(this._fatSegs(new THREE.EdgesGeometry(geo), THEME.gableEdge, EDGE_W));
     }
 
     // -- roof slopes
@@ -282,17 +331,14 @@ class Wind3DRenderer {
     });
     for (const [g, mat] of [[leftGeo,roofSide],[rightGeo,roofSide.clone()]]) {
       const m = new THREE.Mesh(g, mat); m.castShadow=true; grp.add(m);
-      grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), edgeMat(THEME.roofEdge)));
+      grp.add(this._fatSegs(new THREE.EdgesGeometry(g), THEME.roofEdge, EDGE_W));
     }
 
     // -- ridge
-    grp.add(new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, hRidge,-hL),
-        new THREE.Vector3(0, hRidge, hL),
-      ]),
-      new THREE.LineBasicMaterial({ color: THEME.ridge, linewidth: 2 })
-    ));
+    grp.add(this._fatLine([
+      new THREE.Vector3(0, hRidge,-hL),
+      new THREE.Vector3(0, hRidge, hL),
+    ], THEME.ridge, EDGE_W));
 
     return grp;
   }
@@ -548,12 +594,14 @@ class Wind3DRenderer {
     for (const g of [this._building, this._zones, this._dimGroup, this._labelGroup]) {
       if (g) { this._scene.remove(g); disposeGroup(g); }
     }
+    this._lineMats.forEach(m => m.dispose && m.dispose());
     this._building    = new THREE.Group();
     this._zones       = new THREE.Group();
     this._dimGroup    = new THREE.Group();
     this._labelGroup  = new THREE.Group();
     this._zoneMeshes  = [];
     this._dimHighlight = {};
+    this._lineMats    = [];
 
     // building
     this._building = this._buildStructure(B, L, hEave, hRidge);
@@ -647,47 +695,4 @@ class Wind3DRenderer {
   }
 
   _hitZones(ndc) {
-    this._raycaster.setFromCamera(ndc, this._camera);
-    return this._raycaster.intersectObjects(this._zoneMeshes);
-  }
-
-  _handleClick(e) {
-    const hits = this._hitZones(this._ndc(e));
-    if (hits.length > 0 && this._clickCB) {
-      this._clickCB(hits[0].object.userData.zoneType);
-    }
-  }
-
-  _handleHover(e) {
-    const hits = this._hitZones(this._ndc(e));
-    const zone = hits.length > 0 ? hits[0].object.userData.zoneType : null;
-    if (zone === this._hoverZone) return;
-    if (this._hoverZone) {
-      this._zoneMeshes.filter(m => m.userData.zoneType === this._hoverZone)
-        .forEach(m => { m.material.opacity *= 0.65; });
-    }
-    this._hoverZone = zone;
-    if (zone) {
-      this._zoneMeshes.filter(m => m.userData.zoneType === zone)
-        .forEach(m => { m.material.opacity = Math.min(0.9, m.material.opacity / 0.65); });
-      this._renderer.domElement.style.cursor = 'pointer';
-    } else {
-      this._renderer.domElement.style.cursor = '';
-    }
-  }
-
-  /* ── cleanup ─────────────────────────────────────────────────────── */
-
-  dispose() {
-    cancelAnimationFrame(this._animId);
-    window.removeEventListener('resize', this._onResize);
-    if (this._ro) { this._ro.disconnect(); this._ro = null; }
-    this._renderer.dispose();
-    [this._renderer.domElement, this._labelRenderer?.domElement]
-      .filter(Boolean).forEach(el => el.parentNode?.removeChild(el));
-    [this._building, this._zones, this._dimGroup, this._labelGroup]
-      .filter(Boolean).forEach(g => { this._scene.remove(g); disposeGroup(g); });
-    this._container.innerHTML = '';
-  }
-
-} // end Wind3DRenderer
+    this._raycaster.setFromCamera(ndc, this._c

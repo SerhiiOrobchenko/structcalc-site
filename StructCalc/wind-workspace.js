@@ -32,7 +32,13 @@ async function loadWindScripts() {
   await loadScriptTag('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js');
   await loadScriptTag('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js');
   await loadScriptTag('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js');
-  await loadScriptTag('renderer.js?v=4');
+  // Fat-line support (Line2 / LineSegments2 / LineMaterial)
+  await loadScriptTag('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/lines/LineSegmentsGeometry.js');
+  await loadScriptTag('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/lines/LineGeometry.js');
+  await loadScriptTag('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/lines/LineMaterial.js');
+  await loadScriptTag('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/lines/LineSegments2.js');
+  await loadScriptTag('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/lines/Line2.js');
+  await loadScriptTag('renderer.js?v=5');
   windScriptsLoaded = true;
 }
 
@@ -281,25 +287,4 @@ async function openWindWorkspace(proj, calc) {
   await loadWindScripts();
   await loadWindEngine();
 
-  var savedEntry = calc.state && calc.state['ASCE 7-22'];
-  if (savedEntry && savedEntry.state) {
-    windSavedState = savedEntry.state;
-    restoreWindInputs(savedEntry.state);
-  } else {
-    windSavedState = null;
-  }
-
-  if (windRenderer) {
-    try { windRenderer.dispose(); } catch(e) {}
-    windRenderer = null;
-  }
-  await new Promise(function(res){ setTimeout(res, 60); });
-  try { windRenderer = new Wind3DRenderer('threejs-container'); }
-  catch(e) { console.error('Wind3DRenderer init:', e); }
-
-  if (!elWsMain._inputsWired)  {
-    wireWindInputs();
-    elWsMain._inputsWired = true;
-  }
-  recalcWind();
-}
+  var savedEntry = calc.state && calc
