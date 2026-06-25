@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
 <title>StructCalc — Structural Load Workspace</title>
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 
@@ -157,16 +157,6 @@
           <button class="tab-btn" data-tab="geometry">Geometry</button>
           <button class="tab-btn" data-tab="cc">C&amp;C</button>
         </div>
-        <div class="tab-strip-sep"></div>
-        <!-- Diagram view toggle -->
-        <div class="view-toggle" id="windViewToggle">
-          <button class="active" data-view="3d">3D</button>
-          <button data-view="elev">Elevation</button>
-          <button data-view="plan">Plan</button>
-        </div>
-        <button class="icon-btn" id="windBtnReset" title="Reset camera" style="margin-left:6px">
-          <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7M3 3v6h6"/></svg>
-        </button>
         <div class="tab-strip-actions">
           <button class="btn" id="wsBtnReport" style="font-size:.8rem;padding:6px 12px;">
             <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3m0 12l-4-4m4 4l4-4M4 21h16"/></svg>
@@ -319,8 +309,16 @@
              ============================================================ -->
         <div class="col-diagram">
           <div class="diagram-toolbar">
-            <span style="font-size:.74rem;color:var(--slate-400);">Drag to orbit · Scroll to zoom</span>
+            <div class="view-toggle" id="windViewToggle">
+              <button class="active" data-view="3d">3D</button>
+              <button data-view="elev">Elevation</button>
+              <button data-view="plan">Plan</button>
+            </div>
+            <span style="font-size:.74rem;color:var(--slate-400);margin-left:10px;">Drag to orbit · Scroll to zoom</span>
             <div class="diagram-toolbar-right">
+              <button class="icon-btn" id="windBtnReset" title="Reset camera">
+                <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7M3 3v6h6"/></svg>
+              </button>
             </div>
           </div>
 
@@ -442,6 +440,6 @@
 </div>
 
 <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" as="script">
-<script src="shell.js?v=5" defer onerror="console.error('[SC] FATAL: shell.js failed to load')"></script>
+<script src="shell.js?v=6" defer onerror="console.error('[SC] FATAL: shell.js failed to load')"></script>
 </body>
 </html>
