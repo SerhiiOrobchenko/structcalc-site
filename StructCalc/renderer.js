@@ -279,7 +279,7 @@ class Wind3DRenderer {
     const solidMat = c => new THREE.MeshStandardMaterial({
       color:c, transparent:true, opacity:0.96, side:THREE.FrontSide,
     });
-    const EDGE_R = 0.55; // tube radius in world units (~4-5px at normal view distance)
+    const EDGE_R = 0.22; // tube radius in world units (~4-5px at normal view distance)
 
     // -- walls (solid near-opaque: depth buffer hides back edges)
     const boxGeo = new THREE.BoxGeometry(B, hEave, L);
