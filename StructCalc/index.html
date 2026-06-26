@@ -10,7 +10,7 @@
 <title>StructCalc — Structural Load Workspace</title>
 <link rel="stylesheet" href="theme.css?v=1">
 <link rel="stylesheet" href="layout.css?v=1">
-<link rel="stylesheet" href="components.css?v=7">
+<link rel="stylesheet" href="components.css?v=8">
 </head>
 <body>
 
@@ -231,7 +231,7 @@
               </div>
               <div class="field">
                 <label>Basic Wind Speed, V <span class="unit">(mph)</span></label>
-                <input class="num" id="wind-V" value="115" min="85" max="200">
+                <input class="num" id="wind-V" placeholder="—" min="85" max="200">
                 <div class="field-hint">&#8594; <a href="https://ascehazardtool.org/" target="_blank" class="hint-link">ASCE Hazard Tool</a> to look up V by location &amp; RC</div>
               </div>
               <div class="field">
@@ -402,8 +402,15 @@
                     <input class="num" id="wind-h" value="20" min="1" max="500" data-dim="h">
                   </div>
                   <div class="field">
-                    <label>Roof pitch, &#952; <span class="unit">(&#176;)</span></label>
-                    <input class="num" id="wind-theta" value="18" min="0" max="45" data-dim="theta">
+                    <div class="pitch-label-row">
+                      <label id="wind-theta-label">Roof pitch, &#952; <span class="unit">(&#176;)</span></label>
+                      <div class="view-toggle pitch-unit-toggle" id="pitchUnitToggle">
+                        <button class="active" data-unit="deg">°</button>
+                        <button data-unit="slope">X:12</button>
+                      </div>
+                    </div>
+                    <input class="num" id="wind-theta" value="18" min="0" max="89.9" step="0.1" data-dim="theta">
+                    <div class="pitch-convert" id="pitchConvert">= 3.9:12 slope</div>
                   </div>
                 </div>
 
@@ -649,7 +656,7 @@
 
           <!-- Three.js container -->
           <div class="diagram-canvas" id="threejs-container">
-            <div id="wind-label-V">V = <span id="wind-V-display">115</span> mph</div>
+            <div id="wind-label-V">V = <span id="wind-V-display">—</span> mph</div>
             <div id="wind-zone-legend">
               <div><span class="zone-legend-dot" style="background:#ef4444"></span>Zone 3 &#8212; Corners</div>
               <div><span class="zone-legend-dot" style="background:#f59e0b"></span>Zone 2 &#8212; Edges</div>

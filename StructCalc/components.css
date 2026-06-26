@@ -1364,3 +1364,57 @@
   min-width: 80px;
   white-space: nowrap;
 }
+
+/* =====================================================================
+   ROOF PITCH UNIT TOGGLE + CONVERSION NOTE
+   ===================================================================== */
+
+.pitch-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.pitch-unit-toggle {
+  display: inline-flex;
+  border: 1px solid var(--slate-300);
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.pitch-unit-toggle button {
+  background: #fff;
+  color: var(--slate-500);
+  border: none;
+  padding: 3px 9px;
+  font-size: .72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+  line-height: 1.4;
+}
+
+.pitch-unit-toggle button + button {
+  border-left: 1px solid var(--slate-300);
+}
+
+.pitch-unit-toggle button:hover {
+  background: var(--slate-50);
+  color: var(--slate-700);
+}
+
+.pitch-unit-toggle button.active {
+  background: var(--navy-900);
+  color: #fff;
+}
+
+.pitch-convert {
+  margin-top: 4px;
+  font-size: .73rem;
+  color: var(--slate-400);
+  font-style: italic;
+  min-height: 1em;
+}
