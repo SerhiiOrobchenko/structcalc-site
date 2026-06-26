@@ -79,7 +79,7 @@ function gatherWindState(base) {
   var defs = {
     unitSystem:'US', mode:'mwfrs', roofType:'sloped',
     h:60, minDim:40, buildingL:72, theta:15, roofShape:'gable',
-    V:115, exposure:'C', kzt:1.0, kztMode:'manual',
+    exposure:'C', kzt:1.0, kztMode:'manual',
     groundElev:0, enclosure:'enclosed', riskCategory:'II',
     areaWall:20, areaRoof:50, areaEff:20,
     mwfrsProcedure:'envelope', ccProcedure:'part1',
@@ -119,6 +119,8 @@ function restoreWindInputs(saved) {
   Object.entries(WIND_INPUT_MAP).forEach(function(e){ revMap[e[1]] = e[0]; });
   Object.entries(saved).forEach(function(e) {
     var key = e[0], val = e[1];
+    /* Skip V if it was never explicitly set by user (old default = 115) */
+    if (key === 'V' && (val === 115 || val === '' || val === null)) return;
     var inp = document.getElementById(revMap[key]);
     if (inp) inp.value = val;
   });
@@ -175,7 +177,7 @@ function recalcWind() {
   if (windRenderer) windRenderer.update3DModel(B, L, hR, th, za);
 
   var vDisp = document.getElementById('wind-V-display');
-  if (vDisp) vDisp.textContent = s.V;
+  if (vDisp) vDisp.textContent = s.V || '—';
 
   var cap = document.getElementById('windDiagramCaption');
   if (cap) {
@@ -685,11 +687,4 @@ async function openWindWorkspace(proj, calc) {
     windRenderer = null;
   }
   await new Promise(function(res){ setTimeout(res, 60); });
-  try { windRenderer = new Wind3DRenderer('threejs-container'); } catch(e) { console.error('Wind3DRenderer init:', e); }
-
-  if (!elWsMain._inputsWired) {
-    wireWindInputs();
-    elWsMain._inputsWired = true;
-  }
-  recalcWind();
-}
+  try { windRenderer = new Wind3DRenderer('threejs-container'); } catch(e) { c
