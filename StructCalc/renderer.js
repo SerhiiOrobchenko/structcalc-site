@@ -334,6 +334,8 @@ class Wind3DRenderer {
   /* ── hip roof builder ───────────────────────────────────────────────────── */
 
   _buildStructureHip(B, L, hEave, hRidge) {
+    /* Always orient ridge along the longer plan dimension (classic hip, not pyramid) */
+    if (B > L) { [B, L] = [L, B]; }
     const hB = B / 2, hL = L / 2;
     const grp = new THREE.Group();
     const EDGE_R = 0.22;
@@ -792,18 +794,23 @@ class Wind3DRenderer {
       drawZones(ptMono, monoNorm, true);
 
     } else if (_shape === 'hip') {
-      /* Two trapezoidal main slopes; v-range shrinks linearly from ±hL at eave to ±r2 at ridge */
-      const _ridgeL = Math.max(0, L - B);
+      /* Two trapezoidal main slopes; always orient ridge along longer axis */
+      const _hipB   = Math.min(B, L);
+      const _hipL   = Math.max(B, L);
+      const _hipHB  = _hipB / 2;
+      const _hipHL  = _hipL / 2;
+      const _ridgeL = _hipL - _hipB;          // always >= 0
       const _r2     = _ridgeL / 2;
-      const ptHipL = (u, v, hB, hEave, hRidge, hL) => {
-        const zHalf = (1 - u) * hL + u * _r2;
-        return new THREE.Vector3(-hB * (1 - u), (1-u)*hEave + u*hRidge, v * 2 * zHalf - zHalf);
+      /* ptHipL/R: u=0→eave (x=±_hipHB, full z range), u=1→ridge (x=0, z range ±_r2) */
+      const ptHipL = (u, v, _hB, _hEave, _hRidge, _hL) => {
+        const zHalf = (1 - u) * _hipHL + u * _r2;
+        return new THREE.Vector3(-_hipHB * (1 - u), (1-u)*_hEave + u*_hRidge, v * 2 * zHalf - zHalf);
       };
-      const ptHipR = (u, v, hB, hEave, hRidge, hL) => {
-        const zHalf = (1 - u) * hL + u * _r2;
-        return new THREE.Vector3( hB * (1 - u), (1-u)*hEave + u*hRidge, v * 2 * zHalf - zHalf);
+      const ptHipR = (u, v, _hB, _hEave, _hRidge, _hL) => {
+        const zHalf = (1 - u) * _hipHL + u * _r2;
+        return new THREE.Vector3( _hipHB * (1 - u), (1-u)*_hEave + u*_hRidge, v * 2 * zHalf - zHalf);
       };
-      const _leftNorm  = this._leftNormal(hB, hEave, hRidge, hL);
+      const _leftNorm  = this._leftNormal(_hipHB, hEave, hRidge, _hipHL);
       const _rightNorm = new THREE.Vector3(-_leftNorm.x, _leftNorm.y, _leftNorm.z);
       drawZones(ptHipL, _leftNorm,  true);
       drawZones(ptHipR, _rightNorm, false);
