@@ -1308,3 +1308,51 @@
   white-space: nowrap;
 }
 #windBtnCenter:hover { background: rgba(255,255,255,.26); }
+
+/* =====================================================================
+   MAP TOOLBAR FIX — toolbar is white (#fff), all text must be dark
+   ===================================================================== */
+
+/* Override previous rgba-white rules that were for dark toolbars */
+#windMapViewToggle .map-view-btn {
+  background: #fff !important;
+  color: var(--slate-500) !important;
+  border: none;
+  padding: 6px 12px;
+  font-size: .78rem; font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+}
+#windMapViewToggle .map-view-btn:hover {
+  background: var(--slate-50) !important;
+  color: var(--slate-700) !important;
+}
+#windMapViewToggle .map-view-btn.active {
+  background: var(--navy-900) !important;
+  color: #fff !important;
+}
+
+/* Hint text — slate-400 on white bg */
+.map-toolbar-hint {
+  color: var(--slate-400) !important;
+  font-size: .73rem;
+}
+
+/* Center button — dark outline on white toolbar */
+#windBtnCenter {
+  background: #fff !important;
+  color: var(--slate-600) !important;
+  border: 1px solid var(--slate-300) !important;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: .73rem; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 4px;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+#windBtnCenter:hover {
+  background: var(--slate-50) !important;
+  border-color: var(--slate-400) !important;
+  color: var(--slate-800) !important;
+}
