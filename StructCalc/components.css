@@ -623,3 +623,178 @@
   text-transform: uppercase; color: var(--slate-600);
   padding: 0 0 8px; border-bottom: 1px solid var(--slate-150); margin-bottom: 10px;
 }
+
+/* =====================================================================
+   WIND WORKSPACE — NEW UI ELEMENTS (Phase B)
+   ===================================================================== */
+
+/* ── field-hint, field-badge ─────────────────────────────────────────── */
+.field-hint {
+  font-size: .71rem; color: var(--slate-400); margin-top: 4px; line-height: 1.4;
+}
+.field-hint .hint-link, a.hint-link {
+  color: var(--cyan-600); text-decoration: underline; cursor: pointer;
+}
+.field-sublabel { font-size: .69rem; color: var(--slate-400); margin-bottom: 3px; }
+.field-badge {
+  margin-left: 6px; font-size: .62rem; font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; padding: 2px 5px; border-radius: 4px;
+  background: #e6fbff; color: var(--cyan-600); font-family: inherit;
+}
+
+/* readonly "computed" input */
+.field input[readonly] {
+  background: var(--slate-100); color: var(--slate-500); cursor: default;
+  border-color: var(--slate-200);
+}
+
+/* ── toggle-label (checkbox + text) ─────────────────────────────────── */
+.toggle-label {
+  display: flex; align-items: center; gap: 7px;
+  font-size: .82rem; font-weight: 600; color: var(--slate-700);
+  cursor: pointer; line-height: 1.35; margin-bottom: 2px;
+}
+.toggle-label input[type=checkbox] {
+  accent-color: var(--cyan-500); width: 14px; height: 14px; flex: none; margin: 0;
+}
+
+/* ── Address search row ──────────────────────────────────────────────── */
+.address-row {
+  display: flex; gap: 6px; align-items: center; margin-bottom: 4px;
+}
+.address-row input[type=text] {
+  flex: 1; border: 1px solid var(--slate-300); border-radius: 7px;
+  padding: 8px 10px; font-size: .86rem; background: var(--slate-50);
+  color: var(--slate-800); font-family: inherit; transition: .15s; box-sizing: border-box;
+}
+.address-row input:focus {
+  outline: none; border-color: var(--cyan-500); background: #fff;
+  box-shadow: 0 0 0 3px rgba(6,182,212,.12);
+}
+.addr-result {
+  font-size: .73rem; color: var(--slate-500); min-height: 14px;
+  line-height: 1.35; margin-bottom: 2px;
+}
+
+/* ── Structure-type big buttons ──────────────────────────────────────── */
+.struct-type-btns { display: flex; gap: 8px; }
+.struct-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 10px 8px; border: 1.5px solid var(--slate-200); border-radius: 8px;
+  background: var(--slate-50); color: var(--slate-500);
+  font-size: .78rem; font-weight: 700; cursor: pointer; transition: .15s;
+}
+.struct-btn .ic { width: 22px; height: 22px; }
+.struct-btn:hover { border-color: var(--cyan-400); color: var(--navy-900); background: #f7feff; }
+.struct-btn.active { border-color: var(--cyan-500); background: #e6fbff; color: var(--cyan-700); }
+
+/* ── Procedure lock notice ───────────────────────────────────────────── */
+.proc-lock-notice {
+  margin-top: 8px; padding: 6px 10px;
+  background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px;
+  font-size: .73rem; color: #1d4ed8; font-weight: 600; line-height: 1.4;
+}
+
+/* ── K_zt sub-block ──────────────────────────────────────────────────── */
+.kzt-sub-block {
+  margin-top: 10px; padding: 10px 12px;
+  background: #f8fbff; border: 1px solid #bfdbfe; border-radius: 8px;
+}
+.kzt-result {
+  margin-top: 8px; padding: 5px 8px; border-radius: 5px;
+  background: var(--slate-100); font-size: .8rem; font-weight: 700; color: var(--navy-900);
+}
+
+/* ── Tornado alert card ──────────────────────────────────────────────── */
+.tornado-alert {
+  border: 1px solid #fbbf24; border-left: 4px solid #f59e0b;
+  background: #fffbeb; border-radius: 8px;
+  padding: 12px 14px; margin-top: 4px;
+}
+.tornado-alert-head {
+  display: flex; align-items: center; gap: 6px;
+  font-size: .71rem; font-weight: 800; letter-spacing: .05em;
+  text-transform: uppercase; color: #92400e; margin-bottom: 6px;
+}
+.tornado-alert-head .ic-sm { color: #f59e0b; flex: none; }
+.tornado-alert-head .panel-section-note { color: #b45309; margin-left: auto; }
+.tornado-vt-block { margin-top: 8px; }
+.tornado-status {
+  margin-top: 8px; padding: 6px 10px; border-radius: 6px;
+  font-size: .77rem; font-weight: 700; line-height: 1.4;
+}
+.tornado-status.required     { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+.tornado-status.not-required { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+.tornado-status.pending      { background: var(--slate-100); color: var(--slate-500); border: 1px solid var(--slate-200); }
+
+/* ── Enclosure buttons ───────────────────────────────────────────────── */
+.enclosure-btns { display: flex; flex-direction: column; gap: 6px; }
+.enc-btn {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border: 1.5px solid var(--slate-200); border-radius: 8px;
+  background: var(--slate-50); cursor: pointer; transition: .15s; text-align: left;
+  width: 100%;
+}
+.enc-btn:hover   { border-color: var(--cyan-400); background: #f7feff; }
+.enc-btn.active  { border-color: var(--cyan-500); background: #e6fbff; }
+.enc-label { font-size: .84rem; font-weight: 700; color: var(--navy-900); }
+.enc-gcpi  { font-size: .74rem; color: var(--slate-500); font-family: 'JetBrains Mono', monospace; }
+.enc-btn.active .enc-label { color: var(--cyan-700); }
+.enc-btn.active .enc-gcpi  { color: var(--cyan-600); }
+
+/* ── Openings table ──────────────────────────────────────────────────── */
+.openings-table {
+  margin-top: 10px; padding: 10px 12px;
+  background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px;
+}
+.enclosure-calc-result {
+  margin-top: 8px; padding: 7px 10px; border-radius: 6px;
+  font-size: .79rem; font-weight: 700; line-height: 1.4;
+}
+.enclosure-calc-result.enclosed { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+.enclosure-calc-result.partial  { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.enclosure-calc-result.open     { background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; }
+
+/* ── Surface / zone toggles ──────────────────────────────────────────── */
+.surface-toggle {
+  display: flex; border: 1px solid var(--slate-200); border-radius: 8px;
+  overflow: hidden; margin-bottom: 10px;
+}
+.surf-btn {
+  flex: 1; padding: 8px; font-size: .8rem; font-weight: 700;
+  color: var(--slate-500); background: var(--slate-50);
+  border: none; border-right: 1px solid var(--slate-200); cursor: pointer; transition: .12s;
+}
+.surf-btn:last-child { border-right: none; }
+.surf-btn:hover  { background: var(--slate-100); color: var(--navy-900); }
+.surf-btn.active { background: var(--navy-900); color: #fff; }
+
+/* ── Appurtenance sub-blocks ─────────────────────────────────────────── */
+.appurt-sub {
+  margin-top: 4px; padding: 8px 10px;
+  background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: 7px;
+}
+
+/* ── Step-trace (dark terminal) ──────────────────────────────────────── */
+.step-trace {
+  background: #0f172a; color: #e2e8f0;
+  font-family: 'JetBrains Mono', monospace; font-size: .71rem;
+  padding: 14px; overflow-y: auto; min-height: 280px; line-height: 1.65;
+}
+.trace-placeholder { color: var(--slate-600); font-style: italic; }
+.step-trace .ref-link   { color: #67e8f9; text-decoration: underline; cursor: pointer; }
+.step-trace .step-formula { color: #fbbf24; }
+.step-trace .step-result  { color: #86efac; font-weight: 700; }
+.step-sep { border: none; border-top: 1px solid rgba(255,255,255,.08); margin: 6px 0; }
+
+/* ── Report preview ──────────────────────────────────────────────────── */
+.report-actions { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.report-preview {
+  background: var(--slate-50); border: 1px solid var(--slate-200);
+  border-radius: 7px; padding: 14px; font-size: .8rem; color: var(--slate-500);
+}
+
+/* ── Map container ───────────────────────────────────────────────────── */
+#map-container {
+  flex: 1; min-height: 0; position: relative; overflow: hidden; background: #e8f0f8;
+}

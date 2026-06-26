@@ -142,11 +142,6 @@
     <div class="ws-main hidden" id="wsWindWorkspace">
 
       <div class="tab-strip">
-        <button class="tab-btn active" data-wtab="calc">
-          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>
-          Wind Loads
-        </button>
-        <div class="tab-strip-sep"></div>
         <!-- 6 input section tabs -->
         <div class="input-tabs">
           <button class="tab-btn active" data-tab="site">Site</button>
@@ -200,13 +195,14 @@
                 <h4>Risk Category</h4>
                 <span class="panel-section-note">Table 1.5-1</span>
               </div>
-              <div class="rc-btns" id="windRCBtns">
-                <button class="rc-btn" data-rc="I">I</button>
-                <button class="rc-btn active" data-rc="II">II</button>
-                <button class="rc-btn" data-rc="III">III</button>
-                <button class="rc-btn" data-rc="IV">IV</button>
+              <div class="field">
+                <select id="wind-riskCategory">
+                  <option value="I">I — Low hazard</option>
+                  <option value="II" selected>II — Standard occupancy (default)</option>
+                  <option value="III">III — Substantial hazard to human life</option>
+                  <option value="IV">IV — Essential facilities</option>
+                </select>
               </div>
-              <input type="hidden" id="wind-riskCategory" value="II">
             </div>
 
             <div class="panel-section">
@@ -392,10 +388,11 @@
                   </div>
                 </div>
 
-                <div class="computed-row" id="hMeanRow">
-                  <span class="computed-label">Mean roof height, h&#772;</span>
-                  <span class="computed-val" id="hMeanDisplay">—</span>
-                  <span class="computed-unit">ft</span>
+                <div class="field">
+                  <label>Mean roof height, h&#772; <span class="unit">(ft)</span>
+                    <span class="field-badge">auto</span>
+                  </label>
+                  <input class="num" id="hMeanDisplay" value="—" readonly tabindex="-1">
                 </div>
               </div>
 
@@ -404,12 +401,13 @@
                   <h4>Gust Factor, G</h4>
                   <span class="panel-section-note">§26.11</span>
                 </div>
-                <div class="g-mode-row">
-                  <button class="g-btn active" data-g="rigid">Rigid (G = 0.85)</button>
-                  <button class="g-btn" data-g="flexible">Flexible</button>
+                <div class="field">
+                  <select id="wind-gMode">
+                    <option value="rigid" selected>Rigid — G = 0.85 (f₁ ≥ 1 Hz, §26.11.1)</option>
+                    <option value="flexible">Flexible — dynamic calc required (f₁ &lt; 1 Hz)</option>
+                  </select>
                 </div>
-                <input type="hidden" id="wind-gMode" value="rigid">
-                <div class="field-hint" id="gHint">Natural frequency &#8805; 1 Hz per §26.11.1</div>
+                <div class="field-hint">For most low-rise buildings: Rigid (G = 0.85)</div>
               </div>
 
               <div class="panel-section">
