@@ -794,21 +794,16 @@ class Wind3DRenderer {
       drawZones(ptMono, monoNorm, true);
 
     } else if (_shape === 'hip') {
-      /* Hip roof zones per ASCE 7-22 Figs. 30.3-2D–2G:
-         Zone 3 – plan corners (a × a from each building corner)
-         Zone 2 – eave strips (width a) along all 4 eave edges, excl. corners
-         Zone 1 – interior
-         → No Zone 2/3 along hip ridge edges (interior, not eave) */
+      /* Hip roof zones — ASCE 7-22 Figs. 30.3-2D–2G:
+         Zone 3: outer eave perimeter strip (all 4 eave edges), width a — continuous, never interrupted
+         Zone 2: strips along main ridge + all 4 hip ridges on all slopes, width a
+         Zone 1: interior (between Zone 2 near ridge and Zone 3 near eave)             */
       const _hipB  = Math.min(B, L), _hipL = Math.max(B, L);
       const _hipHB = _hipB / 2, _hipHL = _hipL / 2;
       const _ridgeL = _hipL - _hipB;
-      const _r2     = _ridgeL / 2;
+      const _r2     = Math.max(_ridgeL / 2, 0);
 
-      /* u-zone fractions for main slopes */
-      const _ua  = Math.min(zone_a / _hipHB, 0.45);           // eave-strip depth in u
-      const _va  = Math.min(zone_a / (2 * _hipHL), 0.45);     // corner fraction along eave length
-
-      /* Surface functions — close over _hipHB/_hipHL/_r2/hEave/hRidge */
+      /* Surface functions for main slopes (close over _hipHB/_hipHL/_r2/hEave/hRidge) */
       const ptHipL = (u, v) => {
         const zH = (1-u)*_hipHL + u*_r2;
         return new THREE.Vector3(-_hipHB*(1-u), (1-u)*hEave + u*hRidge, (2*v-1)*zH);
@@ -817,64 +812,120 @@ class Wind3DRenderer {
         const zH = (1-u)*_hipHL + u*_r2;
         return new THREE.Vector3( _hipHB*(1-u), (1-u)*hEave + u*hRidge, (2*v-1)*zH);
       };
-      /* Wrap into the ptFn(u,v,hB,hEave,hRidge,hL) signature required by _zoneQuad */
       const wrapL = (u,v,_a,_b,_c,_d) => ptHipL(u,v);
       const wrapR = (u,v,_a,_b,_c,_d) => ptHipR(u,v);
 
       const _leftNorm  = this._leftNormal(_hipHB, hEave, hRidge, _hipHL);
       const _rightNorm = new THREE.Vector3(-_leftNorm.x, _leftNorm.y, _leftNorm.z);
 
-      /* Main slope helper — eave-only perimeter (no side zones = no hip-ridge zones) */
-      const drawHipMain = (ptFn, norm, doLbl) => {
-        // Zone 1: everything above eave strip
-        addZone(_ua, 1,        0,      1,      THEME.zone1, 0.20, 'zone-1', 0.02, ptFn, norm, doLbl);
-        // Zone 2: eave strip middle (no corners)
-        addZone(0,   _ua,  _va,   1-_va, THEME.zone2, 0.35, 'zone-2', 0.07, ptFn, norm, doLbl);
-        // Zone 3: eave corners (front & back)
-        addZone(0,   _ua,  0,     _va,   THEME.zone3, 0.50, 'zone-3', 0.12, ptFn, norm, doLbl);
-        addZone(0,   _ua,  1-_va, 1,     THEME.zone3, 0.50, 'zone-3', 0.12, ptFn, norm, false);
-      };
-      drawHipMain(wrapL, _leftNorm,  true);
-      drawHipMain(wrapR, _rightNorm, false);
+      /* Zone width fractions for main slopes */
+      const _ua   = Math.min(zone_a / _hipHB,       0.40);  // eave strip depth (Zone 3) in u
+      const _ua2  = Math.min(zone_a / _hipHB,       0.40);  // ridge strip depth (Zone 2) in u
+      // hip-ridge Zone 2 inner boundary in v-space (varies: larger fraction at ridge end)
+      const _ve   = Math.min(zone_a / (2*_hipHL),   0.40);  // v-fraction at u=0 (eave level)
+      const _vr   = _r2 > 0.5
+        ? Math.min(zone_a / (2*_r2), 0.40)
+        : 0.40;                                              // v-fraction at u=1 (ridge end)
 
-      /* Hip triangle (end slope) zones */
-      const _rise     = hRidge - hEave;
-      const _triH     = Math.max(_hipHL - _r2, 0.5);   // triangle height in Z (plan)
-      const _t_strip  = Math.min(zone_a / _triH, 0.75); // fraction from base to strip line
-      const _f_corner = Math.min(zone_a / _hipB, 0.45); // corner fraction along base (plan)
+      /* Helper: build an explicit quad mesh from 4 Vector3 points (no addZone) */
+      const addQuadMesh = (p0, p1, p2, p3, norm_, zt, op, eps) => {
+        const off_ = norm_.clone().multiplyScalar(eps);
+        const geo  = this._quad(
+          p0.clone().add(off_), p1.clone().add(off_),
+          p2.clone().add(off_), p3.clone().add(off_)
+        );
+        const mesh = new THREE.Mesh(geo, matZ(
+          zt==='zone-1' ? THEME.zone1 : zt==='zone-2' ? THEME.zone2 : THEME.zone3, op
+        ));
+        mesh.renderOrder = 1;
+        mesh.userData = { zoneType: zt };
+        this._zones.add(mesh);
+        this._zoneMeshes.push(mesh);
+      };
+
+      /* ── Main slope zones (left and right symmetric) ── */
+      const drawHipMainSlope = (ptFn, norm, doLbl) => {
+        /* Zone 1: interior band — between eave strip (Zone 3) and ridge strip (Zone 2) */
+        addZone(_ua, 1-_ua2, 0, 1, THEME.zone1, 0.20, 'zone-1', 0.02, ptFn, norm, doLbl);
+
+        /* Zone 2: main ridge strip — u near 1 (drawn over Zone 1) */
+        addZone(1-_ua2, 1, 0, 1, THEME.zone2, 0.35, 'zone-2', 0.07, ptFn, norm, doLbl);
+
+        /* Zone 2: back hip ridge — tapered quad along v=0 edge
+           outer: ptFn(0,0)→ptFn(1,0)   inner: ptFn(0,_ve)→ptFn(1,_vr)            */
+        addQuadMesh(
+          ptFn(0,    0,   0,0,0,0), ptFn(0, _ve,  0,0,0,0),
+          ptFn(1, _vr,   0,0,0,0), ptFn(1,    0, 0,0,0,0),
+          norm, 'zone-2', 0.35, 0.07
+        );
+
+        /* Zone 2: front hip ridge — tapered quad along v=1 edge
+           outer: ptFn(0,1)→ptFn(1,1)   inner: ptFn(0,1-_ve)→ptFn(1,1-_vr)        */
+        addQuadMesh(
+          ptFn(0, 1-_ve,  0,0,0,0), ptFn(0,    1, 0,0,0,0),
+          ptFn(1,    1,   0,0,0,0), ptFn(1, 1-_vr, 0,0,0,0),
+          norm, 'zone-2', 0.35, 0.07
+        );
+
+        /* Zone 3: eave strip — u ∈ [0, _ua], full v (drawn last → appears on top of corners) */
+        addZone(0, _ua, 0, 1, THEME.zone3, 0.50, 'zone-3', 0.12, ptFn, norm, doLbl);
+      };
+
+      drawHipMainSlope(wrapL, _leftNorm,  true);
+      drawHipMainSlope(wrapR, _rightNorm, false);
+
+      /* ── Hip triangle (end slope) zones ── */
+      const _triH = Math.max(_hipHL - _r2, 0.5);  // triangle plan-height in Z
 
       for (const zs of [-1, 1]) {
-        const zA = zs * _hipHL;  // base z (eave end)
-        const zC = zs * _r2;    // apex z (ridge end)
+        const zA = zs * _hipHL;   // base z (eave level)
+        const zC = zs * _r2;     // apex z (ridge end)
 
         /* Triangle vertices */
-        const A = new THREE.Vector3(-_hipHB, hEave, zA);
-        const B_ = new THREE.Vector3( _hipHB, hEave, zA);
-        const C = new THREE.Vector3(       0, hRidge, zC);
+        const A  = new THREE.Vector3(-_hipHB, hEave, zA);   // left base corner
+        const Bv = new THREE.Vector3( _hipHB, hEave, zA);   // right base corner
+        const C  = new THREE.Vector3(      0, hRidge, zC);  // apex (ridge end)
 
-        /* Strip-boundary points at _t_strip from base (=zone_a from eave in plan) */
-        const Dy = hEave + _t_strip * _rise;
-        const Dz = zA - zs * zone_a;   // = zA + _t_strip*(zC-zA) algebraically
-        const D = new THREE.Vector3(-_hipHB*(1-_t_strip), Dy, Dz);
-        const E = new THREE.Vector3( _hipHB*(1-_t_strip), Dy, Dz);
-
-        /* Corner-boundary points along base (at fraction _f_corner from each end) */
-        const F = new THREE.Vector3(-_hipHB*(1-2*_f_corner), hEave, zA); // left corner right edge
-        const G = new THREE.Vector3( _hipHB*(1-2*_f_corner), hEave, zA); // right corner left edge
-        /* Corner-boundary points at strip height (same fraction D→E) */
-        const H = new THREE.Vector3(D.x + (E.x-D.x)*_f_corner, Dy, Dz);
-        const I_ = new THREE.Vector3(E.x + (D.x-E.x)*_f_corner, Dy, Dz);
-
-        /* Triangle normal (outward = away from roof, positive y) */
-        const _e1 = new THREE.Vector3().subVectors(B_, A);
+        /* Triangle outward normal */
+        const _e1 = new THREE.Vector3().subVectors(Bv, A);
         const _e2 = new THREE.Vector3().subVectors(C,  A);
-        const triNorm = new THREE.Vector3().crossVectors(_e1, _e2).normalize();
-        if (triNorm.y < 0) triNorm.negate();
+        const tN  = new THREE.Vector3().crossVectors(_e1, _e2).normalize();
+        if (tN.y < 0) tN.negate();
 
-        const eps = 0.12;
-        const off = triNorm.clone().multiplyScalar(eps);
+        const lerp3 = (p, q, t) => new THREE.Vector3(
+          p.x + t*(q.x-p.x), p.y + t*(q.y-p.y), p.z + t*(q.z-p.z)
+        );
 
-        const addTri = (geo, zt, op) => {
+        /* Zone 3 base strip — trapezoid A→Bv→E→D at t_base from apex */
+        const t_base = Math.min(zone_a / _triH, 0.70);
+        const D = lerp3(A,  C, t_base);   // on left hip ridge, zone_a from base
+        const E = lerp3(Bv, C, t_base);   // on right hip ridge, zone_a from base
+
+        /* Zone 2 hip ridge strips in upper triangle D–E–C:
+           M_L = inner boundary on DE for left hip ridge strip
+           M_R = inner boundary on DE for right hip ridge strip               */
+        const DE_len = Math.max(Math.abs(E.x - D.x), 0.5);  // approx DE width in plan (x)
+        const f_hip  = Math.min(zone_a / DE_len, 0.45);
+        const M_L = lerp3(D, E, f_hip);   // left inner boundary
+        const M_R = lerp3(E, D, f_hip);   // right inner boundary
+
+        const addTriPart = (pts, zt, op, eps) => {
+          const off_ = tN.clone().multiplyScalar(eps);
+          let geo;
+          if (pts.length === 3) {
+            geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+              pts[0].x+off_.x, pts[0].y+off_.y, pts[0].z+off_.z,
+              pts[1].x+off_.x, pts[1].y+off_.y, pts[1].z+off_.z,
+              pts[2].x+off_.x, pts[2].y+off_.y, pts[2].z+off_.z,
+            ]), 3));
+            geo.computeVertexNormals();
+          } else {
+            geo = this._quad(
+              pts[0].clone().add(off_), pts[1].clone().add(off_),
+              pts[2].clone().add(off_), pts[3].clone().add(off_)
+            );
+          }
           const mesh = new THREE.Mesh(geo, matZ(
             zt==='zone-1' ? THEME.zone1 : zt==='zone-2' ? THEME.zone2 : THEME.zone3, op
           ));
@@ -884,30 +935,17 @@ class Wind3DRenderer {
           this._zoneMeshes.push(mesh);
         };
 
-        /* Zone 3 left corner: quad A → F → H → D */
-        addTri(this._quad(
-          A.clone().add(off), F.clone().add(off), H.clone().add(off), D.clone().add(off)
-        ), 'zone-3', 0.50);
+        /* Zone 1: interior sub-triangle M_L → M_R → C */
+        addTriPart([M_L, M_R, C], 'zone-1', 0.20, 0.02);
 
-        /* Zone 3 right corner: quad G → B → E → I */
-        addTri(this._quad(
-          G.clone().add(off), B_.clone().add(off), E.clone().add(off), I_.clone().add(off)
-        ), 'zone-3', 0.50);
+        /* Zone 2: left hip ridge — triangle D → M_L → C */
+        addTriPart([D, M_L, C], 'zone-2', 0.35, 0.07);
 
-        /* Zone 2 middle eave strip: quad F → G → I → H */
-        addTri(this._quad(
-          F.clone().add(off), G.clone().add(off), I_.clone().add(off), H.clone().add(off)
-        ), 'zone-2', 0.35);
+        /* Zone 2: right hip ridge — triangle M_R → Bv side → C */
+        addTriPart([M_R, E, C], 'zone-2', 0.35, 0.07);
 
-        /* Zone 1 interior: triangle D → E → C */
-        const z1Geo = new THREE.BufferGeometry();
-        z1Geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
-          D.x+off.x, D.y+off.y, D.z+off.z,
-          E.x+off.x, E.y+off.y, E.z+off.z,
-          C.x+off.x, C.y+off.y, C.z+off.z,
-        ]), 3));
-        z1Geo.computeVertexNormals();
-        addTri(z1Geo, 'zone-1', 0.20);
+        /* Zone 3: base eave strip — trapezoid A → Bv → E → D (drawn last) */
+        addTriPart([A, Bv, E, D], 'zone-3', 0.50, 0.12);
       }
 
     } else {
