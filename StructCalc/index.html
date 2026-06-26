@@ -10,7 +10,7 @@
 <title>StructCalc — Structural Load Workspace</title>
 <link rel="stylesheet" href="theme.css?v=1">
 <link rel="stylesheet" href="layout.css?v=1">
-<link rel="stylesheet" href="components.css?v=4">
+<link rel="stylesheet" href="components.css?v=5">
 </head>
 <body>
 
@@ -197,13 +197,13 @@
                 <h4>Project Location</h4>
                 <span class="panel-section-note">§26.5</span>
               </div>
-              <div class="address-row" style="position:relative;">
+              <div class="address-row">
                 <input type="text" id="wind-address" placeholder="Search address…" autocomplete="off">
                 <button class="icon-btn" id="windGeoBtn" title="Use my location">
                   <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.5-8 14-8 14S4 15.5 4 10a8 8 0 0 1 8-8z"/></svg>
                 </button>
+                <div id="wind-addr-suggestions" class="addr-suggestions hidden"></div>
               </div>
-              <div id="wind-addr-suggestions" class="addr-suggestions hidden"></div>
               <div id="wind-addr-result" class="addr-result"></div>
               <input type="hidden" id="wind-lat">
               <input type="hidden" id="wind-lng">
@@ -613,7 +613,7 @@
 
           <!-- Map toolbar (active on Site tab) -->
           <div class="diagram-toolbar hidden" id="mapToolbar">
-            <div class="map-view-toggle">
+            <div class="view-toggle" id="windMapViewToggle">
               <button class="map-view-btn active" data-view="satellite" onclick="windMapSwitchView('satellite')">Satellite</button>
               <button class="map-view-btn" data-view="map" onclick="windMapSwitchView('map')">Map</button>
             </div>

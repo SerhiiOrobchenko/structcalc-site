@@ -80,9 +80,9 @@ function _makeIcon() {
   return L.divIcon({
     className: 'wind-map-pin-wrap',
     html: '<div class="wind-map-pin"></div>',
-    iconSize:    [22, 32],
-    iconAnchor:  [11, 32],
-    popupAnchor: [0, -34],
+    iconSize:    [44, 58],
+    iconAnchor:  [22, 58],
+    popupAnchor: [0, -62],
   });
 }
 
@@ -351,7 +351,7 @@ function windMapSwitchView(mode) {
   }
   _wCurrentMode = mode;
   /* Update toggle button states */
-  document.querySelectorAll('.map-view-btn').forEach(function(b) {
+  document.querySelectorAll('#windMapViewToggle .map-view-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.view === mode);
   });
 }

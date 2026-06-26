@@ -1254,3 +1254,57 @@
 
 /* ── Address row needs relative positioning for dropdown ─────────────── */
 .address-row { position: relative; }
+
+/* =====================================================================
+   MAP v2 FIXES — bigger pin, popup padding, toggle styles, suggestions fix
+   ===================================================================== */
+
+/* ── Larger red pin (44x44 base, teardrop) ──────────────────────────── */
+.wind-map-pin {
+  width: 40px; height: 40px;
+  background: #EA4335;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  border: 3px solid #fff;
+  box-shadow: 0 3px 12px rgba(234,67,53,.6);
+}
+.wind-map-pin::after {
+  width: 14px; height: 14px;
+}
+
+/* ── Popup — more breathing room ────────────────────────────────────── */
+.leaflet-popup-content {
+  margin: 18px 24px !important;
+}
+
+/* ── Map/Satellite toggle — reuse view-toggle appearance ────────────── */
+/* .view-toggle already styled in style.css; just make map-view-btn match */
+#windMapViewToggle .map-view-btn {
+  padding: 4px 10px; font-size: .73rem; font-weight: 500;
+  background: none; color: rgba(255,255,255,.55);
+  border: none; cursor: pointer;
+  transition: all .15s;
+}
+#windMapViewToggle .map-view-btn:hover { background: rgba(255,255,255,.1); color: rgba(255,255,255,.85); }
+#windMapViewToggle .map-view-btn.active { background: rgba(255,255,255,.18); color: #fff; }
+
+/* ── address-row must be position:relative for dropdown ─────────────── */
+.address-row { position: relative; overflow: visible !important; }
+
+/* ── Suggestions positioned inside address-row ──────────────────────── */
+.addr-suggestions {
+  position: absolute;
+  top: 100%; left: 0; right: 0;
+  z-index: 99999;
+}
+
+/* ── Center button — always visible after pin placed ────────────────── */
+#windBtnCenter {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 3px 10px; border-radius: 5px;
+  font-size: .72rem; font-weight: 500;
+  background: rgba(255,255,255,.15); color: #e2e8f0;
+  border: 1px solid rgba(255,255,255,.22);
+  white-space: nowrap;
+}
+#windBtnCenter:hover { background: rgba(255,255,255,.26); }
