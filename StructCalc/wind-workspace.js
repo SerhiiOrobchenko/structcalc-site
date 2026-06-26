@@ -194,8 +194,8 @@ function recalcWind() {
   /* K_e auto on first calc */
   computeKe();
 
-  // Renderer signature: update3DModel(B, L, ridgeHeight, thetaDegrees, zone_a)
-  if (windRenderer) windRenderer.update3DModel(B, L, hR, th, za);
+  // Renderer signature: update3DModel(B, L, ridgeHeight, thetaDegrees, zone_a, roofShape)
+  if (windRenderer) windRenderer.update3DModel(B, L, hR, th, za, s.roofShape);
 
   var vDisp = document.getElementById('wind-V-display');
   if (vDisp) vDisp.textContent = s.V || '—';

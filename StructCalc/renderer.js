@@ -331,6 +331,146 @@ class Wind3DRenderer {
     return grp;
   }
 
+  /* ── hip roof builder ───────────────────────────────────────────────────── */
+
+  _buildStructureHip(B, L, hEave, hRidge) {
+    const hB = B / 2, hL = L / 2;
+    const grp = new THREE.Group();
+    const EDGE_R = 0.22;
+    const solidMat = c => new THREE.MeshStandardMaterial({
+      color: c, transparent: true, opacity: 0.96, side: THREE.FrontSide,
+    });
+    const roofMat = () => new THREE.MeshStandardMaterial({
+      color: THEME.roofFill, transparent: true, opacity: 0.80, side: THREE.DoubleSide,
+    });
+
+    /* Walls — same box as gable (no gable triangles for hip) */
+    const boxGeo = new THREE.BoxGeometry(B, hEave, L);
+    boxGeo.translate(0, hEave / 2, 0);
+    grp.add(new THREE.Mesh(boxGeo, solidMat(THEME.wallFill)));
+    this._tubeEdges(new THREE.EdgesGeometry(boxGeo), THEME.wallEdge, EDGE_R, grp);
+
+    /* Ridge: shorter than building length by B on each side (equal-pitch hip) */
+    const ridgeL = Math.max(0, L - B);
+    const r2 = ridgeL / 2;
+
+    /* Left main slope — trapezoid (or triangle if L === B) */
+    const leftGeo = this._quad(
+      new THREE.Vector3(-hB, hEave, -hL),
+      new THREE.Vector3(-hB, hEave,  hL),
+      new THREE.Vector3(  0, hRidge,  r2),
+      new THREE.Vector3(  0, hRidge, -r2),
+    );
+    /* Right main slope */
+    const rightGeo = this._quad(
+      new THREE.Vector3(hB, hEave, -hL),
+      new THREE.Vector3( 0, hRidge, -r2),
+      new THREE.Vector3( 0, hRidge,  r2),
+      new THREE.Vector3(hB, hEave,  hL),
+    );
+    for (const g of [leftGeo, rightGeo]) {
+      grp.add(new THREE.Mesh(g, roofMat()));
+      this._tubeEdges(new THREE.EdgesGeometry(g), THEME.roofEdge, EDGE_R, grp);
+    }
+
+    /* Hip triangles at each end */
+    for (const zs of [-1, 1]) {
+      const z  = zs * hL;
+      const rz = zs * r2;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+        -hB, hEave, z,
+         hB, hEave, z,
+          0, hRidge, rz,
+      ]), 3));
+      geo.computeVertexNormals();
+      grp.add(new THREE.Mesh(geo, roofMat()));
+      this._tubeEdges(new THREE.EdgesGeometry(geo), THEME.roofEdge, EDGE_R, grp);
+    }
+
+    /* Ridge line (only if ridge has length) */
+    if (ridgeL > 0) {
+      const t = this._tube(
+        new THREE.Vector3(0, hRidge, -r2),
+        new THREE.Vector3(0, hRidge,  r2),
+        THEME.ridge, EDGE_R
+      );
+      if (t) grp.add(t);
+    }
+
+    return grp;
+  }
+
+  /* ── monoslope roof builder ──────────────────────────────────────────────── */
+
+  _buildStructureMonoslope(B, L, hLow, hHigh) {
+    /* hLow  = low eave height  (leeward,  X = +B/2)
+       hHigh = high eave height (windward, X = -B/2) */
+    const hB = B / 2, hL = L / 2;
+    const grp = new THREE.Group();
+    const EDGE_R = 0.22;
+    const solidMat = c => new THREE.MeshStandardMaterial({
+      color: c, transparent: true, opacity: 0.96, side: THREE.FrontSide,
+    });
+    const roofMat = new THREE.MeshStandardMaterial({
+      color: THEME.roofFill, transparent: true, opacity: 0.80, side: THREE.DoubleSide,
+    });
+
+    /* 4 walls — all as quads (not a box, heights differ on each side) */
+    /* Windward wall  (X = -hB): rectangular, full height = hHigh */
+    const windGeo = this._quad(
+      new THREE.Vector3(-hB, 0,     -hL),
+      new THREE.Vector3(-hB, 0,      hL),
+      new THREE.Vector3(-hB, hHigh,  hL),
+      new THREE.Vector3(-hB, hHigh, -hL),
+    );
+    /* Leeward wall  (X = +hB): rectangular, height = hLow */
+    const leeGeo = this._quad(
+      new THREE.Vector3(hB, 0,    -hL),
+      new THREE.Vector3(hB, hLow, -hL),
+      new THREE.Vector3(hB, hLow,  hL),
+      new THREE.Vector3(hB, 0,     hL),
+    );
+    /* Left end wall  (Z = -hL): trapezoid */
+    const leftEndGeo = this._quad(
+      new THREE.Vector3(-hB, 0,     -hL),
+      new THREE.Vector3(-hB, hHigh, -hL),
+      new THREE.Vector3( hB, hLow,  -hL),
+      new THREE.Vector3( hB, 0,     -hL),
+    );
+    /* Right end wall (Z = +hL): trapezoid */
+    const rightEndGeo = this._quad(
+      new THREE.Vector3(-hB, 0,     hL),
+      new THREE.Vector3( hB, 0,     hL),
+      new THREE.Vector3( hB, hLow,  hL),
+      new THREE.Vector3(-hB, hHigh, hL),
+    );
+    for (const g of [windGeo, leeGeo, leftEndGeo, rightEndGeo]) {
+      grp.add(new THREE.Mesh(g, solidMat(THEME.wallFill)));
+      this._tubeEdges(new THREE.EdgesGeometry(g), THEME.wallEdge, EDGE_R, grp);
+    }
+
+    /* Sloped roof — single quad */
+    const roofGeo = this._quad(
+      new THREE.Vector3(-hB, hHigh, -hL),
+      new THREE.Vector3(-hB, hHigh,  hL),
+      new THREE.Vector3( hB, hLow,   hL),
+      new THREE.Vector3( hB, hLow,  -hL),
+    );
+    grp.add(new THREE.Mesh(roofGeo, roofMat));
+    this._tubeEdges(new THREE.EdgesGeometry(roofGeo), THEME.roofEdge, EDGE_R, grp);
+
+    /* High eave edge (accent) */
+    const t = this._tube(
+      new THREE.Vector3(-hB, hHigh, -hL),
+      new THREE.Vector3(-hB, hHigh,  hL),
+      THEME.ridge, EDGE_R
+    );
+    if (t) grp.add(t);
+
+    return grp;
+  }
+
   /* ── dimension system ───────────────────────────────────────────────────── */
 
   /**
@@ -567,7 +707,7 @@ class Wind3DRenderer {
    * @param {number} theta   Roof pitch, degrees
    * @param {number} zone_a  ASCE 7-22 §26.2 edge dimension, ft
    */
-  update3DModel(B, L, h, theta, zone_a) {
+  update3DModel(B, L, h, theta, zone_a, roofShape) {
     B = +B||48; L = +L||96; h = +h||66; theta = +theta||15; zone_a = +zone_a||4;
 
     const H_SCALE  = 1.8;  // vertical exaggeration — keeps proportions readable
@@ -589,8 +729,16 @@ class Wind3DRenderer {
     this._zoneMeshes  = [];
     this._dimHighlight = {};
 
-    // building
-    this._building = this._buildStructure(B, L, hEave, hRidge);
+    // building — dispatch by roof shape
+    const _shape = roofShape || 'gable';
+    if (_shape === 'hip') {
+      this._building = this._buildStructureHip(B, L, hEave, hRidge);
+    } else if (_shape === 'monoslope') {
+      this._building = this._buildStructureMonoslope(B, L, hEave, hRidge);
+    } else {
+      /* gable or flat (flat = gable with theta=0, already handled by caller) */
+      this._building = this._buildStructure(B, L, hEave, hRidge);
+    }
 
     // dim lines (pass hRidge_ft so label shows real engineering value, not scaled)
     this._dimGroup = this._buildAllDims(B, L, hEave, hRidge, zone_a, hRidge_ft);
