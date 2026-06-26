@@ -587,6 +587,7 @@ function wireWindInputs() {
 }
 
 /* ── Pitch toggle: deg ↔ X:12 with live conversion display ────────────── */
+/* ── Pitch toggle: deg ↔ X:12 with live conversion display ────────────── */
 function wirePitchToggle() {
   var thetaInp   = document.getElementById('wind-theta');
   var noteEl     = document.getElementById('pitchConvert');
@@ -605,4 +606,90 @@ function wirePitchToggle() {
       noteEl.textContent = '= ' + rise.toFixed(2) + ':12 slope';
     } else {
       var deg = Math.atan(val / 12) * 180 / Math.PI;
-      noteEl.textContent = '= ' + deg
+      noteEl.textContent = '= ' + deg.toFixed(1) + '°';
+    }
+  }
+
+  function setMode(mode) {
+    if (mode === pitchMode) return;
+    var oldVal = parseFloat(thetaInp.value);
+    if (!isNaN(oldVal)) {
+      if (mode === 'slope') {
+        thetaInp.min  = '0';
+        thetaInp.max  = '48';
+        thetaInp.step = '0.1';
+        thetaInp.value = (12 * Math.tan(oldVal * Math.PI / 180)).toFixed(2);
+        if (labelEl) labelEl.innerHTML = 'Roof pitch <span class="unit">(X:12)</span>';
+      } else {
+        thetaInp.min  = '0';
+        thetaInp.max  = '89.9';
+        thetaInp.step = '0.1';
+        thetaInp.value = (Math.atan(oldVal / 12) * 180 / Math.PI).toFixed(1);
+        if (labelEl) labelEl.innerHTML = 'Roof pitch, θ <span class="unit">(°)</span>';
+      }
+    }
+    pitchMode = mode;
+    updateNote();
+    recalcWind();
+  }
+
+  toggleBtns.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      toggleBtns.forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      setMode(btn.dataset.unit);
+    });
+  });
+
+  thetaInp.addEventListener('input', function() {
+    updateNote();
+  });
+
+  updateNote();
+}
+
+/* ── Read theta always in degrees (handles slope mode) ─────────────────── */
+function readThetaDegrees() {
+  var thetaInp = document.getElementById('wind-theta');
+  if (!thetaInp) return 0;
+  var val = parseFloat(thetaInp.value) || 0;
+  var activeBtn = document.querySelector('#pitchUnitToggle button.active');
+  if (activeBtn && activeBtn.dataset.unit === 'slope') {
+    return Math.atan(val / 12) * 180 / Math.PI;
+  }
+  return val;
+}
+
+/* ── Open wind workspace ───────────────────────────────────────────────── */
+async function openWindWorkspace(proj, calc) {
+  windActiveProj = proj;
+  windActiveCalc = calc;
+
+  var banner = document.getElementById('windBannerText');
+  if (banner) banner.innerHTML = '<strong>' + escHtml(proj.name) + '</strong> · ASCE 7-22 · '
+    + escHtml((proj.settings && proj.settings.units === 'SI') ? 'SI' : 'US') + ' Units';
+
+  await loadWindScripts();
+  await loadWindEngine();
+
+  var savedEntry = calc.state && calc.state['ASCE 7-22'];
+  if (savedEntry && savedEntry.state) {
+    windSavedState = savedEntry.state;
+    restoreWindInputs(savedEntry.state);
+  } else {
+    windSavedState = null;
+  }
+
+  if (windRenderer) {
+    try { windRenderer.dispose(); } catch(e) {}
+    windRenderer = null;
+  }
+  await new Promise(function(res){ setTimeout(res, 60); });
+  try { windRenderer = new Wind3DRenderer('threejs-container'); } catch(e) { console.error('Wind3DRenderer init:', e); }
+
+  if (!elWsMain._inputsWired) {
+    wireWindInputs();
+    elWsMain._inputsWired = true;
+  }
+  recalcWind();
+}
