@@ -1171,3 +1171,86 @@
   border-radius: 4px 0 0 0 !important;
 }
 .leaflet-control-attribution a { color: #67e8f9 !important; }
+
+/* =====================================================================
+   MAP MODULE v2 — red pin, autocomplete, Map/Satellite toggle
+   ===================================================================== */
+
+/* ── Google-style red pin ───────────────────────────────────────────── */
+.wind-map-pin {
+  width: 22px; height: 22px;
+  background: #EA4335;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  border: 2.5px solid #fff;
+  box-shadow: 0 2px 8px rgba(234,67,53,.55);
+}
+.wind-map-pin::after {
+  content: '';
+  position: absolute;
+  width: 7px; height: 7px;
+  background: #fff;
+  border-radius: 50%;
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+}
+
+/* ── Autocomplete dropdown ──────────────────────────────────────────── */
+.addr-suggestions {
+  position: absolute;
+  top: calc(100% + 2px); left: 0; right: 0;
+  z-index: 9999;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.13);
+  overflow: hidden;
+  max-height: 220px; overflow-y: auto;
+}
+.addr-suggestion-item {
+  padding: 8px 12px;
+  font-size: .78rem; line-height: 1.4;
+  color: #1e293b; cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background .1s;
+}
+.addr-suggestion-item:last-child { border-bottom: none; }
+.addr-suggestion-item:hover,
+.addr-suggestion-item.focused {
+  background: #f0fdff; color: #0e7490;
+}
+
+/* ── Map/Satellite toggle (in toolbar) ─────────────────────────────── */
+.map-view-toggle {
+  display: flex; gap: 0;
+  border: 1px solid rgba(255,255,255,.25);
+  border-radius: 6px; overflow: hidden;
+}
+.map-view-btn {
+  padding: 3px 10px;
+  font-size: .72rem; font-weight: 500; letter-spacing: .02em;
+  background: rgba(15,23,42,.45); color: #94a3b8;
+  border: none; cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.map-view-btn:hover { background: rgba(255,255,255,.12); color: #e2e8f0; }
+.map-view-btn.active { background: #fff; color: #0f172a; }
+
+/* ── Map toolbar hint text ──────────────────────────────────────────── */
+.map-toolbar-hint {
+  font-size: .72rem; color: var(--slate-400);
+  flex: 1; text-align: center;
+}
+
+/* ── Center Location button text ────────────────────────────────────── */
+#windBtnCenter {
+  display: flex; align-items: center; gap: 2px;
+  padding: 3px 8px; border-radius: 5px;
+  font-size: .72rem;
+  background: rgba(255,255,255,.12); color: #e2e8f0;
+  border: 1px solid rgba(255,255,255,.2);
+}
+#windBtnCenter:hover { background: rgba(255,255,255,.22); }
+
+/* ── Address row needs relative positioning for dropdown ─────────────── */
+.address-row { position: relative; }

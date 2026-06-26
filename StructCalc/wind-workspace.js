@@ -34,7 +34,7 @@ async function loadWindScripts() {
   await loadScriptTag('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js');
   await loadScriptTag('renderer.js?v=7');
   await loadScriptTag('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
-  await loadScriptTag('map-module.js?v=1');
+  await loadScriptTag('map-module.js?v=2');
   windScriptsLoaded = true;
 }
 

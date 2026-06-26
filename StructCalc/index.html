@@ -10,7 +10,7 @@
 <title>StructCalc — Structural Load Workspace</title>
 <link rel="stylesheet" href="theme.css?v=1">
 <link rel="stylesheet" href="layout.css?v=1">
-<link rel="stylesheet" href="components.css?v=3">
+<link rel="stylesheet" href="components.css?v=4">
 </head>
 <body>
 
@@ -197,12 +197,13 @@
                 <h4>Project Location</h4>
                 <span class="panel-section-note">§26.5</span>
               </div>
-              <div class="address-row">
+              <div class="address-row" style="position:relative;">
                 <input type="text" id="wind-address" placeholder="Search address…" autocomplete="off">
                 <button class="icon-btn" id="windGeoBtn" title="Use my location">
                   <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.5-8 14-8 14S4 15.5 4 10a8 8 0 0 1 8-8z"/></svg>
                 </button>
               </div>
+              <div id="wind-addr-suggestions" class="addr-suggestions hidden"></div>
               <div id="wind-addr-result" class="addr-result"></div>
               <input type="hidden" id="wind-lat">
               <input type="hidden" id="wind-lng">
@@ -612,9 +613,17 @@
 
           <!-- Map toolbar (active on Site tab) -->
           <div class="diagram-toolbar hidden" id="mapToolbar">
-            <span style="font-size:.74rem;color:var(--slate-400);">Click map to place building location</span>
+            <div class="map-view-toggle">
+              <button class="map-view-btn active" data-view="satellite" onclick="windMapSwitchView('satellite')">Satellite</button>
+              <button class="map-view-btn" data-view="map" onclick="windMapSwitchView('map')">Map</button>
+            </div>
+            <span class="map-toolbar-hint">Click map or search to place location</span>
             <div class="diagram-toolbar-right">
-              <button class="icon-btn hidden" id="windBtnMapReset" title="Reset map view">
+              <button class="icon-btn hidden" id="windBtnCenter" title="Center Location" onclick="windMapCenter()">
+                <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+                <span style="font-size:.7rem;margin-left:3px;">Center</span>
+              </button>
+              <button class="icon-btn hidden" id="windBtnMapReset" title="Reset map view" onclick="windMapReset()">
                 <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7M3 3v6h6"/></svg>
               </button>
             </div>
