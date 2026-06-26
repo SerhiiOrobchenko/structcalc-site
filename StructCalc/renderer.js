@@ -743,45 +743,77 @@ class Wind3DRenderer {
     // dim lines (pass hRidge_ft so label shows real engineering value, not scaled)
     this._dimGroup = this._buildAllDims(B, L, hEave, hRidge, zone_a, hRidge_ft);
 
-    // zones
-    const u_zone = Math.min(zone_a / hB, 0.45);
-    const v_zone = Math.min(zone_a / L,  0.45);
-    const u1 = 1 - u_zone, v1 = 1 - v_zone;
-
+    // zones — shape-specific surface mapping
     const matZ = (col, op) => new THREE.MeshBasicMaterial({
       color:col, transparent:true, opacity:op, side:THREE.DoubleSide, depthWrite:false,
     });
 
-    const leftNorm  = this._leftNormal(hB, hEave, hRidge, hL);
-    const rightNorm = new THREE.Vector3(-leftNorm.x, leftNorm.y, leftNorm.z);
+    const u_zone = Math.min(zone_a / hB, 0.45);
+    const v_zone = Math.min(zone_a / L,  0.45);
+    const u1 = 1 - u_zone, v1 = 1 - v_zone;
 
-    for (const [ptFn, norm] of [
-      [this._ptL.bind(this), leftNorm],
-      [this._ptR.bind(this), rightNorm],
-    ]) {
-      const addZ = (u0,uu1,v0,vv1,col,op,zt,eps,label) => {
-        const m = this._zoneQuad(u0,uu1,v0,vv1,ptFn,hB,hEave,hRidge,hL,norm,eps,matZ(col,op),zt);
-        this._zones.add(m);
-        this._zoneMeshes.push(m);
-        if (label) {
-          const ctr = this._zoneCentroid(u0,uu1,v0,vv1,ptFn,hB,hEave,hRidge,hL);
-          ctr.addScaledVector(norm, eps + 0.5);
-          this._makeZoneLabel(zt, ctr, norm, hB, zone_a, L);
-        }
+    /* addZone: maps region [u0..u1]×[v0..v1] onto the surface defined by ptFn/norm */
+    const addZone = (u0,uu1,v0,vv1,col,op,zt,eps,ptFn,norm,label) => {
+      const m = this._zoneQuad(u0,uu1,v0,vv1,ptFn,hB,hEave,hRidge,hL,norm,eps,matZ(col,op),zt);
+      this._zones.add(m);
+      this._zoneMeshes.push(m);
+      if (label) {
+        const ctr = this._zoneCentroid(u0,uu1,v0,vv1,ptFn,hB,hEave,hRidge,hL);
+        ctr.addScaledVector(norm, eps + 0.5);
+        this._makeZoneLabel(zt, ctr, norm, hB, zone_a, L);
+      }
+    };
+
+    /* Shared zone layout applied to one surface (doLabel = draw text labels) */
+    const drawZones = (ptFn, norm, doLabel) => {
+      addZone(u_zone,u1, v_zone,v1, THEME.zone1,0.20,'zone-1',0.02,ptFn,norm,doLabel);
+      addZone(0,u_zone,  v_zone,v1, THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,doLabel);
+      addZone(u1,1,      v_zone,v1, THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
+      addZone(u_zone,u1, 0,v_zone,  THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
+      addZone(u_zone,u1, v1,1,      THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
+      addZone(0,u_zone,  0,v_zone,  THEME.zone3,0.50,'zone-3',0.12,ptFn,norm,doLabel);
+      addZone(0,u_zone,  v1,1,      THEME.zone3,0.50,'zone-3',0.12,ptFn,norm,false);
+      addZone(u1,1,      0,v_zone,  THEME.zone3,0.50,'zone-3',0.12,ptFn,norm,false);
+      addZone(u1,1,      v1,1,      THEME.zone3,0.50,'zone-3',0.12,ptFn,norm,false);
+    };
+
+    if (_shape === 'monoslope') {
+      /* Single sloped surface: u=0 → windward/high (X=-hB, Y=hRidge)
+                                 u=1 → leeward/low  (X=+hB, Y=hEave)  */
+      const ptMono = (u, v, hB, hEave, hRidge, hL) => new THREE.Vector3(
+        -hB + u * 2 * hB,
+        hRidge - u * (hRidge - hEave),
+        v * 2 * hL - hL
+      );
+      const _e1 = new THREE.Vector3(2*hB, hEave - hRidge, 0);  // along u direction
+      const _e2 = new THREE.Vector3(0, 0, 2*hL);               // along v direction
+      const monoNorm = new THREE.Vector3().crossVectors(_e2, _e1).normalize();
+      if (monoNorm.y < 0) monoNorm.negate();
+      drawZones(ptMono, monoNorm, true);
+
+    } else if (_shape === 'hip') {
+      /* Two trapezoidal main slopes; v-range shrinks linearly from ±hL at eave to ±r2 at ridge */
+      const _ridgeL = Math.max(0, L - B);
+      const _r2     = _ridgeL / 2;
+      const ptHipL = (u, v, hB, hEave, hRidge, hL) => {
+        const zHalf = (1 - u) * hL + u * _r2;
+        return new THREE.Vector3(-hB * (1 - u), (1-u)*hEave + u*hRidge, v * 2 * zHalf - zHalf);
       };
+      const ptHipR = (u, v, hB, hEave, hRidge, hL) => {
+        const zHalf = (1 - u) * hL + u * _r2;
+        return new THREE.Vector3( hB * (1 - u), (1-u)*hEave + u*hRidge, v * 2 * zHalf - zHalf);
+      };
+      const _leftNorm  = this._leftNormal(hB, hEave, hRidge, hL);
+      const _rightNorm = new THREE.Vector3(-_leftNorm.x, _leftNorm.y, _leftNorm.z);
+      drawZones(ptHipL, _leftNorm,  true);
+      drawZones(ptHipR, _rightNorm, false);
 
-      // Zone 1 — interior field
-      addZ(u_zone,u1, v_zone,v1, THEME.zone1,0.20,'zone-1',0.02,true);
-      // Zone 2 — four edge strips
-      addZ(0,     u_zone, v_zone,v1, THEME.zone2,0.35,'zone-2',0.07,true);
-      addZ(u1,    1,      v_zone,v1, THEME.zone2,0.35,'zone-2',0.07,false);
-      addZ(u_zone,u1,     0,v_zone,  THEME.zone2,0.35,'zone-2',0.07,false);
-      addZ(u_zone,u1,     v1,1,      THEME.zone2,0.35,'zone-2',0.07,false);
-      // Zone 3 — four corners
-      addZ(0,u_zone,  0,v_zone,  THEME.zone3,0.50,'zone-3',0.12,true);
-      addZ(0,u_zone,  v1,1,      THEME.zone3,0.50,'zone-3',0.12,false);
-      addZ(u1,1,      0,v_zone,  THEME.zone3,0.50,'zone-3',0.12,false);
-      addZ(u1,1,      v1,1,      THEME.zone3,0.50,'zone-3',0.12,false);
+    } else {
+      /* Gable (or flat, theta=0): two rectangular slopes */
+      const _leftNorm  = this._leftNormal(hB, hEave, hRidge, hL);
+      const _rightNorm = new THREE.Vector3(-_leftNorm.x, _leftNorm.y, _leftNorm.z);
+      drawZones(this._ptL.bind(this), _leftNorm,  true);
+      drawZones(this._ptR.bind(this), _rightNorm, false);
     }
 
     this._scene.add(this._building);
