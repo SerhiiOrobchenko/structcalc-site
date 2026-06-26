@@ -1096,3 +1096,78 @@
 #tab-geometry  .field input:focus, #tab-geometry  .field select:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.12); }
 #tab-enclosure .field input:focus, #tab-enclosure .field select:focus { border-color:#8b5cf6; box-shadow:0 0 0 3px rgba(139,92,246,.12); }
 #tab-elements  .field input:focus, #tab-elements  .field select:focus { border-color:#f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.12); }
+
+/* =====================================================================
+   MAP MODULE — Leaflet overrides + custom pin/popup styles
+   ===================================================================== */
+
+/* Map container fills the col-diagram area */
+#map-container {
+  flex: 1; min-height: 0;
+  width: 100%; height: 100%;
+  background: #1e293b;
+}
+
+/* ── Address result bar ─────────────────────────────────────────────── */
+.addr-result {
+  font-size: .74rem; min-height: 18px; margin-top: 4px;
+  padding: 3px 6px; border-radius: 5px; color: var(--slate-500);
+  transition: background .15s, color .15s;
+}
+.addr-result.loading { color: #0891b2; background: #ecfeff; }
+.addr-result.ok      { color: #065f46; background: #ecfdf5; }
+.addr-result.error   { color: #b91c1c; background: #fef2f2; }
+
+/* ── Custom map pin ─────────────────────────────────────────────────── */
+.wind-map-pin-wrap { background: none; border: none; }
+
+.wind-map-pin {
+  width: 22px; height: 30px;
+  background: #06b6d4;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(6,182,212,.5);
+  position: relative;
+}
+.wind-map-pin::after {
+  content: '';
+  position: absolute;
+  width: 8px; height: 8px;
+  background: #fff;
+  border-radius: 50%;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* ── Popup card ─────────────────────────────────────────────────────── */
+.wind-map-popup {
+  font-size: .78rem; line-height: 1.6;
+  font-family: inherit; color: #0f172a;
+  min-width: 180px;
+}
+.wind-map-popup strong { color: #0e7490; }
+.wind-map-popup .popup-hint {
+  font-size: .69rem; color: #94a3b8;
+  display: block; margin-top: 4px;
+}
+
+/* Override Leaflet popup chrome */
+.leaflet-popup-content-wrapper {
+  border-radius: 10px !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,.18) !important;
+  padding: 0 !important;
+}
+.leaflet-popup-content {
+  margin: 10px 14px !important;
+}
+.leaflet-popup-tip-container { margin-top: -1px; }
+
+/* ── Leaflet attribution small ──────────────────────────────────────── */
+.leaflet-control-attribution {
+  font-size: .62rem !important;
+  background: rgba(15,23,42,.55) !important;
+  color: #94a3b8 !important;
+  border-radius: 4px 0 0 0 !important;
+}
+.leaflet-control-attribution a { color: #67e8f9 !important; }

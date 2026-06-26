@@ -33,6 +33,8 @@ async function loadWindScripts() {
   await loadScriptTag('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js');
   await loadScriptTag('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js');
   await loadScriptTag('renderer.js?v=7');
+  await loadScriptTag('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
+  await loadScriptTag('map-module.js?v=1');
   windScriptsLoaded = true;
 }
 
@@ -281,6 +283,10 @@ function activateInputTab(tabName) {
   if (threeEl)  threeEl.classList.toggle('hidden', isMap);
   if (mapTb)    mapTb.classList.toggle('hidden', !isMap);
   if (diagramTb) diagramTb.classList.toggle('hidden', isMap);
+  /* Init / resize Leaflet map when Site tab becomes visible */
+  if (isMap && typeof initWindMap === 'function') {
+    setTimeout(function(){ initWindMap('map-container'); }, 50);
+  }
 }
 
 /* ── Helper ────────────────────────────────────────────────────────────── */
@@ -412,6 +418,52 @@ function wireWindInputs() {
   document.querySelectorAll('.itab').forEach(function(btn) {
     btn.addEventListener('click', function() { activateInputTab(btn.dataset.tab); });
   });
+
+  /* ── Address search (Site tab) ────────────────────────────────────── */
+  var addrEl = document.getElementById('wind-address');
+  var geoBtn = document.getElementById('windGeoBtn');
+  var mapResetBtn = document.getElementById('windBtnMapReset');
+
+  if (addrEl) {
+    /* Enter key → geocode */
+    addrEl.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (typeof windMapGeocodeAndPlace === 'function') windMapGeocodeAndPlace(addrEl.value.trim());
+      }
+    });
+    /* Show/hide reset button when address has value */
+    addrEl.addEventListener('input', function() {
+      if (mapResetBtn) mapResetBtn.classList.toggle('hidden', !addrEl.value);
+    });
+  }
+
+  /* GPS "use my location" button */
+  if (geoBtn) {
+    geoBtn.addEventListener('click', function() {
+      if (!navigator.geolocation) return;
+      geoBtn.disabled = true;
+      navigator.geolocation.getCurrentPosition(
+        function(pos) {
+          geoBtn.disabled = false;
+          if (addrEl) addrEl.value = 'My location (' + pos.coords.latitude.toFixed(4) + ', ' + pos.coords.longitude.toFixed(4) + ')';
+          if (typeof windMapSetLocation === 'function') windMapSetLocation(pos.coords.latitude, pos.coords.longitude);
+        },
+        function() { geoBtn.disabled = false; }
+      );
+    });
+  }
+
+  /* Map reset → pan back to CONUS */
+  if (mapResetBtn) {
+    mapResetBtn.addEventListener('click', function() {
+      if (typeof windMapReset === 'function') windMapReset();
+      if (addrEl) addrEl.value = '';
+      var resEl = document.getElementById('wind-addr-result');
+      if (resEl) { resEl.textContent = ''; resEl.className = 'addr-result'; }
+      mapResetBtn.classList.add('hidden');
+    });
+  }
 
   /* 3D view toggle */
   document.querySelectorAll('#windViewToggle button').forEach(function(btn) {
