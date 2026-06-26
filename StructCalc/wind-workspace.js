@@ -687,4 +687,11 @@ async function openWindWorkspace(proj, calc) {
     windRenderer = null;
   }
   await new Promise(function(res){ setTimeout(res, 60); });
-  try { windRenderer = new Wind3DRenderer('threejs-container'); } catch(e) { c
+  try { windRenderer = new Wind3DRenderer('threejs-container'); } catch(e) { console.error('Wind3DRenderer init:', e); }
+
+  if (!elWsMain._inputsWired) {
+    wireWindInputs();
+    elWsMain._inputsWired = true;
+  }
+  recalcWind();
+}
