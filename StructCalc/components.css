@@ -984,3 +984,115 @@
   position: relative;
   overflow: hidden;
 }
+
+/* =====================================================================
+   WIND WORKSPACE — BOLD COLOR SYSTEM (Phase B refresh)
+   Each tab + its cards carry a distinct color identity
+   ===================================================================== */
+
+/* ── Tab strip background ──────────────────────────────────────────── */
+.input-tabs {
+  background: #f1f5f9;
+  border-bottom: 2px solid var(--slate-200);
+  padding: 8px 10px;
+  gap: 4px;
+}
+
+/* ── Base itab: colored even when inactive ─────────────────────────── */
+.itab { border-radius: 10px; border: 1.5px solid transparent; }
+
+/* Site — cyan */
+.itab[data-tab="site"]         { color: #0e7490; background: #ecfeff; }
+.itab[data-tab="site"] .itab-ic { stroke: #06b6d4; }
+.itab[data-tab="site"]:hover   { background: #cffafe; border-color: #67e8f9; }
+
+/* Geometry — indigo */
+.itab[data-tab="geometry"]         { color: #4338ca; background: #eef2ff; }
+.itab[data-tab="geometry"] .itab-ic { stroke: #6366f1; }
+.itab[data-tab="geometry"]:hover   { background: #e0e7ff; border-color: #a5b4fc; }
+
+/* Enclosure — violet */
+.itab[data-tab="enclosure"]         { color: #6d28d9; background: #f5f3ff; }
+.itab[data-tab="enclosure"] .itab-ic { stroke: #8b5cf6; }
+.itab[data-tab="enclosure"]:hover   { background: #ede9fe; border-color: #c4b5fd; }
+
+/* Elements — amber */
+.itab[data-tab="elements"]         { color: #b45309; background: #fffbeb; }
+.itab[data-tab="elements"] .itab-ic { stroke: #f59e0b; }
+.itab[data-tab="elements"]:hover   { background: #fef3c7; border-color: #fcd34d; }
+
+/* Results — emerald */
+.itab[data-tab="results"]         { color: #065f46; background: #ecfdf5; }
+.itab[data-tab="results"] .itab-ic { stroke: #10b981; }
+.itab[data-tab="results"]:hover   { background: #d1fae5; border-color: #6ee7b7; }
+
+/* Report — slate-blue */
+.itab[data-tab="report"]         { color: #334155; background: #f8fafc; }
+.itab[data-tab="report"] .itab-ic { stroke: #64748b; }
+.itab[data-tab="report"]:hover   { background: #e2e8f0; border-color: #94a3b8; }
+
+/* ── Active tabs — full color treatment ────────────────────────────── */
+.itab.active {
+  box-shadow: 0 2px 12px rgba(0,0,0,.12);
+  transform: translateY(-1px);
+}
+.itab.active[data-tab="site"]      { background:#fff; border-color:#06b6d4; color:#0e7490; box-shadow:0 3px 12px rgba(6,182,212,.25); }
+.itab.active[data-tab="geometry"]  { background:#fff; border-color:#6366f1; color:#4338ca; box-shadow:0 3px 12px rgba(99,102,241,.25); }
+.itab.active[data-tab="enclosure"] { background:#fff; border-color:#8b5cf6; color:#6d28d9; box-shadow:0 3px 12px rgba(139,92,246,.25); }
+.itab.active[data-tab="elements"]  { background:#fff; border-color:#f59e0b; color:#b45309; box-shadow:0 3px 12px rgba(245,158,11,.25); }
+.itab.active[data-tab="results"]   { background:#fff; border-color:#10b981; color:#065f46; box-shadow:0 3px 12px rgba(16,185,129,.25); }
+.itab.active[data-tab="report"]    { background:#fff; border-color:#64748b; color:#334155; box-shadow:0 3px 12px rgba(100,116,139,.25); }
+
+/* ── Panel section cards — colored top border per tab ──────────────── */
+.panel-section {
+  border-top: 3px solid var(--slate-200);
+  border-left: none; border-right: none; border-bottom: none;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+
+/* Tab-specific card accent strips */
+#tab-site      .panel-section { border-top-color: #06b6d4; }
+#tab-geometry  .panel-section { border-top-color: #6366f1; }
+#tab-enclosure .panel-section { border-top-color: #8b5cf6; }
+#tab-elements  .panel-section { border-top-color: #f59e0b; }
+#tab-results   .panel-section { border-top-color: #10b981; }
+#tab-report    .panel-section { border-top-color: #64748b; }
+
+/* ── Section headings — colored text matching tab ───────────────────── */
+.panel-section h4 { font-size: .76rem; }
+
+#tab-site      .panel-section h4 { color: #0e7490; }
+#tab-site      .panel-section h4::before { background: #06b6d4; }
+#tab-geometry  .panel-section h4 { color: #4338ca; }
+#tab-geometry  .panel-section h4::before { background: #6366f1; }
+#tab-enclosure .panel-section h4 { color: #6d28d9; }
+#tab-enclosure .panel-section h4::before { background: #8b5cf6; }
+#tab-elements  .panel-section h4 { color: #b45309; }
+#tab-elements  .panel-section h4::before { background: #f59e0b; }
+#tab-results   .panel-section h4 { color: #065f46; }
+#tab-results   .panel-section h4::before { background: #10b981; }
+#tab-report    .panel-section h4 { color: #334155; }
+#tab-report    .panel-section h4::before { background: #64748b; }
+
+/* ── panel-section-note color follows tab ────────────────────────────── */
+#tab-site      .panel-section-note { color: #0891b2; }
+#tab-geometry  .panel-section-note { color: #6366f1; }
+#tab-enclosure .panel-section-note { color: #8b5cf6; }
+#tab-elements  .panel-section-note { color: #d97706; }
+#tab-results   .panel-section-note { color: #059669; }
+#tab-report    .panel-section-note { color: #64748b; }
+
+/* ── Very subtle tinted bg inside each tab's cards ───────────────────── */
+#tab-site      .panel-section { background: linear-gradient(160deg,#f0fdff 0%,#fff 60%); }
+#tab-geometry  .panel-section { background: linear-gradient(160deg,#eef2ff 0%,#fff 60%); }
+#tab-enclosure .panel-section { background: linear-gradient(160deg,#f5f3ff 0%,#fff 60%); }
+#tab-elements  .panel-section { background: linear-gradient(160deg,#fffbeb 0%,#fff 60%); }
+#tab-results   .panel-section { background: linear-gradient(160deg,#ecfdf5 0%,#fff 60%); }
+#tab-report    .panel-section { background: linear-gradient(160deg,#f8fafc 0%,#fff 60%); }
+
+/* ── Focus ring for inputs follows tab color ─────────────────────────── */
+#tab-site      .field input:focus, #tab-site      .field select:focus { border-color:#06b6d4; box-shadow:0 0 0 3px rgba(6,182,212,.12); }
+#tab-geometry  .field input:focus, #tab-geometry  .field select:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.12); }
+#tab-enclosure .field input:focus, #tab-enclosure .field select:focus { border-color:#8b5cf6; box-shadow:0 0 0 3px rgba(139,92,246,.12); }
+#tab-elements  .field input:focus, #tab-elements  .field select:focus { border-color:#f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.12); }
