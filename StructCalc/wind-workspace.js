@@ -72,6 +72,27 @@ var WIND_INPUT_MAP = {
   'wind-kztLh':           'kztLh',
   'wind-kztX':            'kztX',
   'wind-kztZ':            'kztZ',
+  /* Other structure params */
+  'wind-otherType':       'ch29Type',
+  'ws-ch29B':             'ch29B',
+  'ws-ch29H':             'ch29H',
+  'ws-ch29S':             'ch29S',
+  'ws-ch29As':            'ch29As',
+  'ws-ch29Af':            'ch29Af',
+  'ws-ch29Ar':            'ch29Ar',
+  'ws-ch29Bh':            'ch29Bh',
+  'ws-ch29BL':            'ch29BL',
+  'ws-ch29GsOmega':       'ch29GsOmega',
+  'ws-ch29GsLc':          'ch29GsLc',
+  'ws-ch29GsWg':          'ch29GsWg',
+  'ws-ch29GsS':           'ch29GsS',
+  'ws-ch29GsH1':          'ch29SolarH1',
+  'ws-ch29GsH2':          'ch29SolarH2',
+  'ws-ch29GsWL':          'ch29SolarWL',
+  'ws-ch29GsWs':          'ch29SolarWs',
+  'ws-ch29GsA':           'ch29GsA',
+  'ws-tankD':             'tankD',
+  'ws-tankH':             'tankH',
 };
 
 function gatherWindState(base) {
@@ -491,12 +512,26 @@ function wireWindInputs() {
       btn.classList.add('active');
       var isBuilding = (btn.dataset.struct === 'building');
       var scEl = document.getElementById('wind-structureCategory');
-      if (scEl) scEl.value = btn.dataset.struct;
+      if (scEl) scEl.value = isBuilding ? 'building' : 'otherStructure';
       setVisible('geomBuildingBlock', isBuilding);
       setVisible('geomOtherBlock', !isBuilding);
       recalcWind();
     });
   });
+
+  /* Other structure type selector → show/hide sub-params */
+  var otherTypeEl = document.getElementById('wind-otherType');
+  if (otherTypeEl) {
+    function syncOtherParams() {
+      var chosen = otherTypeEl.value;
+      document.querySelectorAll('.other-params').forEach(function(el) {
+        var isActive = el.id === ('otherParams-' + chosen);
+        el.classList.toggle('hidden', !isActive);
+      });
+    }
+    otherTypeEl.addEventListener('change', function() { syncOtherParams(); recalcWind(); });
+    syncOtherParams();
+  }
 
   /* Enclosure buttons */
   document.querySelectorAll('.enc-btn').forEach(function(btn) {

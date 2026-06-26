@@ -467,19 +467,135 @@
             <div id="geomOtherBlock" class="hidden">
               <div class="panel-section">
                 <div class="panel-section-head">
-                  <h4>Structure Category</h4>
+                  <h4>Structure Type</h4>
                   <span class="panel-section-note">Ch. 29</span>
                 </div>
                 <div class="field">
                   <label>Type</label>
                   <select id="wind-otherType">
-                    <option value="solidSign">Solid Sign / Freestanding Wall</option>
-                    <option value="rooftopEquip">Rooftop Structures &amp; Equipment (§30.8)</option>
+                    <option value="solidSign">Solid Sign / Freestanding Wall (§29.3)</option>
+                    <option value="rooftopEquip">Rooftop Structure / Equipment (§30.8)</option>
                     <option value="groundSolar">Ground-Mounted Solar (§29.4.5)</option>
                     <option value="circularTank">Circular Bin / Silo / Tank (§30.10)</option>
                   </select>
                 </div>
               </div>
+
+              <!-- solidSign params -->
+              <div class="panel-section other-params" id="otherParams-solidSign">
+                <div class="panel-section-head"><h4>Sign / Wall Geometry</h4><span class="panel-section-note">§29.3</span></div>
+                <div class="field-row">
+                  <div class="field">
+                    <label>Width, B <span class="unit">(ft)</span></label>
+                    <input class="num" id="ws-ch29B" value="40" min="1">
+                  </div>
+                  <div class="field">
+                    <label>Height, h <span class="unit">(ft)</span></label>
+                    <input class="num" id="ws-ch29H" value="20" min="1">
+                  </div>
+                </div>
+                <div class="field-row">
+                  <div class="field">
+                    <label>Clearance, s <span class="unit">(ft)</span></label>
+                    <input class="num" id="ws-ch29S" value="0" min="0">
+                  </div>
+                  <div class="field">
+                    <label>Gross area, A<sub>s</sub> <span class="unit">(ft²)</span></label>
+                    <input class="num" id="ws-ch29As" value="800" min="1">
+                  </div>
+                </div>
+              </div>
+
+              <!-- rooftopEquip params -->
+              <div class="panel-section other-params hidden" id="otherParams-rooftopEquip">
+                <div class="panel-section-head"><h4>Equipment Geometry</h4><span class="panel-section-note">§30.8</span></div>
+                <div class="field-row">
+                  <div class="field">
+                    <label>A<sub>f</sub> horiz. area <span class="unit">(ft²)</span></label>
+                    <input class="num" id="ws-ch29Af" value="50" min="1">
+                  </div>
+                  <div class="field">
+                    <label>A<sub>r</sub> roof area <span class="unit">(ft²)</span></label>
+                    <input class="num" id="ws-ch29Ar" value="80" min="1">
+                  </div>
+                </div>
+                <div class="field-row">
+                  <div class="field">
+                    <label>B × h <span class="unit">(ft²)</span></label>
+                    <input class="num" id="ws-ch29Bh" value="1200" min="1">
+                  </div>
+                  <div class="field">
+                    <label>B × L <span class="unit">(ft²)</span></label>
+                    <input class="num" id="ws-ch29BL" value="3600" min="1">
+                  </div>
+                </div>
+              </div>
+
+              <!-- groundSolar params -->
+              <div class="panel-section other-params hidden" id="otherParams-groundSolar">
+                <div class="panel-section-head"><h4>Solar Array</h4><span class="panel-section-note">§29.4.5</span></div>
+                <div class="field-row">
+                  <div class="field">
+                    <label>Tilt, ω <span class="unit">(°)</span></label>
+                    <input class="num" id="ws-ch29GsOmega" value="10" min="0" max="35">
+                  </div>
+                  <div class="field">
+                    <label>Chord, L<sub>p</sub> <span class="unit">(ft)</span></label>
+                    <input class="num" id="ws-ch29GsLc" value="6" min="0.1" max="6.7">
+                  </div>
+                </div>
+                <div class="field-row">
+                  <div class="field">
+                    <label>Panel width, W<sub>g</sub> <span class="unit">(ft)</span></label>
+                    <input class="num" id="ws-ch29GsWg" value="3" min="0.1">
+                  </div>
+                  <div class="field">
+                    <label>Row spacing, S <span class="unit">(ft)</span></label>
+                    <input class="num" id="ws-ch29GsS" value="12" min="1">
+                  </div>
+                </div>
+                <div class="field-row">
+                  <div class="field">
+                    <label>h<sub>1</sub> lower edge <span class="unit">(ft)</span></label>
+                    <input class="num" id="ws-ch29GsH1" value="0.5" min="0" max="2">
+                  </div>
+                  <div class="field">
+                    <label>h<sub>2</sub> upper edge <span class="unit">(ft)</span></label>
+                    <input class="num" id="ws-ch29GsH2" value="2" min="0" max="4">
+                  </div>
+                </div>
+                <div class="field-row">
+                  <div class="field">
+                    <label>Bldg. W<sub>L</sub> <span class="unit">(ft)</span></label>
+                    <input class="num" id="ws-ch29GsWL" value="120" min="10">
+                  </div>
+                  <div class="field">
+                    <label>Bldg. W<sub>s</sub> <span class="unit">(ft)</span></label>
+                    <input class="num" id="ws-ch29GsWs" value="80" min="10">
+                  </div>
+                </div>
+                <div class="field">
+                  <label>Eff. wind area, A <span class="unit">(ft²)</span></label>
+                  <input class="num" id="ws-ch29GsA" value="50" min="1">
+                </div>
+              </div>
+
+              <!-- circularTank params -->
+              <div class="panel-section other-params hidden" id="otherParams-circularTank">
+                <div class="panel-section-head"><h4>Tank / Bin / Silo</h4><span class="panel-section-note">§30.10</span></div>
+                <div class="field-row">
+                  <div class="field">
+                    <label>Diameter, D <span class="unit">(ft)</span></label>
+                    <input class="num" id="ws-tankD" value="30" min="1">
+                  </div>
+                  <div class="field">
+                    <label>Height, H <span class="unit">(ft)</span></label>
+                    <input class="num" id="ws-tankH" value="40" min="1">
+                  </div>
+                </div>
+                <div class="field-hint">H/D must be 0.25–4.0 for §30.10 equations to apply</div>
+              </div>
+
             </div>
 
           </div><!-- /tab-geometry -->
