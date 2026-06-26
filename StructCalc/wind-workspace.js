@@ -265,8 +265,8 @@ function renderWindResults(r, s) {
 
 /* ── Input tab switching ───────────────────────────────────────────────── */
 function activateInputTab(tabName) {
-  document.querySelectorAll('.input-tabs .tab-btn').forEach(function(b){ b.classList.remove('active'); });
-  var btn = document.querySelector('.input-tabs .tab-btn[data-tab="' + tabName + '"]');
+  document.querySelectorAll('.itab').forEach(function(b){ b.classList.remove('active'); });
+  var btn = document.querySelector('.itab[data-tab="' + tabName + '"]');
   if (btn) btn.classList.add('active');
   document.querySelectorAll('.tab-content').forEach(function(c) {
     c.classList.toggle('hidden', c.id !== 'tab-' + tabName);
@@ -409,7 +409,7 @@ function wireWindInputs() {
   });
 
   /* Input tab switching */
-  document.querySelectorAll('.input-tabs .tab-btn').forEach(function(btn) {
+  document.querySelectorAll('.itab').forEach(function(btn) {
     btn.addEventListener('click', function() { activateInputTab(btn.dataset.tab); });
   });
 

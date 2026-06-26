@@ -798,3 +798,189 @@
 #map-container {
   flex: 1; min-height: 0; position: relative; overflow: hidden; background: #e8f0f8;
 }
+
+/* =====================================================================
+   WIND INPUT TABS — CARD STYLE WITH ICONS
+   ===================================================================== */
+
+/* Override tab-strip for wind workspace: no padding, dark bg */
+#wsWindWorkspace .tab-strip {
+  background: var(--navy-950);
+  border-bottom: 1px solid var(--navy-700);
+  padding: 0 12px;
+  gap: 0;
+}
+
+/* "Wind Loads" label on left — the only tab-btn in strip is the Export btn wrapper */
+#wsWindWorkspace .tab-strip-actions .btn {
+  background: transparent;
+  border-color: var(--navy-600);
+  color: #cfe4ec;
+  font-size: .76rem;
+}
+#wsWindWorkspace .tab-strip-actions .btn:hover {
+  background: var(--navy-800);
+}
+
+/* input-tabs strip: own bg row below top strip */
+.input-tabs {
+  display: flex;
+  gap: 3px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--slate-200);
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.input-tabs::-webkit-scrollbar { display: none; }
+
+/* --- itab card --- */
+.itab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px 7px;
+  border-radius: 10px;
+  border: 1.5px solid transparent;
+  background: transparent;
+  color: var(--slate-400);
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+  flex: none;
+}
+.itab-ic {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
+  flex: none;
+}
+.itab:hover {
+  background: var(--white);
+  border-color: var(--slate-200);
+  color: var(--navy-700);
+  box-shadow: 0 1px 4px rgba(0,0,0,.08);
+}
+
+/* Active state per tab — each gets its own accent color */
+.itab.active[data-tab="site"] {
+  background: #fff;
+  border-color: #06b6d4;
+  color: #0891b2;
+  box-shadow: 0 2px 8px rgba(6,182,212,.18);
+}
+.itab.active[data-tab="site"] .itab-ic { stroke: #06b6d4; }
+
+.itab.active[data-tab="geometry"] {
+  background: #fff;
+  border-color: #6366f1;
+  color: #4f46e5;
+  box-shadow: 0 2px 8px rgba(99,102,241,.18);
+}
+.itab.active[data-tab="geometry"] .itab-ic { stroke: #6366f1; }
+
+.itab.active[data-tab="enclosure"] {
+  background: #fff;
+  border-color: #8b5cf6;
+  color: #7c3aed;
+  box-shadow: 0 2px 8px rgba(139,92,246,.18);
+}
+.itab.active[data-tab="enclosure"] .itab-ic { stroke: #8b5cf6; }
+
+.itab.active[data-tab="elements"] {
+  background: #fff;
+  border-color: #f59e0b;
+  color: #d97706;
+  box-shadow: 0 2px 8px rgba(245,158,11,.18);
+}
+.itab.active[data-tab="elements"] .itab-ic { stroke: #f59e0b; }
+
+.itab.active[data-tab="results"] {
+  background: #fff;
+  border-color: #10b981;
+  color: #059669;
+  box-shadow: 0 2px 8px rgba(16,185,129,.18);
+}
+.itab.active[data-tab="results"] .itab-ic { stroke: #10b981; }
+
+.itab.active[data-tab="report"] {
+  background: #fff;
+  border-color: #64748b;
+  color: #475569;
+  box-shadow: 0 2px 8px rgba(100,116,139,.18);
+}
+.itab.active[data-tab="report"] .itab-ic { stroke: #64748b; }
+
+/* =====================================================================
+   PANEL SECTION HEADINGS — colored accents by context
+   ===================================================================== */
+
+/* Bump base font size in col-input */
+.col-input { font-size: .88rem; }
+
+/* Larger, colored panel section headers */
+.panel-section-head {
+  border-bottom: 1px solid var(--slate-150);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+}
+.panel-section h4 {
+  font-size: .75rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--slate-500);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Colored left-pip on h4 via a pseudo-element */
+.panel-section h4::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--cyan-500);
+  flex: none;
+}
+
+/* Override pip colors for specific tabs */
+#tab-geometry  .panel-section h4::before { background: #6366f1; }
+#tab-enclosure .panel-section h4::before { background: #8b5cf6; }
+#tab-elements  .panel-section h4::before { background: #f59e0b; }
+#tab-results   .panel-section h4::before { background: #10b981; }
+#tab-report    .panel-section h4::before { background: #64748b; }
+
+/* Slightly bolder labels */
+.field label { font-size: .81rem; font-weight: 600; color: var(--slate-700); }
+
+/* Panel section subtle bg */
+.panel-section {
+  background: var(--white);
+  border: 1px solid var(--slate-150);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+/* Tab-strip in workspace: give input-tabs its own visual row */
+#wsWindWorkspace .tab-strip {
+  flex-wrap: wrap;
+}
+#wsWindWorkspace .tab-strip-actions {
+  padding: 6px 0;
+}
+
+/* diagram canvas needs full height in col-diagram */
+.diagram-canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
