@@ -831,6 +831,13 @@ class Wind3DRenderer {
       const _vr   = _r2 > 0.5
         ? Math.min(zone_a*L_hip / (2*_hipHB*_r2), 0.45)
         : 0.45;                                                               // hip-ridge v at u=1
+      /* Corrected v-boundaries at the actual u-endpoints of the hip strips.
+         Hip strips run u=[_ua, 1-_ua2]; zHalf varies so _ve/_vr (computed at
+         u=0 and u=1) are wrong at the truncated endpoints.                        */
+      const _zH_ua  = (1 - _ua)  * _hipHL + _ua        * _r2;   // zHalf at u=_ua
+      const _zH_ua2 =      _ua2  * _hipHL + (1 - _ua2) * _r2;   // zHalf at u=1-_ua2
+      const _ve_h   = Math.min(zone_a*L_hip / (2*_hipHB * _zH_ua),  0.45); // v at strip start
+      const _vr_h   = Math.min(zone_a*L_hip / (2*_hipHB * _zH_ua2), 0.45); // v at strip end
 
       /* Helper: explicit quad mesh */
       const addQuadMesh = (p0, p1, p2, p3, norm_, zt, op, eps) => {
@@ -850,31 +857,32 @@ class Wind3DRenderer {
 
       /* ── Trapezoidal main slopes: Zone 2 is a continuous U-shaped band ── */
       const drawHipMainSlope = (ptFn, norm, doLbl) => {
-        /* Zone 1: interior quadrilateral — bounded by Zone 3 bottom, Zone 2 on 3 other sides
-           Corners at the four inner-boundary intersection points                            */
+        /* Zone 1: interior — use _ve_h/_vr_h (calibrated at the strip endpoints u=_ua
+           and u=1-_ua2) so the corners align exactly with the hip strip inner edges.    */
         addQuadMesh(
-          ptFn(_ua,    _ve,    0,0,0,0),   // bottom-left
-          ptFn(_ua,  1-_ve,   0,0,0,0),   // bottom-right
-          ptFn(1-_ua2, 1-_vr, 0,0,0,0),   // top-right
-          ptFn(1-_ua2,   _vr, 0,0,0,0),   // top-left
+          ptFn(_ua,      _ve_h,  0,0,0,0),   // bottom-left
+          ptFn(_ua,    1-_ve_h,  0,0,0,0),   // bottom-right
+          ptFn(1-_ua2, 1-_vr_h, 0,0,0,0),   // top-right
+          ptFn(1-_ua2,   _vr_h, 0,0,0,0),   // top-left
           norm, 'zone-1', 0.20, 0.02
         );
 
         /* Zone 2 — non-overlapping U-shaped band:
            hip strips run only u=[_ua, 1-_ua2]; ridge block u=[1-_ua2, 1] full v.
-           Zone 3 u=[0,_ua]. All pieces share edges only — no double-alpha.             */
+           Zone 3 u=[0,_ua]. All pieces share edges only — no double-alpha.
+           _ve_h/_vr_h keep the inner boundary exactly parallel to the hip ridges.       */
 
-        /* Back hip strip: u=[_ua, 1-_ua2], v=[0 → _ve.._vr] */
+        /* Back hip strip: u=[_ua, 1-_ua2], v=[0 → _ve_h.._vr_h] */
         addQuadMesh(
-          ptFn(_ua,      0, 0,0,0,0), ptFn(_ua,     _ve, 0,0,0,0),
-          ptFn(1-_ua2, _vr, 0,0,0,0), ptFn(1-_ua2,    0, 0,0,0,0),
+          ptFn(_ua,        0, 0,0,0,0), ptFn(_ua,      _ve_h, 0,0,0,0),
+          ptFn(1-_ua2, _vr_h, 0,0,0,0), ptFn(1-_ua2,       0, 0,0,0,0),
           norm, 'zone-2', 0.35, 0.07
         );
 
-        /* Front hip strip: u=[_ua, 1-_ua2], v=[1-_ve..1-_vr → 1] */
+        /* Front hip strip: u=[_ua, 1-_ua2], v=[1-_ve_h..1-_vr_h → 1] */
         addQuadMesh(
-          ptFn(_ua,    1-_ve, 0,0,0,0), ptFn(_ua,        1, 0,0,0,0),
-          ptFn(1-_ua2,     1, 0,0,0,0), ptFn(1-_ua2, 1-_vr, 0,0,0,0),
+          ptFn(_ua,    1-_ve_h, 0,0,0,0), ptFn(_ua,          1, 0,0,0,0),
+          ptFn(1-_ua2,       1, 0,0,0,0), ptFn(1-_ua2, 1-_vr_h, 0,0,0,0),
           norm, 'zone-2', 0.35, 0.07
         );
 
@@ -954,27 +962,30 @@ class Wind3DRenderer {
           this._zoneMeshes.push(mesh);
         };
 
-        /* M_L / M_R: Zone 2 inner boundary at Zone 3 level — Zone 2 starts here,
-           no overlap with Zone 3 (they share the D–M_L and E–M_R edges only)          */
+        /* M_L / M_R: Zone 2 inner boundary at Zone 3 level                            */
         const t_inn = Math.min(t_b / Math.max(s_top, 0.01), 0.99);
         const M_L   = lerp3(P_L_base, P_L_top, t_inn);
         const M_R   = lerp3(P_R_base, P_R_top, t_inn);
 
-        /* Zone 1: interior quad (M_L, M_R, P_R_top, P_L_top) */
+        /* Mx: where Zone 2-left inner boundary crosses the apex axis x=0.
+           Splitting both Zone 2 strips at this axis (left half → Zone 2 left,
+           right half → Zone 2 right) eliminates the apex triangle and all
+           interior overlaps. The two strips share only the edge Mx→C.              */
+        const t_x0 = Math.min(Math.max((-P_L_x) / (P_L_top.x - P_L_x + 1e-6), 0), 1);
+        const Mx   = lerp3(P_L_base, P_L_top, t_x0);   // Mx.x ≈ 0
+
+        /* Zone 1: triangle (M_L, M_R, Mx) — interior, above Zone 3 */
         if (M_L.x < M_R.x - 0.1) {
-          addTriPart([M_L, M_R, P_R_top, P_L_top], 'zone-1', 0.20, 0.02);
+          addTriPart([M_L, M_R, Mx], 'zone-1', 0.20, 0.02);
         }
 
-        /* Zone 2 left: (D, M_L, P_L_top, C) — starts at Zone 3 boundary D, no overlap */
-        addTriPart([D, M_L, P_L_top, C], 'zone-2', 0.35, 0.07);
+        /* Zone 2 left: quad (D, M_L, Mx, C) — x≤0 side, joins Zone 2 right at Mx→C */
+        addTriPart([D, M_L, Mx, C], 'zone-2', 0.35, 0.07);
 
-        /* Zone 2 right: (M_R, E, C, P_R_top) — starts at Zone 3 boundary E, no overlap */
-        addTriPart([M_R, E, C, P_R_top], 'zone-2', 0.35, 0.07);
+        /* Zone 2 right: quad (M_R, E, C, Mx) — x≥0 side, no interior overlap */
+        addTriPart([M_R, E, C, Mx], 'zone-2', 0.35, 0.07);
 
-        /* Zone 2 apex: (P_L_top, P_R_top, C) — shares edges only with left/right */
-        addTriPart([P_L_top, P_R_top, C], 'zone-2', 0.35, 0.07);
-
-        /* Zone 3: (A, Bv, E, D) — meets Zone 2 exactly at the D–E edge, no overlap */
+        /* Zone 3: (A, Bv, E, D) — meets Zone 2 exactly at D–E edge */
         addTriPart([A, Bv, E, D], 'zone-3', 0.50, 0.12);
       }
 
