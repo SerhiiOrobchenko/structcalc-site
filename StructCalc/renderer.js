@@ -944,11 +944,35 @@ class Wind3DRenderer {
       lmesh.userData.dimId   = dimId;
       grp.add(lmesh);
       if (this._dimLabelMeshes) this._dimLabelMeshes.push(lmesh);
+
+      // Store closure so highlightDim() can redraw the canvas texture
+      grp.userData.setLabelActive = function(active) {
+        lctx.clearRect(0, 0, LCW, LCH);
+        lctx.fillStyle = active ? 'rgba(6,182,212,0.92)' : THEME.dimBg;
+        lctx.beginPath();
+        lctx.moveTo(rad, 0); lctx.lineTo(LCW - rad, 0);
+        lctx.arcTo(LCW, 0, LCW, LCH, rad);
+        lctx.lineTo(LCW, LCH - rad);
+        lctx.arcTo(LCW, LCH, LCW - rad, LCH, rad);
+        lctx.lineTo(rad, LCH);
+        lctx.arcTo(0, LCH, 0, LCH - rad, rad);
+        lctx.lineTo(0, rad);
+        lctx.arcTo(0, 0, rad, 0, rad);
+        lctx.closePath();
+        lctx.fill();
+        lctx.strokeStyle = active ? '#0891b2' : '#334155';
+        lctx.lineWidth   = 1.5;
+        lctx.stroke();
+        lctx.fillStyle    = active ? '#ffffff' : THEME.dimText;
+        lctx.font         = LF;
+        lctx.textBaseline = 'middle';
+        lctx.fillText(text, LPAD, LCH / 2);
+        ltex.needsUpdate = true;
+      };
     }
 
     // Store lines for colour toggling
     grp.userData.lines    = grp.children.filter(c => c.isLine);
-    grp.userData.labelEl  = null;
     return grp;
   }
 
@@ -1760,12 +1784,7 @@ class Wind3DRenderer {
     if (!dg) return;
     const col = active ? THEME.dimActive : THEME.dimLine;
     (dg.userData.lines || []).forEach(l => l.material.color.setHex(col));
-    if (dg.userData.labelEl) {
-      const el = dg.userData.labelEl;
-      el.style.color      = active ? '#fff'               : THEME.dimText;
-      el.style.background = active ? 'rgba(6,182,212,.92)': THEME.dimBg;
-      el.style.border     = active ? '1px solid #0891b2'  : '1px solid #334155';
-    }
+    if (dg.userData.setLabelActive) dg.userData.setLabelActive(active);
   }
 
   onZoneClick(cb) { this._clickCB = cb; }

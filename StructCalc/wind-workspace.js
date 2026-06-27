@@ -696,6 +696,35 @@ function wireWindInputs() {
 
   /* Roof pitch unit toggle */
   wirePitchToggle();
+
+  /* ── 3D renderer: dim highlight on input focus/blur ──────────────────── */
+  var dimInputMap = {
+    'wind-B':     ['dim-B'],
+    'wind-L':     ['dim-L'],
+    'wind-h':     ['dim-h', 'dim-h-eave'],
+    'wind-theta': [],
+  };
+  Object.keys(dimInputMap).forEach(function(inputId) {
+    var el = document.getElementById(inputId);
+    if (!el) return;
+    el.addEventListener('focus', function() {
+      dimInputMap[inputId].forEach(function(d) {
+        if (windRenderer) windRenderer.highlightDim(d, true);
+      });
+    });
+    el.addEventListener('blur', function() {
+      dimInputMap[inputId].forEach(function(d) {
+        if (windRenderer) windRenderer.highlightDim(d, false);
+      });
+    });
+  });
+
+  /* ── 3D renderer: zone click → switch to geometry tab ───────────────── */
+  if (windRenderer) {
+    windRenderer.onZoneClick(function(zoneType) {
+      activateInputTab('geometry');
+    });
+  }
 }
 
 /* ── Pitch toggle: deg ↔ X:12 with live conversion display ────────────── */
