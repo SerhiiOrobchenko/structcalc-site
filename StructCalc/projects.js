@@ -199,5 +199,8 @@ var elStatusUnits  = document.getElementById('statusUnits');
 var elStatusMsg    = document.getElementById('statusMsg');
 var elStatusDetail = document.getElementById('statusDetail');
 var elCtxMenu      = document.getElementById('ctx-menu');
-var elWsContent    = document.getElementById('wsContent');
-var elWsMain       = docu
+var elWsMain       = document.getElementById('wsWindWorkspace');
+
+var activeCalcId   = null;   // currently shown calc id
+var loadedScripts  = {};     // { path: true } to avoid double-loading
+var ctxTargetId    = null;   // calc id for context menu
