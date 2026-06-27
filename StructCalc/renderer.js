@@ -23,12 +23,12 @@ const THEME = {
   gnd        : 0xe2ecf5,   // ground plane, slightly darker than bg
 
   wallFill   : 0xbdd4e8,   // medium-pale blue — wall faces
-  wallEdge   : 0x323232,   // near-black contour
+  wallEdge   : 0x0e7490,   // dark cyan contour (cyan-700)
   roofFill   : 0x38bdf8,   // sky blue roof
-  roofEdge   : 0x323232,
+  roofEdge   : 0x0e7490,
   gableFill  : 0x7bb8e0,
-  gableEdge  : 0x323232,
-  ridge      : 0x323232,   // near-black ridge
+  gableEdge  : 0x0e7490,
+  ridge      : 0x0e7490,   // dark cyan ridge
 
   dimLine    : 0x5b7fa8,   // muted blue-grey dim lines
   dimActive  : 0x0284c7,   // strong cyan/blue for hover
@@ -87,6 +87,7 @@ class Wind3DRenderer {
     this._initGrid();
     this._initControls();
     this._bindEvents();
+    this._initViewCube();
     this._animate();
   }
 
@@ -161,6 +162,149 @@ class Wind3DRenderer {
     this._controls.update();
   }
 
+  /* ── Revit-style view cube ──────────────────────────────────────────────── */
+
+  _initViewCube() {
+    // Ensure container is positioned so the overlay canvas can be absolute-placed
+    if (getComputedStyle(this._container).position === 'static') {
+      this._container.style.position = 'relative';
+    }
+
+    // Small overlay canvas (bottom-right corner)
+    const vc = document.createElement('canvas');
+    vc.style.cssText = [
+      'position:absolute', 'bottom:12px', 'right:12px',
+      'width:90px', 'height:90px', 'cursor:pointer',
+      'border-radius:7px',
+      'box-shadow:0 2px 10px rgba(0,0,0,0.22)',
+      'z-index:10',
+    ].join(';');
+    vc.width = 90; vc.height = 90;
+    this._container.appendChild(vc);
+    this._vcCanvas = vc;
+
+    const vcR = new THREE.WebGLRenderer({ canvas: vc, antialias: true, alpha: true });
+    vcR.setSize(90, 90);
+    vcR.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    vcR.setClearColor(0x000000, 0);
+    this._vcRenderer = vcR;
+
+    this._vcScene  = new THREE.Scene();
+    this._vcCamera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+
+    // Canvas texture factory for each face
+    const faceTex = (label, topLine) => {
+      const c = document.createElement('canvas');
+      c.width = 128; c.height = 128;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#0e7490';
+      ctx.fillRect(0, 0, 128, 128);
+      // Subtle inner border
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(4, 4, 120, 120);
+      ctx.fillStyle = '#ffffff';
+      if (topLine) {
+        ctx.font = 'bold 22px "JetBrains Mono",monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(topLine, 64, 44);
+        ctx.font = 'bold 20px "JetBrains Mono",monospace';
+        ctx.fillText(label, 64, 82);
+      } else {
+        ctx.font = 'bold 26px "JetBrains Mono",monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, 64, 64);
+      }
+      return new THREE.CanvasTexture(c);
+    };
+
+    // BoxGeometry material order: +X, -X, +Y, -Y, +Z, -Z
+    this._vcFaceDirs = [
+      new THREE.Vector3( 1,  0,  0),  // 0 Right
+      new THREE.Vector3(-1,  0,  0),  // 1 Left
+      new THREE.Vector3( 0,  1,  0),  // 2 Top
+      new THREE.Vector3( 0, -1,  0),  // 3 Bottom
+      new THREE.Vector3( 0,  0,  1),  // 4 Front
+      new THREE.Vector3( 0,  0, -1),  // 5 Back
+    ];
+    const faceLabels = [
+      ['RIGHT', null], ['LEFT', null],
+      ['TOP',   null], ['BTM',  null],
+      ['FRONT', null], ['BACK', null],
+    ];
+
+    const geo  = new THREE.BoxGeometry(1.1, 1.1, 1.1);
+    const mats = faceLabels.map(([lbl, sub]) =>
+      new THREE.MeshBasicMaterial({ map: faceTex(lbl, sub), transparent: false })
+    );
+    this._vcCube = new THREE.Mesh(geo, mats);
+    this._vcScene.add(this._vcCube);
+
+    // Edge lines for crisp cube outline
+    const edgeGeo = new THREE.EdgesGeometry(geo);
+    this._vcScene.add(new THREE.LineSegments(
+      edgeGeo,
+      new THREE.LineBasicMaterial({ color: 0x083344 })
+    ));
+
+    // Click → camera preset
+    vc.addEventListener('click', e => this._handleViewCubeClick(e));
+
+    // Hover highlight
+    vc.addEventListener('mousemove', e => {
+      const fi = this._vcFaceUnder(e);
+      this._vcCanvas.title = fi >= 0
+        ? ['Right','Left','Top','Bottom','Front','Back'][fi]
+        : '';
+    });
+  }
+
+  _vcFaceUnder(e) {
+    const rect = this._vcCanvas.getBoundingClientRect();
+    const ndcX =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+    const ndcY = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+    const rc   = new THREE.Raycaster();
+    rc.setFromCamera(new THREE.Vector2(ndcX, ndcY), this._vcCamera);
+    const hits = rc.intersectObject(this._vcCube);
+    return hits.length ? hits[0].face.materialIndex : -1;
+  }
+
+  _handleViewCubeClick(e) {
+    const fi = this._vcFaceUnder(e);
+    if (fi < 0) return;
+
+    const faceDir = this._vcFaceDirs[fi].clone();
+    const target  = this._controls.target.clone();
+    const dist    = this._camera.position.distanceTo(target);
+
+    // Slight elevation offset for Top/Bottom so OrbitControls stays happy
+    if (fi === 2) faceDir.set(0.04, 1, 0.04).normalize();
+    if (fi === 3) faceDir.set(0.04, -1, 0.04).normalize();
+
+    const newPos = target.clone().addScaledVector(faceDir, dist);
+    this._animateCameraTo(newPos);
+  }
+
+  _animateCameraTo(targetPos) {
+    if (this._camAnimId) cancelAnimationFrame(this._camAnimId);
+    const startPos = this._camera.position.clone();
+    const t0  = performance.now();
+    const dur = 480;
+
+    const step = () => {
+      const raw  = (performance.now() - t0) / dur;
+      const t    = Math.min(raw, 1);
+      const ease = t < 0.5 ? 2*t*t : -1 + (4 - 2*t)*t;  // ease-in-out quad
+      this._camera.position.lerpVectors(startPos, targetPos, ease);
+      this._controls.update();
+      if (t < 1) this._camAnimId = requestAnimationFrame(step);
+      else        this._camAnimId = null;
+    };
+    step();
+  }
+
   _bindEvents() {
     // rAF-deferred resize: reads container size after flex/grid layout finishes
     this._onResize = () => {
@@ -196,6 +340,15 @@ class Wind3DRenderer {
     this._controls.update();
     this._renderer.render(this._scene, this._camera);
     if (this._labelRenderer) this._labelRenderer.render(this._scene, this._camera);
+
+    // Sync view cube to main camera orientation and render
+    if (this._vcRenderer && this._vcCamera) {
+      const dir = new THREE.Vector3();
+      this._camera.getWorldDirection(dir);
+      this._vcCamera.position.copy(dir.negate().multiplyScalar(3.5));
+      this._vcCamera.lookAt(0, 0, 0);
+      this._vcRenderer.render(this._vcScene, this._vcCamera);
+    }
   }
 
   /* ── tube edge helpers — CylinderGeometry segments for thick contours ──── */
@@ -279,7 +432,7 @@ class Wind3DRenderer {
     const solidMat = c => new THREE.MeshStandardMaterial({
       color:c, transparent:true, opacity:0.96, side:THREE.FrontSide,
     });
-    const EDGE_R = 0.22; // tube radius in world units (~4-5px at normal view distance)
+    const EDGE_R = 0.11; // tube radius in world units (~4-5px at normal view distance)
 
     // -- walls (solid near-opaque: depth buffer hides back edges)
     const boxGeo = new THREE.BoxGeometry(B, hEave, L);
@@ -338,7 +491,7 @@ class Wind3DRenderer {
     if (B > L) { [B, L] = [L, B]; }
     const hB = B / 2, hL = L / 2;
     const grp = new THREE.Group();
-    const EDGE_R = 0.22;
+    const EDGE_R = 0.11;
     const solidMat = c => new THREE.MeshStandardMaterial({
       color: c, transparent: true, opacity: 0.96, side: THREE.FrontSide,
     });
@@ -410,7 +563,7 @@ class Wind3DRenderer {
        hHigh = high eave height (windward, X = -B/2) */
     const hB = B / 2, hL = L / 2;
     const grp = new THREE.Group();
-    const EDGE_R = 0.22;
+    const EDGE_R = 0.11;
     const solidMat = c => new THREE.MeshStandardMaterial({
       color: c, transparent: true, opacity: 0.96, side: THREE.FrontSide,
     });
@@ -741,7 +894,7 @@ class Wind3DRenderer {
 
     const tex = new THREE.CanvasTexture(cv);
     const aspect  = CW / CH;          // ≈ 3.69
-    const planeH  = 2.8;              // world units (ft)
+    const planeH  = 1.4;              // world units (ft) — half size
     const planeW  = planeH * aspect;
 
     const geo = new THREE.PlaneGeometry(planeW, planeH);
@@ -959,8 +1112,11 @@ class Wind3DRenderer {
         addZone(0, _ua, 0, 1, THEME.zone3, 0.50, 'zone-3', 0.12, ptFn, norm, false);
 
         /* Flat on-surface labels — glued to slope, rotate with building.
-           textDir = (0,0,1): parallel to ridge (Z axis) on trapezoidal slopes.   */
-        const _tD = new THREE.Vector3(0, 0, 1);
+           textDir along Z (ridge direction). Flip for right slope so text reads
+           in the same apparent direction when that face is viewed head-on.        */
+        const _tD = norm.x < 0
+          ? new THREE.Vector3(0, 0,  1)   // left slope  (norm.x < 0): front→back
+          : new THREE.Vector3(0, 0, -1);  // right slope (norm.x > 0): back→front
         const _uM = (_ua + 1 - _ua2) / 2;   // mid-u of Zone 1/hip-strip range
         this._makeZoneLabelFlat(
           'zone-1', ptFn(_uM, 0.5, 0,0,0,0), norm, _tD
@@ -1069,8 +1225,8 @@ class Wind3DRenderer {
         addTriPart([A, Bv, E, D], 'zone-3', 0.50, 0.12);
 
         /* Flat on-surface labels for this triangular slope.
-           textDir = from eave midpoint toward apex — perpendicular to ridge.      */
-        const _triTD = new THREE.Vector3(0, hRidge - hEave, zs * (_r2 - _hipHL)).normalize();
+           textDir = (1,0,0): horizontal across eave — rotated 90° from uphill.   */
+        const _triTD = new THREE.Vector3(1, 0, 0);
 
         // Zone 1 centroid: average of triangle (M_L, M_R, Mx)
         const _ctr1 = new THREE.Vector3(
