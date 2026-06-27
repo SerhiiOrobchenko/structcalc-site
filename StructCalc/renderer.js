@@ -260,15 +260,17 @@ class Wind3DRenderer {
 
     // [css_cx, css_cy, css_cz, tjs_dx, tjs_dy, tjs_dz]
     // CSS +Y is down; Three.js +Y is up → tjs_dy = -(css_cy sign)
+    // Offset by (HALF - MHALF) so each mini-cube is flush with (not protruding from) the main face.
+    const CI = HALF - MHALF;   // inset amount
     const corners = [
-      [ HALF, -HALF,  HALF,  1,  1,  1],
-      [-HALF, -HALF,  HALF, -1,  1,  1],
-      [ HALF, -HALF, -HALF,  1,  1, -1],
-      [-HALF, -HALF, -HALF, -1,  1, -1],
-      [ HALF,  HALF,  HALF,  1, -1,  1],
-      [-HALF,  HALF,  HALF, -1, -1,  1],
-      [ HALF,  HALF, -HALF,  1, -1, -1],
-      [-HALF,  HALF, -HALF, -1, -1, -1],
+      [ CI, -CI,  CI,  1,  1,  1],
+      [-CI, -CI,  CI, -1,  1,  1],
+      [ CI, -CI, -CI,  1,  1, -1],
+      [-CI, -CI, -CI, -1,  1, -1],
+      [ CI,  CI,  CI,  1, -1,  1],
+      [-CI,  CI,  CI, -1, -1,  1],
+      [ CI,  CI, -CI,  1, -1, -1],
+      [-CI,  CI, -CI, -1, -1, -1],
     ];
 
     corners.forEach(([cx, cy, cz, dx, dy, dz]) => {
@@ -695,7 +697,7 @@ class Wind3DRenderer {
         (p0.x+p1.x+p2.x+p3.x)/4,
         (p0.y+p1.y+p2.y+p3.y)/4,
         (p0.z+p1.z+p2.z+p3.z)/4
-      ).addScaledVector(norm, 0.30);
+      ).addScaledVector(norm, 0.04);
       this._makeZoneLabelFlat(zt, ctr, norm, tDir);
     };
 
@@ -968,13 +970,16 @@ class Wind3DRenderer {
     // ── h (ridge) — Left face, slightly further out, y=0→hRidge ───────────
     const hXh = -hB - D * 1.6;
     const hZh = hL;
+    // Upper ext line of 'h': extend from the extended left-slope-plane intersection
+    // at y=hRidge, z=hZh. For hip roof, that plane intersection is at x=0.
+    const hExtTopX = roofShape === 'hip' ? 0 : -hB;
     grp.add(this._buildDim(
       new THREE.Vector3(hXh, EPS_Y,   hZh),
       new THREE.Vector3(hXh, hRidge,  hZh),
       new THREE.Vector3(-1, 1, 0).normalize(),
       [
-        [new THREE.Vector3(hXhe, EPS_Y,   hZh), new THREE.Vector3(hXh, EPS_Y,   hZh)],
-        [new THREE.Vector3(hXhe, hRidge,  hZh), new THREE.Vector3(hXh, hRidge,  hZh)],
+        [new THREE.Vector3(hXhe,     EPS_Y,   hZh), new THREE.Vector3(hXh, EPS_Y,   hZh)],
+        [new THREE.Vector3(hExtTopX, hRidge,  hZh), new THREE.Vector3(hXh, hRidge,  hZh)],
       ],
       `h = ${fmt(hLabel ?? hRidge)} ft`, 'dim-h', 'inp-h'
     ));
@@ -984,7 +989,7 @@ class Wind3DRenderer {
     const aOFF = D * 0.4;
 
     // ── Eave "a" — Front face right side (zone 3 strip from Back toward front right) ──
-    const aFZ = hL + aOFF;
+    const aFZ = hL + D * 0.7;   // move Front-face 'a' dims further out
     grp.add(this._buildDim(
       new THREE.Vector3(hB - zone_a, aEY, aFZ),
       new THREE.Vector3(hB,          aEY, aFZ),
@@ -1013,7 +1018,7 @@ class Wind3DRenderer {
 
     // ── Zone 5 base dims (y = EPS_Y) ─────────────────────────────────────────
     // Front face RIGHT corner base
-    const az5FZ = hL + aOFF;
+    const az5FZ = hL + D * 0.7;
     grp.add(this._buildDim(
       new THREE.Vector3(hB - zone_a, EPS_Y, az5FZ),
       new THREE.Vector3(hB,          EPS_Y, az5FZ),
@@ -1125,12 +1130,14 @@ class Wind3DRenderer {
         const ctr3  = new THREE.Vector3(0, (hEave + hRidge) * 0.4, (hL + r2) * 0.5);
         if (perpH.dot(new THREE.Vector3().subVectors(ctr3, Bv)) < 0) perpH.negate();
         // Place the dim slightly above eave (halfway up the slope)
-        const mid   = Bv.clone().lerp(Cv, 0.3);
+        const mid   = Bv.clone().lerp(Cv, 0.55);   // midway up hip = Zone 2 area
         const qa1   = mid.clone();
         const qa2   = mid.clone().addScaledVector(perpH, zone_a);
-        const stub  = hipDir.clone().multiplyScalar(0.5);
+        // tick at 45° between hip direction and perpH (both in slope plane)
+        const tick45T = hipDir.clone().add(perpH).normalize();
+        const stub    = hipDir.clone().multiplyScalar(0.5);
         grp.add(this._buildDim(
-          qa1, qa2, hipDir,
+          qa1, qa2, tick45T,
           [
             [qa1.clone().sub(stub), qa1.clone()],
             [qa2.clone().sub(stub), qa2.clone()],
@@ -1157,12 +1164,14 @@ class Wind3DRenderer {
         const ctrR  = new THREE.Vector3(hB * 0.5, hEave * 0.5 + hRidge * 0.5, 0);
         if (perpH.dot(new THREE.Vector3().subVectors(ctrR, Bv)) < 0) perpH.negate();
         // Place at midpoint of front hip of right slope
-        const mid  = Bv.clone().lerp(Cv, 0.3);
+        const mid  = Bv.clone().lerp(Cv, 0.55);  // midway up hip = Zone 2 area
         const qa1  = mid.clone();
         const qa2  = mid.clone().addScaledVector(perpH, zone_a);
+        // tick at 45° between hip direction and perpH (both in slope plane)
+        const tick45R = hipDir.clone().add(perpH).normalize();
         const stub = hipDir.clone().multiplyScalar(0.5);
         grp.add(this._buildDim(
-          qa1, qa2, hipDir,
+          qa1, qa2, tick45R,
           [
             [qa1.clone().sub(stub), qa1.clone()],
             [qa2.clone().sub(stub), qa2.clone()],
@@ -1278,34 +1287,20 @@ class Wind3DRenderer {
 
     // Zone 5 uses a vertical (portrait) canvas — text reads upward.
     // All other zones use the standard landscape pill.
-    const isVertical = zoneType === 'zone-5';
-
-    const FONT_SIZE = 24;
-    const PAD = 10;
-    let CW, CH;
-    if (isVertical) {
-      // Portrait: fixed width, text rotated 90° CCW on canvas
-      CH = 44;   // this becomes the plane's WIDTH in world space
-      const _cv0 = document.createElement('canvas');
-      _cv0.width = 4; _cv0.height = CH;
-      const _ctx0 = _cv0.getContext('2d');
-      _ctx0.font = `bold ${FONT_SIZE}px "JetBrains Mono",monospace`;
-      CW = Math.ceil(_ctx0.measureText(cfg.text).width) + 2 * PAD;
-      // Swap so the canvas is portrait (tall)
-      [CW, CH] = [CH, CW];
-    } else {
-      CH = 44;
-      const _cv0 = document.createElement('canvas');
-      _cv0.width = 4; _cv0.height = CH;
-      const _ctx0 = _cv0.getContext('2d');
-      _ctx0.font = `bold ${FONT_SIZE}px "JetBrains Mono",monospace`;
-      CW = Math.ceil(_ctx0.measureText(cfg.text).width) + 2 * PAD;
-    }
+    // Uniform landscape label for all zones (zone-5 same size as 1-4)
+    const FONT_SIZE = 16;   // 1.5× smaller than original 24px
+    const PAD = 7;
+    const CH  = 30;         // canvas height (was 44, reduced 1.5×)
+    const _cv0 = document.createElement('canvas');
+    _cv0.width = 4; _cv0.height = CH;
+    const _ctx0 = _cv0.getContext('2d');
+    _ctx0.font = `bold ${FONT_SIZE}px "JetBrains Mono",monospace`;
+    const CW  = Math.ceil(_ctx0.measureText(cfg.text).width) + 2 * PAD;
 
     const cv  = document.createElement('canvas');
     cv.width  = CW; cv.height = CH;
     const ctx = cv.getContext('2d');
-    const rad = 8;
+    const rad = 5;
     ctx.beginPath();
     ctx.moveTo(rad, 0); ctx.lineTo(CW-rad, 0);
     ctx.arcTo(CW, 0, CW, rad, rad);
@@ -1322,22 +1317,12 @@ class Wind3DRenderer {
     ctx.font = `bold ${FONT_SIZE}px "JetBrains Mono",monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    if (isVertical) {
-      // Rotate canvas 90° CCW so text reads upward on wall
-      ctx.save();
-      ctx.translate(CW / 2, CH / 2);
-      ctx.rotate(-Math.PI / 2);
-      ctx.fillText(cfg.text, 0, 0);
-      ctx.restore();
-    } else {
-      ctx.fillText(cfg.text, CW / 2, CH / 2);
-    }
+    ctx.fillText(cfg.text, CW / 2, CH / 2);
 
-    const tex = new THREE.CanvasTexture(cv);
-    // For vertical label: aspect is CH/CW (tall portrait)
-    const aspect  = isVertical ? CH / CW : CW / CH;
-    const planeH  = 1.4;              // world units — shorter side
-    const planeW  = isVertical ? planeH / aspect : planeH * aspect;
+    const tex    = new THREE.CanvasTexture(cv);
+    const aspect = CW / CH;
+    const planeH = 0.93;              // world units (~1.4/1.5)
+    const planeW = planeH * aspect;
 
     const geo = new THREE.PlaneGeometry(planeW, planeH);
     const mat = new THREE.MeshBasicMaterial({
@@ -1355,7 +1340,7 @@ class Wind3DRenderer {
     const txF = new THREE.Vector3().crossVectors(ty, n).normalize();
     mesh.setRotationFromMatrix(new THREE.Matrix4().makeBasis(txF, ty, n));
 
-    mesh.position.copy(centroid).addScaledVector(n, 0.25); // tiny lift above surface
+    mesh.position.copy(centroid).addScaledVector(n, 0.06); // tiny lift above surface
     mesh.renderOrder = 3;
     this._labelGroup.add(mesh);
   }
