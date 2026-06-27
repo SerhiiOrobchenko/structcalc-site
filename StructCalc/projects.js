@@ -200,7 +200,7 @@ var elStatusMsg    = document.getElementById('statusMsg');
 var elStatusDetail = document.getElementById('statusDetail');
 var elCtxMenu      = document.getElementById('ctx-menu');
 var elWsMain       = document.getElementById('wsWindWorkspace');
+var elWsContent    = document.getElementById('wsContent');
 
 var activeCalcId   = null;   // currently shown calc id
-var loadedScripts  = {};     // { path: true } to avoid double-loading
-var ctxTargetId    = null;   // calc id for context menu
+var loadedScripts  = {};     // { path: true } to avoid double-loadin
