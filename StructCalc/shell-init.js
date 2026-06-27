@@ -6,8 +6,11 @@
    Rule: only touch when adding/removing global startup side-effects.
    ===================================================================== */
 
-renderDashboard();
+try {
+  renderDashboard();
+} catch (e) {
+  console.error('[SC] renderDashboard failed at init:', e);
+}
 
 var _initials = 'SO';
-document.getElementById('dbAvatar').textContent = _initials;
-document.getElementById('wsAvatar').textContent = _initials;
+document.getElementById('dbAvatar').te
