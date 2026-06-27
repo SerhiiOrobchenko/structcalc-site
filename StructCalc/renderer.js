@@ -30,18 +30,22 @@ const THEME = {
   gableEdge  : 0x0e7490,
   ridge      : 0x0e7490,   // dark cyan ridge
 
-  dimLine    : 0x5b7fa8,   // muted blue-grey dim lines
+  dimLine    : 0x000000,   // black dim lines
   dimActive  : 0x0284c7,   // strong cyan/blue for hover
-  dimExt     : 0x8aa5c2,   // light extension lines
+  dimExt     : 0x000000,   // black extension lines
   dimText    : '#1e3a5f',  // dark navy text — readable on light bg
   dimBg      : 'rgba(255,255,255,0.92)',
 
   zone1      : 0x22d3ee,   // cyan   — interior field
   zone2      : 0xf59e0b,   // amber  — edges
   zone3      : 0xef4444,   // red    — corners
+  zone4      : 0x22d3ee,   // cyan   — wall field
+  zone5      : 0xef4444,   // red    — wall corner strip
   zoneLabel1 : { bg:'rgba(6,182,212,0.85)',  fg:'#fff' },
   zoneLabel2 : { bg:'rgba(217,119,6,0.88)',  fg:'#fff' },
   zoneLabel3 : { bg:'rgba(220,38,38,0.88)',  fg:'#fff' },
+  zoneLabel4 : { bg:'rgb(6,182,212)',        fg:'#fff' },
+  zoneLabel5 : { bg:'rgb(220,38,38)',        fg:'#fff' },
 };
 
 /* =========================================================================
@@ -179,7 +183,7 @@ class Wind3DRenderer {
     // Outer wrapper — perspective container, top-right with margin
     const wrap = document.createElement('div');
     wrap.style.cssText = [
-      'position:absolute', 'top:16px', 'right:16px',
+      'position:absolute', 'top:28px', 'right:28px',
       `width:${S}px`, `height:${S}px`,
       `perspective:${S * 3.5}px`,
       'z-index:10',
@@ -200,7 +204,7 @@ class Wind3DRenderer {
     const BG   = 'rgba(14,116,144,0.06)';
     const BGHV = 'rgba(14,116,144,0.22)';
     const BORD = 'rgba(14,116,144,0.38)';
-    const FG   = '#0e7490';   // dark cyan text
+    const FG   = '#000000';   // black text
 
     // ── Faces ────────────────────────────────────────────────────────────────
     const faces = [
@@ -223,7 +227,7 @@ class Wind3DRenderer {
         `background:${BG}`, `border:1px solid ${BORD}`,
         `color:${FG}`,
         'font-family:"JetBrains Mono",monospace',
-        'font-size:8px', 'font-weight:700', 'letter-spacing:0.08em',
+        'font-size:18px', 'font-weight:700', 'letter-spacing:0.02em',
         'cursor:pointer', 'user-select:none', 'box-sizing:border-box',
         `transform:${ry}${rx}translateZ(${HALF}px)`,
         'backface-visibility:hidden', 'transition:background 0.12s',
@@ -261,26 +265,22 @@ class Wind3DRenderer {
       const dot = document.createElement('div');
       dot.style.cssText = [
         'position:absolute',
-        'width:8px', 'height:8px',
-        'border-radius:50%',
-        `background:${BORD}`,
-        'border:1px solid rgba(14,116,144,0.6)',
+        'width:13px', 'height:13px',
+        // no border-radius → square indicator
+        `background:rgba(0,0,0,0.28)`,
+        'border:1px solid rgba(0,0,0,0.55)',
         'cursor:pointer', 'box-sizing:border-box',
         'left:50%', 'top:50%',
         // center on corner point; CSS right-to-left: first 3D translates, then -50% centering
         `transform:translate(-50%,-50%) translateX(${cx}px) translateY(${cy}px) translateZ(${cz}px)`,
-        'transition:background 0.12s, transform 0.12s',
+        'transition:background 0.12s',
       ].join(';');
 
       dot.addEventListener('mouseenter', () => {
-        dot.style.background = 'rgba(6,182,212,0.9)';
-        dot.style.transform =
-          `translate(-50%,-50%) translateX(${cx}px) translateY(${cy}px) translateZ(${cz}px) scale(1.5)`;
+        dot.style.background = 'rgba(0,0,0,0.60)';
       });
       dot.addEventListener('mouseleave', () => {
-        dot.style.background = BORD;
-        dot.style.transform =
-          `translate(-50%,-50%) translateX(${cx}px) translateY(${cy}px) translateZ(${cz}px)`;
+        dot.style.background = 'rgba(0,0,0,0.28)';
       });
       dot.addEventListener('click', e => {
         e.stopPropagation();
@@ -638,6 +638,165 @@ class Wind3DRenderer {
 
   /* ── dimension system ───────────────────────────────────────────────────── */
 
+  /* ── wall zone 4/5 overlay ─────────────────────────────────────────────────
+     Draws Zone 5 (corner strip, width=zone_a) and Zone 4 (field) on all 4
+     vertical wall faces. matZ(color, opacity) is the same factory used for
+     roof zones.                                                               */
+  _drawWallZones(B, L, hEave, zone_a, matZ) {
+    const hB = B / 2, hL = L / 2;
+    const EPS = 0.06;   // tiny outward offset to avoid z-fighting with wall mesh
+    const Z4_OP = 0.22, Z5_OP = 0.45;   // opacities for field and corner zones
+
+    /* Helper: add a wall quad (convex, given 4 corners in CCW order when viewed
+       from the outside) to this._zones with userData.zoneType set. */
+    const addWallQ = (pts, zt, op) => {
+      const geo = this._quad(pts[0], pts[1], pts[2], pts[3]);
+      const col = zt === 'zone-5' ? THEME.zone5 : THEME.zone4;
+      const m = new THREE.Mesh(geo, matZ(col, op));
+      m.renderOrder = 1;
+      m.userData = { zoneType: zt };
+      this._zones.add(m);
+      this._zoneMeshes.push(m);
+    };
+
+    /* Wall label (flat, glued to surface) at the centroid of a wall region.    */
+    const wallLabel = (zt, p0, p1, p2, p3, norm, tDir) => {
+      const ctr = new THREE.Vector3(
+        (p0.x+p1.x+p2.x+p3.x)/4,
+        (p0.y+p1.y+p2.y+p3.y)/4,
+        (p0.z+p1.z+p2.z+p3.z)/4
+      ).addScaledVector(norm, 0.30);
+      this._makeZoneLabelFlat(zt, ctr, norm, tDir);
+    };
+
+    /* ── FRONT wall  (z = +hL, outward normal +Z) ─────────────────────────── */
+    {
+      const nF = new THREE.Vector3(0, 0, 1);
+      const e  = EPS;
+      const z  = hL + e;
+      const a  = Math.min(zone_a, hB);  // clamp strip to half-width
+      const tD = new THREE.Vector3(1, 0, 0);
+
+      // Zone 5 left strip: x=-hB … -hB+a
+      const fz5L = [
+        new THREE.Vector3(-hB, 0, z),  new THREE.Vector3(-hB+a, 0, z),
+        new THREE.Vector3(-hB+a, hEave, z), new THREE.Vector3(-hB, hEave, z),
+      ];
+      addWallQ(fz5L, 'zone-5', Z5_OP);
+
+      // Zone 5 right strip: x=hB-a … hB
+      const fz5R = [
+        new THREE.Vector3(hB-a, 0, z),  new THREE.Vector3(hB, 0, z),
+        new THREE.Vector3(hB, hEave, z), new THREE.Vector3(hB-a, hEave, z),
+      ];
+      addWallQ(fz5R, 'zone-5', Z5_OP);
+
+      // Zone 4 field: x=-hB+a … hB-a (only if wide enough)
+      if (2 * a < B - 0.1) {
+        const fz4 = [
+          new THREE.Vector3(-hB+a, 0, z),  new THREE.Vector3(hB-a, 0, z),
+          new THREE.Vector3(hB-a, hEave, z), new THREE.Vector3(-hB+a, hEave, z),
+        ];
+        addWallQ(fz4, 'zone-4', Z4_OP);
+        wallLabel('zone-4', fz4[0], fz4[1], fz4[2], fz4[3], nF, tD);
+      }
+    }
+
+    /* ── BACK wall  (z = -hL, outward normal -Z) ──────────────────────────── */
+    {
+      const nB = new THREE.Vector3(0, 0, -1);
+      const e  = EPS;
+      const z  = -hL - e;
+      const a  = Math.min(zone_a, hB);
+      const tD = new THREE.Vector3(-1, 0, 0);
+
+      const bz5L = [
+        new THREE.Vector3(hB-a, 0, z),  new THREE.Vector3(hB, 0, z),
+        new THREE.Vector3(hB, hEave, z), new THREE.Vector3(hB-a, hEave, z),
+      ];
+      addWallQ(bz5L, 'zone-5', Z5_OP);
+
+      const bz5R = [
+        new THREE.Vector3(-hB, 0, z),  new THREE.Vector3(-hB+a, 0, z),
+        new THREE.Vector3(-hB+a, hEave, z), new THREE.Vector3(-hB, hEave, z),
+      ];
+      addWallQ(bz5R, 'zone-5', Z5_OP);
+
+      if (2 * a < B - 0.1) {
+        const bz4 = [
+          new THREE.Vector3(-hB+a, 0, z),  new THREE.Vector3(hB-a, 0, z),
+          new THREE.Vector3(hB-a, hEave, z), new THREE.Vector3(-hB+a, hEave, z),
+        ];
+        addWallQ(bz4, 'zone-4', Z4_OP);
+        wallLabel('zone-4', bz4[0], bz4[1], bz4[2], bz4[3], nB, tD);
+      }
+    }
+
+    /* ── RIGHT wall  (x = +hB, outward normal +X) ─────────────────────────── */
+    {
+      const nR = new THREE.Vector3(1, 0, 0);
+      const e  = EPS;
+      const x  = hB + e;
+      const a  = Math.min(zone_a, hL);
+      const tD = new THREE.Vector3(0, 0, -1);
+
+      // Zone 5 front strip (z=+hL side): z=hL-a … hL
+      const rz5F = [
+        new THREE.Vector3(x, 0, hL-a),  new THREE.Vector3(x, 0, hL),
+        new THREE.Vector3(x, hEave, hL), new THREE.Vector3(x, hEave, hL-a),
+      ];
+      addWallQ(rz5F, 'zone-5', Z5_OP);
+
+      // Zone 5 back strip: z=-hL … -hL+a
+      const rz5B = [
+        new THREE.Vector3(x, 0, -hL),  new THREE.Vector3(x, 0, -hL+a),
+        new THREE.Vector3(x, hEave, -hL+a), new THREE.Vector3(x, hEave, -hL),
+      ];
+      addWallQ(rz5B, 'zone-5', Z5_OP);
+
+      if (2 * a < L - 0.1) {
+        const rz4 = [
+          new THREE.Vector3(x, 0, -hL+a),  new THREE.Vector3(x, 0, hL-a),
+          new THREE.Vector3(x, hEave, hL-a), new THREE.Vector3(x, hEave, -hL+a),
+        ];
+        addWallQ(rz4, 'zone-4', Z4_OP);
+        wallLabel('zone-4', rz4[0], rz4[1], rz4[2], rz4[3], nR, tD);
+      }
+    }
+
+    /* ── LEFT wall  (x = -hB, outward normal -X) ──────────────────────────── */
+    {
+      const nL = new THREE.Vector3(-1, 0, 0);
+      const e  = EPS;
+      const x  = -hB - e;
+      const a  = Math.min(zone_a, hL);
+      const tD = new THREE.Vector3(0, 0, 1);
+
+      // Zone 5 front strip: z=hL-a … hL
+      const lz5F = [
+        new THREE.Vector3(x, 0, hL-a),  new THREE.Vector3(x, 0, hL),
+        new THREE.Vector3(x, hEave, hL), new THREE.Vector3(x, hEave, hL-a),
+      ];
+      addWallQ(lz5F, 'zone-5', Z5_OP);
+
+      // Zone 5 back strip: z=-hL … -hL+a
+      const lz5B = [
+        new THREE.Vector3(x, 0, -hL),  new THREE.Vector3(x, 0, -hL+a),
+        new THREE.Vector3(x, hEave, -hL+a), new THREE.Vector3(x, hEave, -hL),
+      ];
+      addWallQ(lz5B, 'zone-5', Z5_OP);
+
+      if (2 * a < L - 0.1) {
+        const lz4 = [
+          new THREE.Vector3(x, 0, -hL+a),  new THREE.Vector3(x, 0, hL-a),
+          new THREE.Vector3(x, hEave, hL-a), new THREE.Vector3(x, hEave, -hL+a),
+        ];
+        addWallQ(lz4, 'zone-4', Z4_OP);
+        wallLabel('zone-4', lz4[0], lz4[1], lz4[2], lz4[3], nL, tD);
+      }
+    }
+  }
+
   /**
    * Build one dimension annotation:
    *   - main 3D line between p1 and p2
@@ -649,8 +808,8 @@ class Wind3DRenderer {
     const grp = new THREE.Group();
     grp.userData = { dimId, defaultColor: THEME.dimLine };
 
-    const mat    = () => new THREE.LineBasicMaterial({ color: THEME.dimLine });
-    const extMat = () => new THREE.LineDashedMaterial({ color: THEME.dimExt, dashSize:1.5, gapSize:1.2 });
+    const mat    = () => new THREE.LineBasicMaterial({ color: 0x000000 });
+    const extMat = () => new THREE.LineBasicMaterial({ color: 0x000000 });  // solid, not dashed
 
     // main dimension line
     const mainLine = new THREE.Line(
@@ -658,24 +817,21 @@ class Wind3DRenderer {
     );
     grp.add(mainLine);
 
-    // perpendicular tick marks at each end (length 3 ft each side)
+    // bold tube tick marks at each end (CylinderGeometry, radius 0.26)
     const td = tickDir.clone().normalize();
+    const TICK = 1.8;  // half-length of tick (was line ±3; now bold tube ±1.8)
     for (const p of [p1, p2]) {
-      grp.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([
-          p.clone().addScaledVector(td,  3),
-          p.clone().addScaledVector(td, -3),
-        ]), mat()
-      ));
+      const ta = p.clone().addScaledVector(td,  TICK);
+      const tb = p.clone().addScaledVector(td, -TICK);
+      const tk = this._tube(ta, tb, 0x000000, 0.30);
+      if (tk) grp.add(tk);
     }
 
-    // extension lines (thin dashed)
+    // extension lines (solid black, no dash)
     for (const [a, b] of extLines) {
-      const el = new THREE.Line(
+      grp.add(new THREE.Line(
         new THREE.BufferGeometry().setFromPoints([a, b]), extMat()
-      );
-      el.computeLineDistances();
-      grp.add(el);
+      ));
     }
 
     // CSS2D label
@@ -718,17 +874,18 @@ class Wind3DRenderer {
   _buildAllDims(B, L, hEave, hRidge, zone_a, hLabel = null) {
     const hB = B/2, hL = L/2;
     const grp = new THREE.Group();
-    const D   = Math.max(10, Math.max(B, L) * 0.12); // offset from building face
+    const D   = Math.max(8, Math.max(B, L) * 0.10); // offset from building face
 
-    // ── B (Width) — front face, at ground, parallel to X ──────────────────
-    const bZ = -hL - D;
+    // ── B (Width) — ON the Front face (z = +hL), at ground level ─────────
+    // Front face = +Z side (what you see from the front camera angle)
+    const bZ = hL + D;
     grp.add(this._buildDim(
       new THREE.Vector3(-hB, 0, bZ),
       new THREE.Vector3( hB, 0, bZ),
       new THREE.Vector3(0, 1, 0),           // tick: vertical
-      [                                       // extension lines
-        [new THREE.Vector3(-hB, 0, -hL), new THREE.Vector3(-hB, 0, bZ)],
-        [new THREE.Vector3( hB, 0, -hL), new THREE.Vector3( hB, 0, bZ)],
+      [
+        [new THREE.Vector3(-hB, 0,  hL), new THREE.Vector3(-hB, 0, bZ)],
+        [new THREE.Vector3( hB, 0,  hL), new THREE.Vector3( hB, 0, bZ)],
       ],
       `B = ${B.toFixed(1)} ft`, 'dim-B', 'inp-B'
     ));
@@ -748,34 +905,55 @@ class Wind3DRenderer {
     ));
     this._dimHighlight['dim-L'] = grp.children[grp.children.length - 1];
 
-    // ── h (Height) — left back corner, vertical ────────────────────────────
-    const hX = -hB - D;
-    const hZv = -hL - D * 0.6;
+    // ── h (Height) — Left face, RIGHT edge (z = +hL), vertical ──────────────
+    // Parallel to the front-left building edge — tick along -Z direction
+    const hXh = -hB - D;
+    const hZh =  hL;   // right edge of Left face
     grp.add(this._buildDim(
-      new THREE.Vector3(hX, 0,       hZv),
-      new THREE.Vector3(hX, hRidge,  hZv),
-      new THREE.Vector3(-1, 0, 0),          // tick: horizontal X
+      new THREE.Vector3(hXh, 0,       hZh),
+      new THREE.Vector3(hXh, hRidge,  hZh),
+      new THREE.Vector3(0, 0, -1),          // tick: along -Z (into building)
       [
-        [new THREE.Vector3(-hB, 0,      -hL), new THREE.Vector3(hX, 0,      hZv)],
-        [new THREE.Vector3(-hB, hRidge,   0), new THREE.Vector3(hX, hRidge, hZv)],
+        [new THREE.Vector3(-hB, 0,       hZh), new THREE.Vector3(hXh, 0,       hZh)],
+        [new THREE.Vector3(  0, hRidge,    0), new THREE.Vector3(hXh, hRidge,  hZh)],
       ],
       `h = ${(hLabel ?? hRidge).toFixed(1)} ft`, 'dim-h', 'inp-h'
     ));
     this._dimHighlight['dim-h'] = grp.children[grp.children.length - 1];
 
-    // ── a (Zone width) — inner sub-dim below B dim ─────────────────────────
-    const aZ = bZ - D * 0.55;
+    // ── a (Zone 3 eave strip width) ────────────────────────────────────────
+    // Two annotations:
+    //   A) Right face, LEFT side (z=-hL): shows a at eave level on right wall
+    //   B) Front face, RIGHT side (x=+hB): shows a at eave level on front wall
+    const aEY = hEave;  // eave height level
+
+    // A) Right face left side — dim parallel to Z at x=hB+D, y=hEave
+    const aRX = hB + D * 0.6;
     grp.add(this._buildDim(
-      new THREE.Vector3(-hB,          0, aZ),
-      new THREE.Vector3(-hB + zone_a, 0, aZ),
-      new THREE.Vector3(0, 1, 0),
+      new THREE.Vector3(aRX, aEY, -hL),
+      new THREE.Vector3(aRX, aEY, -hL + zone_a),
+      new THREE.Vector3(0, -1, 0),          // tick: vertical down
       [
-        [new THREE.Vector3(-hB,          0, bZ), new THREE.Vector3(-hB,          0, aZ)],
-        [new THREE.Vector3(-hB + zone_a, 0, bZ), new THREE.Vector3(-hB + zone_a, 0, aZ)],
+        [new THREE.Vector3(hB, aEY, -hL),          new THREE.Vector3(aRX, aEY, -hL)],
+        [new THREE.Vector3(hB, aEY, -hL + zone_a), new THREE.Vector3(aRX, aEY, -hL + zone_a)],
       ],
       `a = ${zone_a.toFixed(1)} ft`, 'dim-a', null
     ));
     this._dimHighlight['dim-a'] = grp.children[grp.children.length - 1];
+
+    // B) Front face right side — dim parallel to X at z=hL+D, y=hEave
+    const aFZ = hL + D * 0.6;
+    grp.add(this._buildDim(
+      new THREE.Vector3(hB - zone_a, aEY, aFZ),
+      new THREE.Vector3(hB,          aEY, aFZ),
+      new THREE.Vector3(0, -1, 0),          // tick: vertical down
+      [
+        [new THREE.Vector3(hB - zone_a, aEY,  hL), new THREE.Vector3(hB - zone_a, aEY, aFZ)],
+        [new THREE.Vector3(hB,          aEY,  hL), new THREE.Vector3(hB,          aEY, aFZ)],
+      ],
+      `a = ${zone_a.toFixed(1)} ft`, 'dim-a2', null
+    ));
+    this._dimHighlight['dim-a2'] = grp.children[grp.children.length - 1];
 
     return grp;
   }
@@ -871,19 +1049,22 @@ class Wind3DRenderer {
 
   _makeZoneLabelFlat(zoneType, centroid, faceNormal, textDir) {
     const cfgMap = {
-      'zone-1': { bg:'rgba(6,182,212,0.85)',   fg:'#fff', text:'Zone 1' },
-      'zone-2': { bg:'rgba(217,119,6,0.88)',   fg:'#fff', text:'Zone 2' },
-      'zone-3': { bg:'rgba(220,38,38,0.88)',   fg:'#fff', text:'Zone 3' },
+      'zone-1': { bg:'rgb(6,182,212)',   fg:'#fff', text:'Zone 1' },
+      'zone-2': { bg:'rgb(217,119,6)',   fg:'#fff', text:'Zone 2' },
+      'zone-3': { bg:'rgb(220,38,38)',   fg:'#fff', text:'Zone 3' },
+      'zone-4': { bg:'rgb(6,182,212)',   fg:'#fff', text:'Zone 4' },
+      'zone-5': { bg:'rgb(220,38,38)',   fg:'#fff', text:'Zone 5' },
     };
     const cfg = cfgMap[zoneType];
     if (!cfg) return;
 
     // Canvas texture — pill-shaped background + bold text
-    const CW = 192, CH = 52;
+    // CW=152, CH=44: tighter equal padding (~8px each side)
+    const CW = 152, CH = 44;
     const cv  = document.createElement('canvas');
     cv.width  = CW; cv.height = CH;
     const ctx = cv.getContext('2d');
-    const rad = 10;
+    const rad = 8;
     ctx.beginPath();
     ctx.moveTo(rad, 0); ctx.lineTo(CW-rad, 0);
     ctx.arcTo(CW, 0, CW, rad, rad);
@@ -897,7 +1078,7 @@ class Wind3DRenderer {
     ctx.fillStyle = cfg.bg;
     ctx.fill();
     ctx.fillStyle = cfg.fg;
-    ctx.font = 'bold 28px "JetBrains Mono",monospace';
+    ctx.font = 'bold 24px "JetBrains Mono",monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(cfg.text, CW / 2, CH / 2);
@@ -1253,8 +1434,8 @@ class Wind3DRenderer {
         //   (apex), placing the label in the upper Zone 2 band between Zone 1 and ridge.
         const _ctr2 = new THREE.Vector3(
           0,
-          Mx.y + 0.5 * (C.y - Mx.y),
-          Mx.z + 0.5 * (C.z - Mx.z)
+          Mx.y + 0.4 * (C.y - Mx.y),   // 0.5→0.4: lower by 20% toward Zone 1
+          Mx.z + 0.4 * (C.z - Mx.z)
         );
         this._makeZoneLabelFlat('zone-2', _ctr2, tN, _triTD);
 
@@ -1274,6 +1455,12 @@ class Wind3DRenderer {
       drawZones(this._ptL.bind(this), _leftNorm,  true);
       drawZones(this._ptR.bind(this), _rightNorm, false);
     }
+
+    /* ── Wall C&C zones 4 and 5 (ASCE 7-22 §30.3-2A) ──────────────────────────
+       Zone 5: vertical end strip width 'a' at each corner of every facade
+       Zone 4: rest of wall field
+       Drawn as flat quads offset 0.05 ft from each wall face.              */
+    this._drawWallZones(B, L, hEave, zone_a, matZ);
 
     this._scene.add(this._building);
     this._scene.add(this._zones);
