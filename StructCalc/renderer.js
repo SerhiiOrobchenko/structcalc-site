@@ -36,16 +36,16 @@ const THEME = {
   dimText    : '#1e3a5f',  // dark navy text — readable on light bg
   dimBg      : 'rgba(255,255,255,0.92)',
 
-  zone1      : 0x22d3ee,   // cyan   — interior field
-  zone2      : 0xf59e0b,   // amber  — edges
-  zone3      : 0xef4444,   // red    — corners
-  zone4      : 0x22c55e,   // green  — wall field
-  zone5      : 0xa855f7,   // purple — wall corner strip
-  zoneLabel1 : { bg:'rgba(6,182,212,0.85)',  fg:'#fff' },
-  zoneLabel2 : { bg:'rgba(217,119,6,0.88)',  fg:'#fff' },
-  zoneLabel3 : { bg:'rgba(220,38,38,0.88)',  fg:'#fff' },
-  zoneLabel4 : { bg:'rgb(34,197,94)',         fg:'#fff' },
-  zoneLabel5 : { bg:'rgb(168,85,247)',        fg:'#fff' },
+  zone1      : 0xa7f3d0,   // pastel green-light — interior field
+  zone2      : 0x6ee7b7,   // pastel green-med   — edges
+  zone3      : 0xfca5a5,   // pastel red          — corners
+  zone4      : 0x22d3ee,   // cyan (= old zone1)  — wall field
+  zone5      : 0x0891b2,   // dark cyan           — wall corner strip
+  zoneLabel1 : { bg:'rgba(52,211,153,0.88)',  fg:'#065f46' },  // emerald-400, dark text
+  zoneLabel2 : { bg:'rgba(16,185,129,0.88)',  fg:'#fff' },     // emerald-500
+  zoneLabel3 : { bg:'rgba(239,68,68,0.88)',   fg:'#fff' },     // red-500
+  zoneLabel4 : { bg:'rgb(6,182,212)',          fg:'#fff' },    // cyan-500 (= old zoneLabel1)
+  zoneLabel5 : { bg:'rgb(37,99,235)',          fg:'#fff' },    // blue-600
 };
 
 /* =========================================================================
@@ -77,8 +77,9 @@ class Wind3DRenderer {
     this._zones       = null;
     this._dimGroup    = null;   // all dimension geometry
     this._labelGroup  = null;   // CSS2D zone labels
-    this._zoneMeshes  = [];
-    this._dimHighlight = {};    // dimId → { lines, labelEl }
+    this._zoneMeshes      = [];
+    this._dimHighlight    = {};    // dimId → { lines, labelEl }
+    this._dimLabelMeshes  = [];    // flat mesh labels for raycasting
     this._clickCB     = null;
     this._raycaster   = new THREE.Raycaster();
     this._animId      = null;
@@ -183,7 +184,7 @@ class Wind3DRenderer {
     // Wrapper — 3× margins from scene edges
     const wrap = document.createElement('div');
     wrap.style.cssText = [
-      'position:absolute', 'top:84px', 'right:84px',
+      'position:absolute', 'top:50px', 'right:50px',
       `width:${S}px`, `height:${S}px`,
       `perspective:${S * 3.5}px`,
       'z-index:10',
@@ -304,7 +305,7 @@ class Wind3DRenderer {
           `background:${MCBG}`,
           `border:1px solid ${MCBORD}`,
           'box-sizing:border-box',
-          `transform:${tfm}translateZ(${MHALF}px)`,
+          `transform:${tfm}translateZ(${MHALF + 2}px)`,
           'transition:background 0.12s',
         ].join(';');
         wrapper.appendChild(face);
@@ -869,49 +870,85 @@ class Wind3DRenderer {
       if (tk) grp.add(tk);
     }
 
-    // extension lines (solid black) — extend TICK past the dim-line endpoint
+    // extension lines (solid black) — start TICK/2 gap from building, extend TICK past dim line
     for (const [a, b] of extLines) {
       const extDir = new THREE.Vector3().subVectors(b, a).normalize();
-      const bExt   = b.clone().addScaledVector(extDir, TICK);
+      const aGap   = a.clone().addScaledVector(extDir, TICK / 2);  // gap at building face
+      const bExt   = b.clone().addScaledVector(extDir, TICK);       // overshoot past dim line
       grp.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([a, bExt]), extMat()
+        new THREE.BufferGeometry().setFromPoints([aGap, bExt]), extMat()
       ));
     }
 
-    // CSS2D label
-    let labelEl = null;
-    if (THREE.CSS2DObject) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      div.style.cssText = [
-        'font-family:"JetBrains Mono",monospace',
-        'font-size:13px',
-        'font-weight:600',
-        'color:' + THEME.dimText,
-        'background:' + THEME.dimBg,
-        'padding:2px 8px',
-        'border-radius:4px',
-        'border:1px solid #334155',
-        'white-space:nowrap',
-        'pointer-events:' + (inputId ? 'auto' : 'none'),
-        inputId ? 'cursor:pointer' : '',
-      ].join(';');
-      if (inputId) {
-        div.title = 'Click to edit ' + dimId.replace('dim-','');
-        div.addEventListener('click', () => {
-          const el = document.getElementById(inputId);
-          if (el) { el.focus(); el.select(); }
-        });
-      }
-      const obj = new THREE.CSS2DObject(div);
-      obj.position.copy(p1).lerp(p2, 0.5);  // label at midpoint
-      grp.add(obj);
-      labelEl = div;
+    // ── Flat 3D label — CanvasTexture oriented along dim line ────────────
+    // Plane normal = cross(dimDir, tickDir), so text faces the viewer from
+    // the dim-line plane and rotates with the building.
+    {
+      const lDir  = new THREE.Vector3().subVectors(p2, p1).normalize();
+      const lTick = tickDir.clone().normalize();
+      let   lNorm = new THREE.Vector3().crossVectors(lDir, lTick).normalize();
+      // Ensure label faces roughly toward default camera (+X+Y+Z)
+      if (lNorm.dot(new THREE.Vector3(1, 1, 1)) < 0) lNorm.negate();
+      const lUp = new THREE.Vector3().crossVectors(lNorm, lDir).normalize();
+
+      // Build canvas with pill background + text
+      const LF   = 'bold 22px "JetBrains Mono",monospace';
+      const LPAD = 8;
+      const LCH  = 34;
+      const _cv0 = document.createElement('canvas');
+      _cv0.height = LCH;
+      _cv0.width  = 4;
+      const _ctx0 = _cv0.getContext('2d');
+      _ctx0.font  = LF;
+      const LCW = Math.ceil(_ctx0.measureText(text).width) + 2 * LPAD;
+      const lcv = document.createElement('canvas');
+      lcv.width  = LCW;
+      lcv.height = LCH;
+      const lctx = lcv.getContext('2d');
+      const rad  = LCH / 2;
+      lctx.fillStyle = THEME.dimBg;
+      lctx.beginPath();
+      lctx.moveTo(rad, 0); lctx.lineTo(LCW - rad, 0);
+      lctx.arcTo(LCW, 0, LCW, LCH, rad);
+      lctx.lineTo(LCW, LCH - rad);
+      lctx.arcTo(LCW, LCH, LCW - rad, LCH, rad);
+      lctx.lineTo(rad, LCH);
+      lctx.arcTo(0, LCH, 0, LCH - rad, rad);
+      lctx.lineTo(0, rad);
+      lctx.arcTo(0, 0, rad, 0, rad);
+      lctx.closePath();
+      lctx.fill();
+      lctx.strokeStyle = '#334155';
+      lctx.lineWidth   = 1.5;
+      lctx.stroke();
+      lctx.fillStyle = THEME.dimText;
+      lctx.font      = LF;
+      lctx.textBaseline = 'middle';
+      lctx.fillText(text, LPAD, LCH / 2);
+
+      const ltex = new THREE.CanvasTexture(lcv);
+      const lH   = 1.1;
+      const lW   = lH * (LCW / LCH);
+      const lgeo = new THREE.PlaneGeometry(lW, lH);
+      const lmat = new THREE.MeshBasicMaterial({
+        map: ltex, transparent: true, depthWrite: false,
+        side: THREE.FrontSide, alphaTest: 0.05,
+      });
+      const lmesh = new THREE.Mesh(lgeo, lmat);
+      lmesh.setRotationFromMatrix(
+        new THREE.Matrix4().makeBasis(lDir, lUp, lNorm)
+      );
+      lmesh.position.copy(p1).lerp(p2, 0.5).addScaledVector(lNorm, 0.25);
+      lmesh.renderOrder = 4;
+      lmesh.userData.inputId = inputId || null;
+      lmesh.userData.dimId   = dimId;
+      grp.add(lmesh);
+      if (this._dimLabelMeshes) this._dimLabelMeshes.push(lmesh);
     }
 
     // Store lines for colour toggling
     grp.userData.lines    = grp.children.filter(c => c.isLine);
-    grp.userData.labelEl  = labelEl;
+    grp.userData.labelEl  = null;
     return grp;
   }
 
@@ -952,9 +989,9 @@ class Wind3DRenderer {
     ));
     this._dimHighlight['dim-L'] = grp.children[grp.children.length - 1];
 
-    // ── h_eave — Left face right edge, y=0→hEave ──────────────────────────
+    // ── h_eave — Left face centre (z=0), y=0→hEave ───────────────────────
     const hXhe = -hB - D;
-    const hZhe = hL;
+    const hZhe = 0;   // midpoint of building length
     grp.add(this._buildDim(
       new THREE.Vector3(hXhe, EPS_Y,  hZhe),
       new THREE.Vector3(hXhe, hEave,  hZhe),
@@ -967,21 +1004,21 @@ class Wind3DRenderer {
     ));
     this._dimHighlight['dim-h-eave'] = grp.children[grp.children.length - 1];
 
-    // ── h (ridge) — Left face, slightly further out, y=0→hRidge ───────────
-    const hXh = -hB - D * 1.6;
-    const hZh = hL;
-    // Upper ext line of 'h': extend from the extended left-slope-plane intersection
-    // at y=hRidge, z=hZh. For hip roof, that plane intersection is at x=0.
-    const hExtTopX = roofShape === 'hip' ? 0 : -hB;
+    // ── h (mean roof height) — Left face, further out, y=0→hMean ──────────
+    const hXh   = -hB - D * 1.6;
+    const hZh   = 0;   // midpoint of building length
+    const hMean = (hEave + hRidge) / 2;   // mean roof height (scaled)
+    const hMeanFt = (hEaveLabel != null && hLabel != null)
+      ? (hEaveLabel + hLabel) / 2 : null;
     grp.add(this._buildDim(
-      new THREE.Vector3(hXh, EPS_Y,   hZh),
-      new THREE.Vector3(hXh, hRidge,  hZh),
+      new THREE.Vector3(hXh, EPS_Y,  hZh),
+      new THREE.Vector3(hXh, hMean,  hZh),
       new THREE.Vector3(-1, 1, 0).normalize(),
       [
-        [new THREE.Vector3(hXhe,     EPS_Y,   hZh), new THREE.Vector3(hXh, EPS_Y,   hZh)],
-        [new THREE.Vector3(hExtTopX, hRidge,  hZh), new THREE.Vector3(hXh, hRidge,  hZh)],
+        [new THREE.Vector3(hXhe, EPS_Y,  hZh), new THREE.Vector3(hXh, EPS_Y,  hZh)],
+        [new THREE.Vector3(-hB,  hMean,  hZh), new THREE.Vector3(hXh, hMean,  hZh)],
       ],
-      `h = ${fmt(hLabel ?? hRidge)} ft`, 'dim-h', 'inp-h'
+      `h = ${fmt(hMeanFt ?? hMean)} ft`, 'dim-h', 'inp-h'
     ));
     this._dimHighlight['dim-h'] = grp.children[grp.children.length - 1];
 
@@ -1002,15 +1039,15 @@ class Wind3DRenderer {
     ));
     this._dimHighlight['dim-a2'] = grp.children[grp.children.length - 1];
 
-    // ── Eave "a" — Right face back corner (zone 3/5 strip z=-hL to -hL+zone_a) ──
+    // ── Eave "a" — Right face front corner (zone 3/5 strip z=hL-zone_a to hL) ──
     const aRX = hB + aOFF;
     grp.add(this._buildDim(
-      new THREE.Vector3(aRX, aEY, -hL),
-      new THREE.Vector3(aRX, aEY, -hL + zone_a),
-      new THREE.Vector3(1, 0, 1).normalize(),
+      new THREE.Vector3(aRX, aEY, hL - zone_a),
+      new THREE.Vector3(aRX, aEY, hL),
+      new THREE.Vector3(1, 0, -1).normalize(),
       [
-        [new THREE.Vector3(hB, aEY, -hL),          new THREE.Vector3(aRX, aEY, -hL)],
-        [new THREE.Vector3(hB, aEY, -hL + zone_a), new THREE.Vector3(aRX, aEY, -hL + zone_a)],
+        [new THREE.Vector3(hB, aEY, hL - zone_a), new THREE.Vector3(aRX, aEY, hL - zone_a)],
+        [new THREE.Vector3(hB, aEY, hL),          new THREE.Vector3(aRX, aEY, hL)],
       ],
       `a = ${fmt(zone_a)} ft`, 'dim-a', null
     ));
@@ -1031,15 +1068,15 @@ class Wind3DRenderer {
     ));
     this._dimHighlight['dim-a3'] = grp.children[grp.children.length - 1];
 
-    // Right face BACK corner base
+    // Right face FRONT corner base (zone-5 strip z=hL-zone_a to hL)
     const az5RX = hB + aOFF;
     grp.add(this._buildDim(
-      new THREE.Vector3(az5RX, EPS_Y, -hL),
-      new THREE.Vector3(az5RX, EPS_Y, -hL + zone_a),
-      new THREE.Vector3(1, 0, 1).normalize(),
+      new THREE.Vector3(az5RX, EPS_Y, hL - zone_a),
+      new THREE.Vector3(az5RX, EPS_Y, hL),
+      new THREE.Vector3(1, 0, -1).normalize(),
       [
-        [new THREE.Vector3(hB, EPS_Y, -hL),          new THREE.Vector3(az5RX, EPS_Y, -hL)],
-        [new THREE.Vector3(hB, EPS_Y, -hL + zone_a), new THREE.Vector3(az5RX, EPS_Y, -hL + zone_a)],
+        [new THREE.Vector3(hB, EPS_Y, hL - zone_a), new THREE.Vector3(az5RX, EPS_Y, hL - zone_a)],
+        [new THREE.Vector3(hB, EPS_Y, hL),          new THREE.Vector3(az5RX, EPS_Y, hL)],
       ],
       `a = ${fmt(zone_a)} ft`, 'dim-a4', null
     ));
@@ -1134,7 +1171,7 @@ class Wind3DRenderer {
         const qa1   = mid.clone();
         const qa2   = mid.clone().addScaledVector(perpH, zone_a);
         // tick at 45° between hip direction and perpH (both in slope plane)
-        const tick45T = hipDir.clone().add(perpH).normalize();
+        const tick45T = hipDir.clone().sub(perpH).normalize();  // perpendicular to hip (90° rotation)
         const stub    = hipDir.clone().multiplyScalar(0.5);
         grp.add(this._buildDim(
           qa1, qa2, tick45T,
@@ -1168,7 +1205,7 @@ class Wind3DRenderer {
         const qa1  = mid.clone();
         const qa2  = mid.clone().addScaledVector(perpH, zone_a);
         // tick at 45° between hip direction and perpH (both in slope plane)
-        const tick45R = hipDir.clone().add(perpH).normalize();
+        const tick45R = hipDir.clone().sub(perpH).normalize();  // perpendicular to hip (90° rotation)
         const stub = hipDir.clone().multiplyScalar(0.5);
         grp.add(this._buildDim(
           qa1, qa2, tick45R,
@@ -1276,11 +1313,11 @@ class Wind3DRenderer {
 
   _makeZoneLabelFlat(zoneType, centroid, faceNormal, textDir) {
     const cfgMap = {
-      'zone-1': { bg:'rgb(6,182,212)',   fg:'#fff', text:'Zone 1' },
-      'zone-2': { bg:'rgb(217,119,6)',   fg:'#fff', text:'Zone 2' },
-      'zone-3': { bg:'rgb(220,38,38)',   fg:'#fff', text:'Zone 3' },
-      'zone-4': { bg:'rgb(34,197,94)',   fg:'#fff', text:'Zone 4' },
-      'zone-5': { bg:'rgb(168,85,247)',  fg:'#fff', text:'Zone 5' },
+      'zone-1': { bg:'rgb(52,211,153)',  fg:'#065f46', text:'Zone 1' },  // emerald-400
+      'zone-2': { bg:'rgb(16,185,129)', fg:'#fff',    text:'Zone 2' },  // emerald-500
+      'zone-3': { bg:'rgb(239,68,68)',   fg:'#fff',    text:'Zone 3' },  // red-500
+      'zone-4': { bg:'rgb(6,182,212)',   fg:'#fff',    text:'Zone 4' },  // cyan-500
+      'zone-5': { bg:'rgb(37,99,235)',   fg:'#fff',    text:'Zone 5' },  // blue-600
     };
     const cfg = cfgMap[zoneType];
     if (!cfg) return;
@@ -1374,8 +1411,9 @@ class Wind3DRenderer {
     this._zones       = new THREE.Group();
     this._dimGroup    = new THREE.Group();
     this._labelGroup  = new THREE.Group();
-    this._zoneMeshes  = [];
-    this._dimHighlight = {};
+    this._zoneMeshes      = [];
+    this._dimHighlight    = {};
+    this._dimLabelMeshes  = [];   // reset flat label meshes each rebuild
 
     // building — dispatch by roof shape
     const _shape = roofShape || 'gable';
@@ -1748,9 +1786,21 @@ class Wind3DRenderer {
   }
 
   _handleClick(e) {
-    const hits = this._hitZones(this._ndc(e));
-    if (hits.length > 0 && this._clickCB) {
-      this._clickCB(hits[0].object.userData.zoneType);
+    const ndc = this._ndc(e);
+    // Zone click
+    const zHits = this._hitZones(ndc);
+    if (zHits.length > 0 && this._clickCB) {
+      this._clickCB(zHits[0].object.userData.zoneType);
+      return;
+    }
+    // Dim label click → focus the corresponding input field
+    if (this._dimLabelMeshes && this._dimLabelMeshes.length > 0) {
+      this._raycaster.setFromCamera(ndc, this._camera);
+      const dHits = this._raycaster.intersectObjects(this._dimLabelMeshes);
+      if (dHits.length > 0) {
+        const id = dHits[0].object.userData.inputId;
+        if (id) { const el = document.getElementById(id); if (el) { el.focus(); el.select(); } }
+      }
     }
   }
 
