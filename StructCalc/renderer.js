@@ -699,6 +699,72 @@ class Wind3DRenderer {
     }
   }
 
+  /* ── flat on-surface zone label — plane mesh glued to slope surface ─────────
+     centroid   : THREE.Vector3  — centre of the label on the slope
+     faceNormal : THREE.Vector3  — surface outward normal
+     textDir    : THREE.Vector3  — direction the text reads (baseline direction)
+     The plane is oriented so: local X = textDir, local Y = n×textDir, local Z = n.
+     The label rotates with the building and never faces the camera.               */
+
+  _makeZoneLabelFlat(zoneType, centroid, faceNormal, textDir) {
+    const cfgMap = {
+      'zone-1': { bg:'rgba(6,182,212,0.85)',   fg:'#fff', text:'Zone 1' },
+      'zone-2': { bg:'rgba(217,119,6,0.88)',   fg:'#fff', text:'Zone 2' },
+      'zone-3': { bg:'rgba(220,38,38,0.88)',   fg:'#fff', text:'Zone 3' },
+    };
+    const cfg = cfgMap[zoneType];
+    if (!cfg) return;
+
+    // Canvas texture — pill-shaped background + bold text
+    const CW = 192, CH = 52;
+    const cv  = document.createElement('canvas');
+    cv.width  = CW; cv.height = CH;
+    const ctx = cv.getContext('2d');
+    const rad = 10;
+    ctx.beginPath();
+    ctx.moveTo(rad, 0); ctx.lineTo(CW-rad, 0);
+    ctx.arcTo(CW, 0, CW, rad, rad);
+    ctx.lineTo(CW, CH-rad);
+    ctx.arcTo(CW, CH, CW-rad, CH, rad);
+    ctx.lineTo(rad, CH);
+    ctx.arcTo(0, CH, 0, CH-rad, rad);
+    ctx.lineTo(0, rad);
+    ctx.arcTo(0, 0, rad, 0, rad);
+    ctx.closePath();
+    ctx.fillStyle = cfg.bg;
+    ctx.fill();
+    ctx.fillStyle = cfg.fg;
+    ctx.font = 'bold 28px "JetBrains Mono",monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(cfg.text, CW / 2, CH / 2);
+
+    const tex = new THREE.CanvasTexture(cv);
+    const aspect  = CW / CH;          // ≈ 3.69
+    const planeH  = 2.8;              // world units (ft)
+    const planeW  = planeH * aspect;
+
+    const geo = new THREE.PlaneGeometry(planeW, planeH);
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex, transparent: true, depthWrite: false,
+      side: THREE.DoubleSide, alphaTest: 0.05,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+
+    // Orient: local X = textDir (baseline), local Y = n×textDir (uphill on slope),
+    //         local Z = faceNormal (out of surface)
+    const n  = faceNormal.clone().normalize();
+    const tx = textDir.clone().normalize();
+    const ty = new THREE.Vector3().crossVectors(n, tx).normalize();
+    // Re-orthogonalise tx in case of float drift
+    const txF = new THREE.Vector3().crossVectors(ty, n).normalize();
+    mesh.setRotationFromMatrix(new THREE.Matrix4().makeBasis(txF, ty, n));
+
+    mesh.position.copy(centroid).addScaledVector(n, 0.25); // tiny lift above surface
+    mesh.renderOrder = 3;
+    this._labelGroup.add(mesh);
+  }
+
   /* ── public API ─────────────────────────────────────────────────────────── */
 
   /**
@@ -887,10 +953,24 @@ class Wind3DRenderer {
         );
 
         /* Ridge block: u=[1-_ua2, 1], full v — meets hip strips at u=1-_ua2 exactly */
-        addZone(1-_ua2, 1, 0, 1, THEME.zone2, 0.35, 'zone-2', 0.07, ptFn, norm, doLbl);
+        addZone(1-_ua2, 1, 0, 1, THEME.zone2, 0.35, 'zone-2', 0.07, ptFn, norm, false);
 
         /* Zone 3: eave strip u=[0, _ua] — meets hip strips at u=_ua exactly */
-        addZone(0, _ua, 0, 1, THEME.zone3, 0.50, 'zone-3', 0.12, ptFn, norm, doLbl);
+        addZone(0, _ua, 0, 1, THEME.zone3, 0.50, 'zone-3', 0.12, ptFn, norm, false);
+
+        /* Flat on-surface labels — glued to slope, rotate with building.
+           textDir = (0,0,1): parallel to ridge (Z axis) on trapezoidal slopes.   */
+        const _tD = new THREE.Vector3(0, 0, 1);
+        const _uM = (_ua + 1 - _ua2) / 2;   // mid-u of Zone 1/hip-strip range
+        this._makeZoneLabelFlat(
+          'zone-1', ptFn(_uM, 0.5, 0,0,0,0), norm, _tD
+        );
+        this._makeZoneLabelFlat(
+          'zone-2', ptFn(1 - _ua2 / 2, 0.5, 0,0,0,0), norm, _tD
+        );
+        this._makeZoneLabelFlat(
+          'zone-3', ptFn(_ua / 2, 0.5, 0,0,0,0), norm, _tD
+        );
       };
 
       drawHipMainSlope(wrapL, _leftNorm,  true);
@@ -987,6 +1067,37 @@ class Wind3DRenderer {
 
         /* Zone 3: (A, Bv, E, D) — meets Zone 2 exactly at D–E edge */
         addTriPart([A, Bv, E, D], 'zone-3', 0.50, 0.12);
+
+        /* Flat on-surface labels for this triangular slope.
+           textDir = from eave midpoint toward apex — perpendicular to ridge.      */
+        const _triTD = new THREE.Vector3(0, hRidge - hEave, zs * (_r2 - _hipHL)).normalize();
+
+        // Zone 1 centroid: average of triangle (M_L, M_R, Mx)
+        const _ctr1 = new THREE.Vector3(
+          (M_L.x + M_R.x + Mx.x) / 3,
+          (M_L.y + M_R.y + Mx.y) / 3,
+          (M_L.z + M_R.z + Mx.z) / 3
+        );
+        if (M_L.x < M_R.x - 0.1) {
+          this._makeZoneLabelFlat('zone-1', _ctr1, tN, _triTD);
+        }
+
+        // Zone 2 centroid: midpoint between Zone-2-left and Zone-2-right centroids
+        //   both quads share the same y/z values by symmetry; x = 0
+        const _ctr2 = new THREE.Vector3(
+          0,
+          (D.y + M_L.y + Mx.y + C.y) / 4,
+          (D.z + M_L.z + Mx.z + C.z) / 4
+        );
+        this._makeZoneLabelFlat('zone-2', _ctr2, tN, _triTD);
+
+        // Zone 3 centroid: average of trapezoid (A, Bv, E, D)
+        const _ctr3 = new THREE.Vector3(
+          (A.x + Bv.x + E.x + D.x) / 4,
+          (A.y + Bv.y + E.y + D.y) / 4,
+          (A.z + Bv.z + E.z + D.z) / 4
+        );
+        this._makeZoneLabelFlat('zone-3', _ctr3, tN, _triTD);
       }
 
     } else {
