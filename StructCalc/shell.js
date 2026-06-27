@@ -8,15 +8,15 @@
    ===================================================================== */
 
 /* ── Constants ─────────────────────────────────────────────────────── */
-const LS_PROJECTS       = 'structcalc.projects.v2';
-const LS_ACTIVE_PROJECT = 'structcalc.activeProject.v2';
-const LS_ACTIVE_CALC    = 'structcalc.activeCalc.v2';
-const DEFAULT_UNITS     = { 'ASCE 7-22': 'US', 'NBCC 2015': 'SI' };
+var LS_PROJECTS       = 'structcalc.projects.v2';
+var LS_ACTIVE_PROJECT = 'structcalc.activeProject.v2';
+var LS_ACTIVE_CALC    = 'structcalc.activeCalc.v2';
+var DEFAULT_UNITS     = { 'ASCE 7-22': 'US', 'NBCC 2015': 'SI' };
 /* ── DIAGNOSTIC checkpoints (remove after debug) ─────────────────── */
 
 
 /* ── Module registry ────────────────────────────────────────────────── */
-const MODULE_TYPES = [
+var MODULE_TYPES = [
   {
     type: 'wind',
     group: 'site',
@@ -102,7 +102,7 @@ const MODULE_TYPES = [
   }
 ];
 
-const MODULE_MAP = Object.fromEntries(MODULE_TYPES.map(m => [m.type, m]));
+var MODULE_MAP = Object.fromEntries(MODULE_TYPES.map(m => [m.type, m]));
 
 /* ── Persistence ────────────────────────────────────────────────────── */
 function loadProjects() {
@@ -124,7 +124,7 @@ function saveProjects() {
   }
 }
 
-let saveTimer = null;
+var saveTimer = null;
 function scheduleSave() {
   showSavePill('Saving…');
   clearTimeout(saveTimer);
@@ -188,7 +188,7 @@ function tryMigrateV1() {
 }
 
 /* ── State ──────────────────────────────────────────────────────────── */
-let projects = loadProjects();
+var projects = loadProjects();
 
 if (Object.keys(projects).length === 0) {
   tryMigrateV1();
@@ -199,37 +199,37 @@ if (Object.keys(projects).length === 0) {
   saveProjects();
 }
 
-let activeProjectId = localStorage.getItem(LS_ACTIVE_PROJECT);
+var activeProjectId = localStorage.getItem(LS_ACTIVE_PROJECT);
 if (!activeProjectId || !projects[activeProjectId]) {
   activeProjectId = Object.keys(projects)[0];
   localStorage.setItem(LS_ACTIVE_PROJECT, activeProjectId);
 }
 
 /* ── DOM refs ────────────────────────────────────────────────────────── */
-const elDashboard  = document.getElementById('screen-dashboard');
-const elWorkspace  = document.getElementById('screen-workspace');
-const elProjGrid   = document.getElementById('projGrid');
-const elDbSubtitle = document.getElementById('dbSubtitle');
-const elRailAll    = document.getElementById('railCountAll');
-const elTreeList   = document.getElementById('treeList');
-const elModuleHost = document.getElementById('module-host');
-const elModulePh   = document.getElementById('module-placeholder');
-const elProjSettings = document.getElementById('project-settings-view');
-const elModuleLoading= document.getElementById('module-loading');
-const elWsCrumbProj  = document.getElementById('wsCrumbProject');
-const elWsCrumbCalc  = document.getElementById('wsCrumbCalc');
-const elStatusCode   = document.getElementById('statusCode');
-const elStatusUnits  = document.getElementById('statusUnits');
-const elStatusMsg    = document.getElementById('statusMsg');
-const elStatusDetail = document.getElementById('statusDetail');
-const elCtxMenu      = document.getElementById('ctx-menu');
-const elWsContent    = document.getElementById('wsContent');
-const elWsMain       = document.getElementById('wsWindWorkspace');
+var elDashboard  = document.getElementById('screen-dashboard');
+var elWorkspace  = document.getElementById('screen-workspace');
+var elProjGrid   = document.getElementById('projGrid');
+var elDbSubtitle = document.getElementById('dbSubtitle');
+var elRailAll    = document.getElementById('railCountAll');
+var elTreeList   = document.getElementById('treeList');
+var elModuleHost = document.getElementById('module-host');
+var elModulePh   = document.getElementById('module-placeholder');
+var elProjSettings = document.getElementById('project-settings-view');
+var elModuleLoading= document.getElementById('module-loading');
+var elWsCrumbProj  = document.getElementById('wsCrumbProject');
+var elWsCrumbCalc  = document.getElementById('wsCrumbCalc');
+var elStatusCode   = document.getElementById('statusCode');
+var elStatusUnits  = document.getElementById('statusUnits');
+var elStatusMsg    = document.getElementById('statusMsg');
+var elStatusDetail = document.getElementById('statusDetail');
+var elCtxMenu      = document.getElementById('ctx-menu');
+var elWsContent    = document.getElementById('wsContent');
+var elWsMain       = document.getElementById('wsWindWorkspace');
 
 /* ── Current workspace state ─────────────────────────────────────────── */
-let activeCalcId   = null;  // currently shown calc
-let loadedScripts  = {};    // { path: true } to avoid double-loading
-let ctxTargetId    = null;  // calc id for context menu
+var activeCalcId   = null;  // currently shown calc
+var loadedScripts  = {};    // { path: true } to avoid double-loading
+var ctxTargetId    = null;  // calc id for context menu
 
 /* =====================================================================
    DASHBOARD
@@ -436,7 +436,7 @@ function appendGroupHdr(parent, labelHtml) {
   parent.appendChild(hdr);
 }
 
-const CALC_ICONS = {
+var CALC_ICONS = {
   wind:    `<path d="M9 4a2 2 0 1 1 2 2H3M17 9a2 2 0 1 1-2 2H3M11 18a2 2 0 1 0 2-2H3"/>`,
   snow:    `<path d="M12 2v20M4.9 4.9l14.2 14.2M2 12h20M4.9 19.1 19.1 4.9"/>`,
   seismic: `<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>`
@@ -860,11 +860,11 @@ function showSavePill(msg, err) {
 /* =====================================================================
    ADD CALCULATION MODAL
    ===================================================================== */
-const elAddCalcModal = document.getElementById('addCalcModal');
-const elCalcTypeGrid = document.getElementById('calcTypeGrid');
-const elAcAdd        = document.getElementById('acAdd');
-const elAcDesc       = document.getElementById('acDescription');
-let   selectedType   = null;
+var elAddCalcModal = document.getElementById('addCalcModal');
+var elCalcTypeGrid = document.getElementById('calcTypeGrid');
+var elAcAdd        = document.getElementById('acAdd');
+var elAcDesc       = document.getElementById('acDescription');
+var   selectedType   = null;
 
 function openAddCalcModal() {
   const proj = projects[activeProjectId];
@@ -917,9 +917,9 @@ document.getElementById('treeAddBtn').addEventListener('click', openAddCalcModal
 /* =====================================================================
    NEW PROJECT MODAL
    ===================================================================== */
-const elNewProjModal  = document.getElementById('newProjectModal');
-const elNpCode        = document.getElementById('npCode');
-const elNpUnits       = document.getElementById('npUnits');
+var elNewProjModal  = document.getElementById('newProjectModal');
+var elNpCode        = document.getElementById('npCode');
+var elNpUnits       = document.getElementById('npUnits');
 
 elNpCode.addEventListener('change', () => {
   const defUnits = DEFAULT_UNITS[elNpCode.value] || 'US';
@@ -1040,12 +1040,12 @@ function calcLabel(calc) {
    LOCKED STRUCTURE: col-input(320px) | col-diagram(1fr) | col-results(380px)
    ===================================================================== */
 
-let windScriptsLoaded = false;
-let windEngineLoaded  = false;
-let windRenderer      = null;
-let windActiveProj    = null;
-let windActiveCalc    = null;
-let windSavedState    = null;
+var windScriptsLoaded = false;
+var windEngineLoaded  = false;
+var windRenderer      = null;
+var windActiveProj    = null;
+var windActiveCalc    = null;
+var windSavedState    = null;
 
 function loadScriptTag(src) {
   return new Promise((resolve, reject) => {
@@ -1077,7 +1077,7 @@ async function loadWindEngine() {
   windEngineLoaded = true;
 }
 
-const WIND_INPUT_MAP = {
+var WIND_INPUT_MAP = {
   'wind-h':          'h',
   'wind-B':          'minDim',
   'wind-L':          'buildingL',
@@ -1347,6 +1347,6 @@ async function openWindWorkspace(proj, calc) {
    INIT
    ===================================================================== */
 renderDashboard();
-const initials = 'SO';
+var initials = 'SO';
 document.getElementById('dbAvatar').textContent = initials;
 document.getElementById('wsAvatar').textContent = initia
