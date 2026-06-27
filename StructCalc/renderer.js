@@ -164,127 +164,92 @@ class Wind3DRenderer {
 
   /* ── Revit-style view cube ──────────────────────────────────────────────── */
 
+  /* ── CSS 3D view cube — no extra WebGL context, pure DOM ────────────────
+     The cube's rotation mirrors the main camera's spherical orientation.
+     Clicking a face animates the main camera to that canonical view.           */
+
   _initViewCube() {
-    // Ensure container is positioned so the overlay canvas can be absolute-placed
     if (getComputedStyle(this._container).position === 'static') {
       this._container.style.position = 'relative';
     }
 
-    // Small overlay canvas (bottom-right corner)
-    const vc = document.createElement('canvas');
-    vc.style.cssText = [
+    const S    = 76;   // cube side length, px
+    const HALF = S / 2;
+
+    // Outer wrapper — perspective container
+    const wrap = document.createElement('div');
+    wrap.style.cssText = [
       'position:absolute', 'bottom:12px', 'right:12px',
-      'width:90px', 'height:90px', 'cursor:pointer',
-      'border-radius:7px',
-      'box-shadow:0 2px 10px rgba(0,0,0,0.22)',
+      `width:${S}px`, `height:${S}px`,
+      `perspective:${S * 3.5}px`,
       'z-index:10',
+      'box-shadow:0 3px 12px rgba(0,0,0,0.28)',
+      'border-radius:4px',
     ].join(';');
-    vc.width = 90; vc.height = 90;
-    this._container.appendChild(vc);
-    this._vcCanvas = vc;
+    this._container.appendChild(wrap);
 
-    const vcR = new THREE.WebGLRenderer({ canvas: vc, antialias: true, alpha: true });
-    vcR.setSize(90, 90);
-    vcR.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    vcR.setClearColor(0x000000, 0);
-    this._vcRenderer = vcR;
+    // Rotating inner cube
+    const cube = document.createElement('div');
+    cube.style.cssText = [
+      `width:${S}px`, `height:${S}px`,
+      'position:relative',
+      'transform-style:preserve-3d',
+      'transform:rotateX(0deg) rotateY(0deg)',
+      'transition:transform 0.05s linear',
+    ].join(';');
+    wrap.appendChild(cube);
+    this._vcCubeEl = cube;
 
-    this._vcScene  = new THREE.Scene();
-    this._vcCamera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
-
-    // Canvas texture factory for each face
-    const faceTex = (label, topLine) => {
-      const c = document.createElement('canvas');
-      c.width = 128; c.height = 128;
-      const ctx = c.getContext('2d');
-      ctx.fillStyle = '#0e7490';
-      ctx.fillRect(0, 0, 128, 128);
-      // Subtle inner border
-      ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-      ctx.lineWidth = 4;
-      ctx.strokeRect(4, 4, 120, 120);
-      ctx.fillStyle = '#ffffff';
-      if (topLine) {
-        ctx.font = 'bold 22px "JetBrains Mono",monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(topLine, 64, 44);
-        ctx.font = 'bold 20px "JetBrains Mono",monospace';
-        ctx.fillText(label, 64, 82);
-      } else {
-        ctx.font = 'bold 26px "JetBrains Mono",monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(label, 64, 64);
-      }
-      return new THREE.CanvasTexture(c);
-    };
-
-    // BoxGeometry material order: +X, -X, +Y, -Y, +Z, -Z
-    this._vcFaceDirs = [
-      new THREE.Vector3( 1,  0,  0),  // 0 Right
-      new THREE.Vector3(-1,  0,  0),  // 1 Left
-      new THREE.Vector3( 0,  1,  0),  // 2 Top
-      new THREE.Vector3( 0, -1,  0),  // 3 Bottom
-      new THREE.Vector3( 0,  0,  1),  // 4 Front
-      new THREE.Vector3( 0,  0, -1),  // 5 Back
-    ];
-    const faceLabels = [
-      ['RIGHT', null], ['LEFT', null],
-      ['TOP',   null], ['BTM',  null],
-      ['FRONT', null], ['BACK', null],
+    // Face definitions:
+    //  transform applied RIGHT-TO-LEFT in CSS, so list is [rotY, rotX, translateZ]
+    //  camDir: world direction from which the camera should view when this face is clicked
+    const faces = [
+      { label:'FRONT', ry:   0, rx:   0, camDir: new THREE.Vector3( 0, 0,  1) },
+      { label:'BACK',  ry: 180, rx:   0, camDir: new THREE.Vector3( 0, 0, -1) },
+      { label:'RIGHT', ry:  90, rx:   0, camDir: new THREE.Vector3( 1, 0,  0) },
+      { label:'LEFT',  ry: -90, rx:   0, camDir: new THREE.Vector3(-1, 0,  0) },
+      { label:'TOP',   ry:   0, rx: -90, camDir: new THREE.Vector3( 0, 1,  0) },
+      { label:'BTM',   ry:   0, rx:  90, camDir: new THREE.Vector3( 0,-1,  0) },
     ];
 
-    const geo  = new THREE.BoxGeometry(1.1, 1.1, 1.1);
-    const mats = faceLabels.map(([lbl, sub]) =>
-      new THREE.MeshBasicMaterial({ map: faceTex(lbl, sub), transparent: false })
-    );
-    this._vcCube = new THREE.Mesh(geo, mats);
-    this._vcScene.add(this._vcCube);
+    const BG   = 'rgba(14,116,144,0.88)';
+    const BGHV = 'rgba(6,182,212,0.95)';
+    const BORD = 'rgba(255,255,255,0.22)';
 
-    // Edge lines for crisp cube outline
-    const edgeGeo = new THREE.EdgesGeometry(geo);
-    this._vcScene.add(new THREE.LineSegments(
-      edgeGeo,
-      new THREE.LineBasicMaterial({ color: 0x083344 })
-    ));
+    faces.forEach(f => {
+      const el = document.createElement('div');
+      const ryPart = f.ry !== 0 ? `rotateY(${f.ry}deg) ` : '';
+      const rxPart = f.rx !== 0 ? `rotateX(${f.rx}deg) ` : '';
+      el.style.cssText = [
+        'position:absolute',
+        `width:${S}px`, `height:${S}px`,
+        'display:flex', 'align-items:center', 'justify-content:center',
+        `background:${BG}`,
+        `border:1px solid ${BORD}`,
+        'color:#fff',
+        'font-family:"JetBrains Mono",monospace',
+        'font-size:9px', 'font-weight:700', 'letter-spacing:0.08em',
+        'cursor:pointer', 'user-select:none', 'box-sizing:border-box',
+        `transform:${ryPart}${rxPart}translateZ(${HALF}px)`,
+        'backface-visibility:hidden',
+        'transition:background 0.12s',
+      ].join(';');
+      el.textContent = f.label;
 
-    // Click → camera preset
-    vc.addEventListener('click', e => this._handleViewCubeClick(e));
+      el.addEventListener('mouseenter', () => { el.style.background = BGHV; });
+      el.addEventListener('mouseleave', () => { el.style.background = BG;   });
+      el.addEventListener('click', () => {
+        const target = this._controls.target.clone();
+        const dist   = this._camera.position.distanceTo(target);
+        // Tiny elevation offset for top/bottom so OrbitControls doesn't flip
+        const dir    = f.camDir.clone();
+        if (f.label === 'TOP') dir.set(0.03, 1, 0.03).normalize();
+        if (f.label === 'BTM') dir.set(0.03,-1, 0.03).normalize();
+        this._animateCameraTo(target.clone().addScaledVector(dir, dist));
+      });
 
-    // Hover highlight
-    vc.addEventListener('mousemove', e => {
-      const fi = this._vcFaceUnder(e);
-      this._vcCanvas.title = fi >= 0
-        ? ['Right','Left','Top','Bottom','Front','Back'][fi]
-        : '';
+      cube.appendChild(el);
     });
-  }
-
-  _vcFaceUnder(e) {
-    const rect = this._vcCanvas.getBoundingClientRect();
-    const ndcX =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
-    const ndcY = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
-    const rc   = new THREE.Raycaster();
-    rc.setFromCamera(new THREE.Vector2(ndcX, ndcY), this._vcCamera);
-    const hits = rc.intersectObject(this._vcCube);
-    return hits.length ? hits[0].face.materialIndex : -1;
-  }
-
-  _handleViewCubeClick(e) {
-    const fi = this._vcFaceUnder(e);
-    if (fi < 0) return;
-
-    const faceDir = this._vcFaceDirs[fi].clone();
-    const target  = this._controls.target.clone();
-    const dist    = this._camera.position.distanceTo(target);
-
-    // Slight elevation offset for Top/Bottom so OrbitControls stays happy
-    if (fi === 2) faceDir.set(0.04, 1, 0.04).normalize();
-    if (fi === 3) faceDir.set(0.04, -1, 0.04).normalize();
-
-    const newPos = target.clone().addScaledVector(faceDir, dist);
-    this._animateCameraTo(newPos);
   }
 
   _animateCameraTo(targetPos) {
@@ -341,13 +306,16 @@ class Wind3DRenderer {
     this._renderer.render(this._scene, this._camera);
     if (this._labelRenderer) this._labelRenderer.render(this._scene, this._camera);
 
-    // Sync view cube to main camera orientation and render
-    if (this._vcRenderer && this._vcCamera) {
-      const dir = new THREE.Vector3();
-      this._camera.getWorldDirection(dir);
-      this._vcCamera.position.copy(dir.negate().multiplyScalar(3.5));
-      this._vcCamera.lookAt(0, 0, 0);
-      this._vcRenderer.render(this._vcScene, this._vcCamera);
+    // Sync CSS view cube rotation to main camera spherical orientation.
+    // Formula: rotateX(−phi) rotateY(−theta), CSS right-to-left = Y first then X.
+    if (this._vcCubeEl) {
+      const d     = new THREE.Vector3().subVectors(this._camera.position, this._controls.target);
+      const r     = d.length() || 1;
+      const theta = Math.atan2(d.x, d.z);         // azimuth (rad)
+      const phi   = Math.asin(Math.max(-1, Math.min(1, d.y / r))); // elevation (rad)
+      const R     = 180 / Math.PI;
+      this._vcCubeEl.style.transform =
+        `rotateX(${(-phi * R).toFixed(2)}deg) rotateY(${(-theta * R).toFixed(2)}deg)`;
     }
   }
 
