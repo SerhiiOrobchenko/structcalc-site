@@ -52,13 +52,13 @@ var WIND_INPUT_MAP = {
   'wind-L':               'buildingL',
   'wind-theta':           'theta',
   'wind-roofShape':       'roofShape',
-  'wind-steppedLowerH':  'steppedLowerH',
-  'wind-steppedLowerW':  'steppedLowerW',
-  'wind-msModuleW':      'msModuleW',
-  'wind-swModuleW':      'swModuleW',
-  'wind-domeD':          'domeD',
-  'wind-domeF':          'domeF',
-  'wind-domeHD':         'domeHD',
+  'wind-steppedLowerH':   'steppedLowerH',
+  'wind-steppedLowerW':   'steppedLowerW',
+  'wind-msModuleW':       'msModuleW',
+  'wind-swModuleW':       'swModuleW',
+  'wind-domeD':           'domeD',
+  'wind-domeF':           'domeF',
+  'wind-domeHD':          'domeHD',
   'wind-V':               'V',
   'wind-exposure':        'exposure',
   'wind-kzt':             'kzt',
@@ -139,19 +139,13 @@ function gatherWindState(base) {
   }
   s.roofType = (s.theta <= 7 || s.roofShape === 'flat') ? 'flat' : 'sloped';
   if (s.roofShape === 'flat') s.theta = 0;
-
-  // Derive has* flags from roofShape for special C&C roof types
   var specialRoofs = ['stepped', 'multispan', 'sawtooth', 'dome'];
   s.hasSteppedRoof   = (s.roofShape === 'stepped');
   s.hasMultispanRoof = (s.roofShape === 'multispan');
   s.hasSawtoothRoof  = (s.roofShape === 'sawtooth');
   s.hasDomeRoof      = (s.roofShape === 'dome');
   s.hasMonoslopeRoof = (s.roofShape === 'monoslope');
-  // For special roof types the underlying geometry is a flat baseline
-  if (specialRoofs.indexOf(s.roofShape) !== -1) {
-    s.roofType = 'flat';
-  }
-
+  if (specialRoofs.indexOf(s.roofShape) !== -1) { s.roofType = 'flat'; }
   return s;
 }
 
@@ -214,18 +208,15 @@ function recalcWind() {
   /* K_e auto on first calc */
   computeKe();
 
-  // Show / hide extra parameter fields for special roof profiles
+  // Renderer signature: update3DModel(B, L, ridgeHeight, thetaDegrees, zone_a, roofShape)
   var specialExtras = ['stepped', 'multispan', 'sawtooth', 'dome'];
   specialExtras.forEach(function(t) {
     var el = document.getElementById('ws-extra-' + t);
     if (el) el.classList.toggle('hidden', s.roofShape !== t);
   });
-
-  // Map special roof shapes to a sensible 3D fallback for the renderer
   var rendererShape = s.roofShape;
   if (s.roofShape === 'stepped' || s.roofShape === 'sawtooth' || s.roofShape === 'dome') rendererShape = 'flat';
   if (s.roofShape === 'multispan') rendererShape = 'gable';
-  // Renderer signature: update3DModel(B, L, ridgeHeight, thetaDegrees, zone_a, roofShape)
   if (windRenderer) windRenderer.update3DModel(B, L, hR, th, za, rendererShape);
 
   var vDisp = document.getElementById('wind-V-display');
@@ -233,8 +224,7 @@ function recalcWind() {
 
   var cap = document.getElementById('windDiagramCaption');
   if (cap) {
-    var sh = {gable:'Gable Roof',hip:'Hip Roof',flat:'Flat Roof',monoslope:'Monoslope Roof',
-              stepped:'Stepped Roof',multispan:'Multispan Gable',sawtooth:'Sawtooth Roof',dome:'Domed Roof'};
+    var sh = {gable:'Gable Roof',hip:'Hip Roof',flat:'Flat Roof',monoslope:'Monoslope Roof',stepped:'Stepped Roof',multispan:'Multispan Gable',sawtooth:'Sawtooth Roof',dome:'Domed Roof'};
     var pr = {envelope:'Envelope (Ch. 28)',directional:'Directional (Ch. 27)',cc:'C&C (Ch. 30)'};
     var pk = s.mode === 'cc' ? 'cc' : s.mwfrsProcedure;
     cap.textContent = (sh[s.roofShape] || 'Building') + ' — ' + (pr[pk] || '');
@@ -322,7 +312,7 @@ function renderWindResults(r, s) {
     }
   }
 
-  // ── Special C&C roof results ─────────────────────────────────────────
+  /* ── Special C&C roof cards ───────────────────────────────────────── */
   function zoneRow(label, neg, pos, cls) {
     return '<div class="result-row ' + (cls||'zone-mid') + '"><span class="k">' + label +
            '</span><span class="v">' + fmt(neg) + ' / +' + fmt(pos) + ' psf</span></div>';
@@ -334,23 +324,21 @@ function renderWindResults(r, s) {
       '<div class="result-row zone-low"><span class="k">Step height h<sub>s</sub></span><span class="v">' + fmt(sr.hs,1) + ' ft</span></div>' +
       '<div class="result-row zone-low"><span class="k">Zone a (main)</span><span class="v">' + fmt(sr.aMain,1) + ' ft</span></div>' +
       '<div class="result-row zone-low"><span class="k">Zone a (step)</span><span class="v">' + fmt(sr.aStep,1) + (sr.aStepCapped?' (capped)':'') + ' ft</span></div>' +
-      zoneRow('Zone 1 — field', sr.zone1.pMin, sr.zone1.pMax, 'zone-low') +
-      zoneRow('Zone 2 — edge',  sr.zone2.pMin, sr.zone2.pMax, 'zone-mid') +
-      zoneRow('Zone 3 — corner',sr.zone3.pMin, sr.zone3.pMax, 'zone-high') +
+      zoneRow('Zone 1 — field',  sr.zone1.pMin, sr.zone1.pMax, 'zone-low') +
+      zoneRow('Zone 2 — edge',   sr.zone2.pMin, sr.zone2.pMax, 'zone-mid') +
+      zoneRow('Zone 3 — corner', sr.zone3.pMin, sr.zone3.pMax, 'zone-high') +
       '</div>';
   }
-
   if (r.multispanRoof) {
     var mr = r.multispanRoof;
     html += '<div class="result-card"><div class="result-card-head">Multispan Gable C&amp;C <span class="ref">Fig. 30.3-4</span></div>' +
       '<div class="result-row zone-low"><span class="k">Zone a</span><span class="v">' + fmt(mr.a,1) + ' ft</span></div>' +
-      (mr.capped ? '<div class="result-row zone-low"><span class="k">⚠ θ &gt; 45° — capped</span></div>' : '') +
-      zoneRow('Zone 1 — field', mr.zone1.pMin, mr.zone1.pMax, 'zone-low') +
-      zoneRow('Zone 2 — edge',  mr.zone2.pMin, mr.zone2.pMax, 'zone-mid') +
-      zoneRow('Zone 3 — corner',mr.zone3.pMin, mr.zone3.pMax, 'zone-high') +
+      (mr.capped ? '<div class="result-row zone-low"><span class="k">&#9888; &theta; &gt; 45&deg; &mdash; capped</span></div>' : '') +
+      zoneRow('Zone 1 — field',  mr.zone1.pMin, mr.zone1.pMax, 'zone-low') +
+      zoneRow('Zone 2 — edge',   mr.zone2.pMin, mr.zone2.pMax, 'zone-mid') +
+      zoneRow('Zone 3 — corner', mr.zone3.pMin, mr.zone3.pMax, 'zone-high') +
       '</div>';
   }
-
   if (r.sawtoothRoof) {
     var sw = r.sawtoothRoof;
     html += '<div class="result-card"><div class="result-card-head">Sawtooth Roof C&amp;C <span class="ref">Fig. 30.3-6</span></div>' +
@@ -360,22 +348,20 @@ function renderWindResults(r, s) {
     if (sw.thetaLE10) {
       html += zoneRow('Zone 3 — corner', sw.zone3.pMin, sw.zone3.pMax, 'zone-high');
     } else {
-      // θ > 10°: zone 3 splits by span
-      html += zoneRow('Zone 3 Span A',      sw.zone3SpanA.pMin,    sw.zone3SpanA.pMax,    'zone-high') +
-              zoneRow('Zone 3 Spans B–D',   sw.zone3SpansBCD.pMin, sw.zone3SpansBCD.pMax, 'zone-high');
+      html += zoneRow('Zone 3 Span A',    sw.zone3SpanA.pMin,    sw.zone3SpanA.pMax,    'zone-high') +
+              zoneRow('Zone 3 Spans B–D', sw.zone3SpansBCD.pMin, sw.zone3SpansBCD.pMax, 'zone-high');
     }
     html += '</div>';
   }
-
   if (r.domeRoof) {
     var dr = r.domeRoof;
     html += '<div class="result-card"><div class="result-card-head">Domed Roof C&amp;C <span class="ref">Fig. 30.3-7</span></div>' +
-      '<div class="result-row zone-low"><span class="k">f/D</span><span class="v">' + fmt(dr.fOverD,3) + (dr.outOfRange?' ⚠ out of range':'') + '</span></div>' +
+      '<div class="result-row zone-low"><span class="k">f/D</span><span class="v">' + fmt(dr.fOverD,3) + (dr.outOfRange?' &#9888; out of range':'') + '</span></div>' +
       '<div class="result-row zone-low"><span class="k">h<sub>D</sub>/D</span><span class="v">' + fmt(dr.hDoverD,3) + '</span></div>' +
-      '<div class="result-row zone-low"><span class="k">q at dome top</span><span class="v">' + psf(dr.qDome) + '</span></div>' +
-      '<div class="result-row zone-mid"><span class="k">Neg (θ 0–90°)</span><span class="v">' + fmt(dr.pNeg && dr.pNeg.min) + ' / +' + fmt(dr.pNeg && dr.pNeg.max) + ' psf</span></div>' +
-      '<div class="result-row zone-low"><span class="k">Pos θ 0–60°</span><span class="v">' + fmt(dr.pPosLow && dr.pPosLow.min) + ' / +' + fmt(dr.pPosLow && dr.pPosLow.max) + ' psf</span></div>' +
-      '<div class="result-row zone-low"><span class="k">Pos θ 61–90°</span><span class="v">' + fmt(dr.pPosHigh && dr.pPosHigh.min) + ' / +' + fmt(dr.pPosHigh && dr.pPosHigh.max) + ' psf</span></div>' +
+      '<div class="result-row zone-low"><span class="k">q at dome top</span><span class="v">' + fmt(dr.qDome,2) + ' psf</span></div>' +
+      '<div class="result-row zone-mid"><span class="k">Neg (&#952; 0&ndash;90&deg;)</span><span class="v">' + fmt(dr.pNeg && dr.pNeg.min) + ' / +' + fmt(dr.pNeg && dr.pNeg.max) + ' psf</span></div>' +
+      '<div class="result-row zone-low"><span class="k">Pos &#952; 0&ndash;60&deg;</span><span class="v">' + fmt(dr.pPosLow && dr.pPosLow.min) + ' / +' + fmt(dr.pPosLow && dr.pPosLow.max) + ' psf</span></div>' +
+      '<div class="result-row zone-low"><span class="k">Pos &#952; 61&ndash;90&deg;</span><span class="v">' + fmt(dr.pPosHigh && dr.pPosHigh.min) + ' / +' + fmt(dr.pPosHigh && dr.pPosHigh.max) + ' psf</span></div>' +
       '</div>';
   }
 
@@ -667,4 +653,155 @@ function wireWindInputs() {
   }
 
   /* Overhang */
-  var chkO = document.getElementById('wind-hasOver
+  var chkO = document.getElementById('wind-hasOverhang');
+  if (chkO) {
+    chkO.addEventListener('change', function(){ setVisible('overhangSub', this.checked); recalcWind(); });
+    var woEl = document.getElementById('wind-wo');
+    if (woEl) woEl.addEventListener('input', onInput);
+  }
+
+  /* K_zt calc mode */
+  var chkKzt = document.getElementById('wind-kztCalcMode');
+  if (chkKzt) {
+    chkKzt.addEventListener('change', function() {
+      setVisible('kztManualBlock', !this.checked);
+      setVisible('kztCalcBlock',    this.checked);
+      if (this.checked) computeKzt();
+    });
+    ['wind-kztShape','wind-kztH','wind-kztLh','wind-kztX','wind-kztZ'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('input', function(){ computeKzt(); recalcWind(); });
+    });
+  }
+
+  /* Ground elevation → K_e */
+  var elevEl = document.getElementById('wind-groundElev');
+  if (elevEl) elevEl.addEventListener('input', function(){ computeKe(); recalcWind(); });
+
+  /* Risk Category → tornado alert + recalc */
+  var rcEl = document.getElementById('wind-riskCategory');
+  if (rcEl) rcEl.addEventListener('change', function(){ updateTornadoAlert(); recalcWind(); });
+
+  /* Tornado prone toggle */
+  var proneEl = document.getElementById('wind-tornadoProne');
+  if (proneEl) proneEl.addEventListener('change', function(){ updateTornadoAlert(); recalcWind(); });
+
+  /* V_T input */
+  var vtEl = document.getElementById('wind-Vt');
+  if (vtEl) vtEl.addEventListener('input', function(){ clearTimeout(debounce); debounce = setTimeout(function(){ updateTornadoAlert(); recalcWind(); }, 250); });
+
+  /* Exposure → re-check tornado */
+  var expEl = document.getElementById('wind-exposure');
+  if (expEl) expEl.addEventListener('change', function(){ updateTornadoAlert(); recalcWind(); });
+
+  /* Roof pitch unit toggle */
+  wirePitchToggle();
+}
+
+/* ── Pitch toggle: deg ↔ X:12 with live conversion display ────────────── */
+/* ── Pitch toggle: deg ↔ X:12 with live conversion display ────────────── */
+function wirePitchToggle() {
+  var thetaInp   = document.getElementById('wind-theta');
+  var noteEl     = document.getElementById('pitchConvert');
+  var toggleBtns = document.querySelectorAll('#pitchUnitToggle button');
+  var labelEl    = document.getElementById('wind-theta-label');
+
+  if (!thetaInp || !noteEl || !toggleBtns.length) return;
+
+  var pitchMode = 'deg';
+
+  function updateNote() {
+    var val = parseFloat(thetaInp.value);
+    if (isNaN(val)) { noteEl.textContent = ''; return; }
+    if (pitchMode === 'deg') {
+      var rise = 12 * Math.tan(val * Math.PI / 180);
+      noteEl.textContent = '= ' + rise.toFixed(2) + ':12 slope';
+    } else {
+      var deg = Math.atan(val / 12) * 180 / Math.PI;
+      noteEl.textContent = '= ' + deg.toFixed(1) + '°';
+    }
+  }
+
+  function setMode(mode) {
+    if (mode === pitchMode) return;
+    var oldVal = parseFloat(thetaInp.value);
+    if (!isNaN(oldVal)) {
+      if (mode === 'slope') {
+        thetaInp.min  = '0';
+        thetaInp.max  = '48';
+        thetaInp.step = '0.1';
+        thetaInp.value = (12 * Math.tan(oldVal * Math.PI / 180)).toFixed(2);
+        if (labelEl) labelEl.innerHTML = 'Roof pitch <span class="unit">(X:12)</span>';
+      } else {
+        thetaInp.min  = '0';
+        thetaInp.max  = '89.9';
+        thetaInp.step = '0.1';
+        thetaInp.value = (Math.atan(oldVal / 12) * 180 / Math.PI).toFixed(1);
+        if (labelEl) labelEl.innerHTML = 'Roof pitch, θ <span class="unit">(°)</span>';
+      }
+    }
+    pitchMode = mode;
+    updateNote();
+    recalcWind();
+  }
+
+  toggleBtns.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      toggleBtns.forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      setMode(btn.dataset.unit);
+    });
+  });
+
+  thetaInp.addEventListener('input', function() {
+    updateNote();
+  });
+
+  updateNote();
+}
+
+/* ── Read theta always in degrees (handles slope mode) ─────────────────── */
+function readThetaDegrees() {
+  var thetaInp = document.getElementById('wind-theta');
+  if (!thetaInp) return 0;
+  var val = parseFloat(thetaInp.value) || 0;
+  var activeBtn = document.querySelector('#pitchUnitToggle button.active');
+  if (activeBtn && activeBtn.dataset.unit === 'slope') {
+    return Math.atan(val / 12) * 180 / Math.PI;
+  }
+  return val;
+}
+
+/* ── Open wind workspace ───────────────────────────────────────────────── */
+async function openWindWorkspace(proj, calc) {
+  windActiveProj = proj;
+  windActiveCalc = calc;
+
+  var banner = document.getElementById('windBannerText');
+  if (banner) banner.innerHTML = '<strong>' + escHtml(proj.name) + '</strong> · ASCE 7-22 · '
+    + escHtml((proj.settings && proj.settings.units === 'SI') ? 'SI' : 'US') + ' Units';
+
+  await loadWindScripts();
+  await loadWindEngine();
+
+  var savedEntry = calc.state && calc.state['ASCE 7-22'];
+  if (savedEntry && savedEntry.state) {
+    windSavedState = savedEntry.state;
+    restoreWindInputs(savedEntry.state);
+  } else {
+    windSavedState = null;
+  }
+
+  if (windRenderer) {
+    try { windRenderer.dispose(); } catch(e) {}
+    windRenderer = null;
+  }
+  await new Promise(function(res){ setTimeout(res, 60); });
+  try { windRenderer = new Wind3DRenderer('threejs-container'); } catch(e) { console.error('Wind3DRenderer init:', e); }
+
+  if (!elWsMain._inputsWired) {
+    wireWindInputs();
+    elWsMain._inputsWired = true;
+  }
+  recalcWind();
+}
