@@ -39,13 +39,13 @@ const THEME = {
   zone1      : 0x22d3ee,   // cyan   — interior field
   zone2      : 0xf59e0b,   // amber  — edges
   zone3      : 0xef4444,   // red    — corners
-  zone4      : 0x22d3ee,   // cyan   — wall field
-  zone5      : 0xef4444,   // red    — wall corner strip
+  zone4      : 0x22c55e,   // green  — wall field
+  zone5      : 0xa855f7,   // purple — wall corner strip
   zoneLabel1 : { bg:'rgba(6,182,212,0.85)',  fg:'#fff' },
   zoneLabel2 : { bg:'rgba(217,119,6,0.88)',  fg:'#fff' },
   zoneLabel3 : { bg:'rgba(220,38,38,0.88)',  fg:'#fff' },
-  zoneLabel4 : { bg:'rgb(6,182,212)',        fg:'#fff' },
-  zoneLabel5 : { bg:'rgb(220,38,38)',        fg:'#fff' },
+  zoneLabel4 : { bg:'rgb(34,197,94)',         fg:'#fff' },
+  zoneLabel5 : { bg:'rgb(168,85,247)',        fg:'#fff' },
 };
 
 /* =========================================================================
@@ -177,13 +177,13 @@ class Wind3DRenderer {
       this._container.style.position = 'relative';
     }
 
-    const S    = 72;   // cube side, px
+    const S    = 72;    // main cube side, px
     const HALF = S / 2;
 
-    // Outer wrapper — perspective container, top-right with margin
+    // Wrapper — 3× margins from scene edges
     const wrap = document.createElement('div');
     wrap.style.cssText = [
-      'position:absolute', 'top:28px', 'right:28px',
+      'position:absolute', 'top:84px', 'right:84px',
       `width:${S}px`, `height:${S}px`,
       `perspective:${S * 3.5}px`,
       'z-index:10',
@@ -200,20 +200,22 @@ class Wind3DRenderer {
     wrap.appendChild(cube);
     this._vcCubeEl = cube;
 
-    // Transparent glass style
-    const BG   = 'rgba(14,116,144,0.06)';
-    const BGHV = 'rgba(14,116,144,0.22)';
-    const BORD = 'rgba(14,116,144,0.38)';
-    const FG   = '#000000';   // black text
+    // Light-gray Revit-style palette
+    const BG   = 'rgb(232,232,232)';   // light gray, opaque
+    const BGHV = 'rgb(155,198,235)';   // blue highlight on hover
+    const BORD = 'rgb(175,175,175)';
+    const FG   = '#333333';
 
-    // ── Faces ────────────────────────────────────────────────────────────────
+    // ── Main faces ────────────────────────────────────────────────────────────
+    // NOTE: rx=-90 face appears at CSS-BOTTOM (visual bottom); rx=90 at CSS-TOP.
+    // Swap labels so the visually-top face shows "TOP" and bottom shows "BTM".
     const faces = [
       { label:'FRONT', ry:   0, rx:   0, dir: new THREE.Vector3( 0, 0,  1) },
       { label:'BACK',  ry: 180, rx:   0, dir: new THREE.Vector3( 0, 0, -1) },
       { label:'RIGHT', ry:  90, rx:   0, dir: new THREE.Vector3( 1, 0,  0) },
       { label:'LEFT',  ry: -90, rx:   0, dir: new THREE.Vector3(-1, 0,  0) },
-      { label:'TOP',   ry:   0, rx: -90, dir: new THREE.Vector3( 0, 1,  0) },
-      { label:'BTM',   ry:   0, rx:  90, dir: new THREE.Vector3( 0,-1,  0) },
+      { label:'TOP',   ry:   0, rx:  90, dir: new THREE.Vector3( 0, 1,  0) }, // rx=90 → CSS top
+      { label:'BTM',   ry:   0, rx: -90, dir: new THREE.Vector3( 0,-1,  0) }, // rx=-90 → CSS bottom
     ];
 
     faces.forEach(f => {
@@ -227,7 +229,7 @@ class Wind3DRenderer {
         `background:${BG}`, `border:1px solid ${BORD}`,
         `color:${FG}`,
         'font-family:"JetBrains Mono",monospace',
-        'font-size:18px', 'font-weight:700', 'letter-spacing:0.02em',
+        'font-size:16px', 'font-weight:700', 'letter-spacing:0.02em',
         'cursor:pointer', 'user-select:none', 'box-sizing:border-box',
         `transform:${ry}${rx}translateZ(${HALF}px)`,
         'backface-visibility:hidden', 'transition:background 0.12s',
@@ -247,50 +249,78 @@ class Wind3DRenderer {
       cube.appendChild(el);
     });
 
-    // ── Corner dots — click for axonometric (isometric) views ────────────────
-    // CSS +Y is down; Three.js +Y is up → camDir.y = -(CSS cy sign)
-    // corners: [cx_css, cy_css, cz_css, tjsX, tjsY, tjsZ]
+    // ── Revit-style corner mini-cubes ─────────────────────────────────────────
+    // At each of the 8 corners, a small CSS 3D cube with 3 outward-facing faces.
+    // Hovering highlights the mini-cube; clicking navigates to the axonometric view.
+    const MS    = 13;     // mini-cube side, px
+    const MHALF = MS / 2;
+    const MCBG   = 'rgb(210,210,210)';
+    const MCBGHV = 'rgb(120,180,230)';
+    const MCBORD = 'rgb(155,155,155)';
+
+    // [css_cx, css_cy, css_cz, tjs_dx, tjs_dy, tjs_dz]
+    // CSS +Y is down; Three.js +Y is up → tjs_dy = -(css_cy sign)
     const corners = [
-      [ HALF, -HALF,  HALF,  1,  1,  1],  // Right-Top-Front
-      [-HALF, -HALF,  HALF, -1,  1,  1],  // Left-Top-Front
-      [ HALF, -HALF, -HALF,  1,  1, -1],  // Right-Top-Back
-      [-HALF, -HALF, -HALF, -1,  1, -1],  // Left-Top-Back
-      [ HALF,  HALF,  HALF,  1, -1,  1],  // Right-Btm-Front
-      [-HALF,  HALF,  HALF, -1, -1,  1],  // Left-Btm-Front
-      [ HALF,  HALF, -HALF,  1, -1, -1],  // Right-Btm-Back
-      [-HALF,  HALF, -HALF, -1, -1, -1],  // Left-Btm-Back
+      [ HALF, -HALF,  HALF,  1,  1,  1],
+      [-HALF, -HALF,  HALF, -1,  1,  1],
+      [ HALF, -HALF, -HALF,  1,  1, -1],
+      [-HALF, -HALF, -HALF, -1,  1, -1],
+      [ HALF,  HALF,  HALF,  1, -1,  1],
+      [-HALF,  HALF,  HALF, -1, -1,  1],
+      [ HALF,  HALF, -HALF,  1, -1, -1],
+      [-HALF,  HALF, -HALF, -1, -1, -1],
     ];
 
     corners.forEach(([cx, cy, cz, dx, dy, dz]) => {
-      const dot = document.createElement('div');
-      dot.style.cssText = [
-        'position:absolute',
-        'width:13px', 'height:13px',
-        // no border-radius → square indicator
-        `background:rgba(0,0,0,0.28)`,
-        'border:1px solid rgba(0,0,0,0.55)',
-        'cursor:pointer', 'box-sizing:border-box',
-        'left:50%', 'top:50%',
-        // center on corner point; CSS right-to-left: first 3D translates, then -50% centering
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = [
+        'position:absolute', 'left:50%', 'top:50%',
+        `width:${MS}px`, `height:${MS}px`,
+        'transform-style:preserve-3d',
         `transform:translate(-50%,-50%) translateX(${cx}px) translateY(${cy}px) translateZ(${cz}px)`,
-        'transition:background 0.12s',
+        'cursor:pointer',
       ].join(';');
 
-      dot.addEventListener('mouseenter', () => {
-        dot.style.background = 'rgba(0,0,0,0.60)';
+      // Build the 3 outward-facing mini-cube faces for this corner's octant.
+      // Face pointing in +X direction: rotateY(90) translateZ(MHALF)  if cx>0
+      //                         in -X: rotateY(-90) translateZ(MHALF) if cx<0
+      // Face pointing visually UP (CSS top): rotateX(90) translateZ(MHALF) if cy<0
+      //                         DOWN (CSS bottom): rotateX(-90) translateZ(MHALF) if cy>0
+      // Face pointing in +Z direction: translateZ(MHALF) if cz>0
+      //                         in -Z: rotateY(180) translateZ(MHALF) if cz<0
+      const miniFaceDefs = [
+        cx > 0 ? 'rotateY(90deg) '  : 'rotateY(-90deg) ',
+        cy < 0 ? 'rotateX(90deg) '  : 'rotateX(-90deg) ',
+        cz > 0 ? ''                  : 'rotateY(180deg) ',
+      ];
+
+      miniFaceDefs.forEach(tfm => {
+        const face = document.createElement('div');
+        face.style.cssText = [
+          'position:absolute',
+          `width:${MS}px`, `height:${MS}px`,
+          `background:${MCBG}`,
+          `border:1px solid ${MCBORD}`,
+          'box-sizing:border-box',
+          `transform:${tfm}translateZ(${MHALF}px)`,
+          'transition:background 0.12s',
+        ].join(';');
+        wrapper.appendChild(face);
       });
-      dot.addEventListener('mouseleave', () => {
-        dot.style.background = 'rgba(0,0,0,0.28)';
-      });
-      dot.addEventListener('click', e => {
+
+      const setMC = col => wrapper.querySelectorAll('div').forEach(f => f.style.background = col);
+      wrapper.addEventListener('mouseenter', () => setMC(MCBGHV));
+      wrapper.addEventListener('mouseleave', () => setMC(MCBG));
+      wrapper.addEventListener('click', e => {
         e.stopPropagation();
         const target = this._controls.target.clone();
         const dist   = this._camera.position.distanceTo(target);
-        const dir    = new THREE.Vector3(dx, dy, dz).normalize();
-        this._animateCameraTo(target.clone().addScaledVector(dir, dist));
+        this._animateCameraTo(target.clone().addScaledVector(
+          new THREE.Vector3(dx, dy, dz).normalize(), dist
+        ));
       });
 
-      cube.appendChild(dot);
+      cube.appendChild(wrapper);
     });
   }
 
@@ -683,6 +713,7 @@ class Wind3DRenderer {
         new THREE.Vector3(-hB+a, hEave, z), new THREE.Vector3(-hB, hEave, z),
       ];
       addWallQ(fz5L, 'zone-5', Z5_OP);
+      wallLabel('zone-5', fz5L[0], fz5L[1], fz5L[2], fz5L[3], nF, tD);
 
       // Zone 5 right strip: x=hB-a … hB
       const fz5R = [
@@ -690,6 +721,7 @@ class Wind3DRenderer {
         new THREE.Vector3(hB, hEave, z), new THREE.Vector3(hB-a, hEave, z),
       ];
       addWallQ(fz5R, 'zone-5', Z5_OP);
+      wallLabel('zone-5', fz5R[0], fz5R[1], fz5R[2], fz5R[3], nF, tD);
 
       // Zone 4 field: x=-hB+a … hB-a (only if wide enough)
       if (2 * a < B - 0.1) {
@@ -715,12 +747,14 @@ class Wind3DRenderer {
         new THREE.Vector3(hB, hEave, z), new THREE.Vector3(hB-a, hEave, z),
       ];
       addWallQ(bz5L, 'zone-5', Z5_OP);
+      wallLabel('zone-5', bz5L[0], bz5L[1], bz5L[2], bz5L[3], nB, tD);
 
       const bz5R = [
         new THREE.Vector3(-hB, 0, z),  new THREE.Vector3(-hB+a, 0, z),
         new THREE.Vector3(-hB+a, hEave, z), new THREE.Vector3(-hB, hEave, z),
       ];
       addWallQ(bz5R, 'zone-5', Z5_OP);
+      wallLabel('zone-5', bz5R[0], bz5R[1], bz5R[2], bz5R[3], nB, tD);
 
       if (2 * a < B - 0.1) {
         const bz4 = [
@@ -746,6 +780,7 @@ class Wind3DRenderer {
         new THREE.Vector3(x, hEave, hL), new THREE.Vector3(x, hEave, hL-a),
       ];
       addWallQ(rz5F, 'zone-5', Z5_OP);
+      wallLabel('zone-5', rz5F[0], rz5F[1], rz5F[2], rz5F[3], nR, tD);
 
       // Zone 5 back strip: z=-hL … -hL+a
       const rz5B = [
@@ -753,6 +788,7 @@ class Wind3DRenderer {
         new THREE.Vector3(x, hEave, -hL+a), new THREE.Vector3(x, hEave, -hL),
       ];
       addWallQ(rz5B, 'zone-5', Z5_OP);
+      wallLabel('zone-5', rz5B[0], rz5B[1], rz5B[2], rz5B[3], nR, tD);
 
       if (2 * a < L - 0.1) {
         const rz4 = [
@@ -778,6 +814,7 @@ class Wind3DRenderer {
         new THREE.Vector3(x, hEave, hL), new THREE.Vector3(x, hEave, hL-a),
       ];
       addWallQ(lz5F, 'zone-5', Z5_OP);
+      wallLabel('zone-5', lz5F[0], lz5F[1], lz5F[2], lz5F[3], nL, tD);
 
       // Zone 5 back strip: z=-hL … -hL+a
       const lz5B = [
@@ -785,6 +822,7 @@ class Wind3DRenderer {
         new THREE.Vector3(x, hEave, -hL+a), new THREE.Vector3(x, hEave, -hL),
       ];
       addWallQ(lz5B, 'zone-5', Z5_OP);
+      wallLabel('zone-5', lz5B[0], lz5B[1], lz5B[2], lz5B[3], nL, tD);
 
       if (2 * a < L - 0.1) {
         const lz4 = [
@@ -845,7 +883,7 @@ class Wind3DRenderer {
       div.textContent = text;
       div.style.cssText = [
         'font-family:"JetBrains Mono",monospace',
-        'font-size:11px',
+        'font-size:13px',
         'font-weight:600',
         'color:' + THEME.dimText,
         'background:' + THEME.dimBg,
@@ -875,124 +913,270 @@ class Wind3DRenderer {
     return grp;
   }
 
-  _buildAllDims(B, L, hEave, hRidge, zone_a, hLabel = null) {
+  _buildAllDims(B, L, hEave, hRidge, zone_a, hLabel = null, hEaveLabel = null, theta = 0, roofShape = 'hip') {
     const hB = B/2, hL = L/2;
     const grp = new THREE.Group();
-    const D   = Math.max(8, Math.max(B, L) * 0.10); // offset from building face
+    const D   = Math.max(8, Math.max(B, L) * 0.10);
+    const EPS_Y = 0.2;  // lift base dims off y=0 to prevent z-fighting
 
-    // ── B (Width) — ON the Front face (z = +hL), at ground level ─────────
-    // Front face = +Z side (what you see from the front camera angle)
+    // Helper: remove trailing .0 from toFixed(1)
+    const fmt = v => { const s = v.toFixed(1); return s.endsWith('.0') ? s.slice(0,-2) : s; };
+
+    // ── B (Width) — Front face (z = +hL) ──────────────────────────────────
     const bZ = hL + D;
     grp.add(this._buildDim(
-      new THREE.Vector3(-hB, 0, bZ),
-      new THREE.Vector3( hB, 0, bZ),
-      new THREE.Vector3(1, 0, -1).normalize(), // tick: 45° in XZ plane (in-plane slash)
+      new THREE.Vector3(-hB, EPS_Y, bZ),
+      new THREE.Vector3( hB, EPS_Y, bZ),
+      new THREE.Vector3(1, 0, -1).normalize(),
       [
-        [new THREE.Vector3(-hB, 0,  hL), new THREE.Vector3(-hB, 0, bZ)],
-        [new THREE.Vector3( hB, 0,  hL), new THREE.Vector3( hB, 0, bZ)],
+        [new THREE.Vector3(-hB, EPS_Y,  hL), new THREE.Vector3(-hB, EPS_Y, bZ)],
+        [new THREE.Vector3( hB, EPS_Y,  hL), new THREE.Vector3( hB, EPS_Y, bZ)],
       ],
-      `B = ${B.toFixed(1)} ft`, 'dim-B', 'inp-B'
+      `B = ${fmt(B)} ft`, 'dim-B', 'inp-B'
     ));
     this._dimHighlight['dim-B'] = grp.children[grp.children.length - 1];
 
-    // ── L (Length) — right face, at ground, parallel to Z ─────────────────
+    // ── L (Length) — Right face, parallel to Z ─────────────────────────────
     const lX = hB + D;
     grp.add(this._buildDim(
-      new THREE.Vector3(lX, 0, -hL),
-      new THREE.Vector3(lX, 0,  hL),
-      new THREE.Vector3(1, 0, 1).normalize(),  // tick: 45° in XZ plane
+      new THREE.Vector3(lX, EPS_Y, -hL),
+      new THREE.Vector3(lX, EPS_Y,  hL),
+      new THREE.Vector3(1, 0, 1).normalize(),
       [
-        [new THREE.Vector3(hB, 0, -hL), new THREE.Vector3(lX, 0, -hL)],
-        [new THREE.Vector3(hB, 0,  hL), new THREE.Vector3(lX, 0,  hL)],
+        [new THREE.Vector3(hB, EPS_Y, -hL), new THREE.Vector3(lX, EPS_Y, -hL)],
+        [new THREE.Vector3(hB, EPS_Y,  hL), new THREE.Vector3(lX, EPS_Y,  hL)],
       ],
-      `L = ${L.toFixed(1)} ft`, 'dim-L', 'inp-L'
+      `L = ${fmt(L)} ft`, 'dim-L', 'inp-L'
     ));
     this._dimHighlight['dim-L'] = grp.children[grp.children.length - 1];
 
-    // ── h (Height) — Left face, RIGHT edge (z = +hL), vertical ──────────────
-    // Parallel to the front-left building edge — tick along -Z direction
-    const hXh = -hB - D;
-    const hZh =  hL;   // right edge of Left face
+    // ── h_eave — Left face right edge, y=0→hEave ──────────────────────────
+    const hXhe = -hB - D;
+    const hZhe = hL;
     grp.add(this._buildDim(
-      new THREE.Vector3(hXh, 0,       hZh),
-      new THREE.Vector3(hXh, hRidge,  hZh),
-      new THREE.Vector3(-1, 1, 0).normalize(), // tick: 45° in XY plane
+      new THREE.Vector3(hXhe, EPS_Y,  hZhe),
+      new THREE.Vector3(hXhe, hEave,  hZhe),
+      new THREE.Vector3(-1, 1, 0).normalize(),
       [
-        [new THREE.Vector3(-hB, 0,       hZh), new THREE.Vector3(hXh, 0,       hZh)],
-        [new THREE.Vector3(  0, hRidge,    0), new THREE.Vector3(hXh, hRidge,  hZh)],
+        [new THREE.Vector3(-hB, EPS_Y,  hZhe), new THREE.Vector3(hXhe, EPS_Y,  hZhe)],
+        [new THREE.Vector3(-hB, hEave,  hZhe), new THREE.Vector3(hXhe, hEave,  hZhe)],
       ],
-      `h = ${(hLabel ?? hRidge).toFixed(1)} ft`, 'dim-h', 'inp-h'
+      `h_eave = ${fmt(hEaveLabel ?? hEave)} ft`, 'dim-h-eave', 'inp-h'
+    ));
+    this._dimHighlight['dim-h-eave'] = grp.children[grp.children.length - 1];
+
+    // ── h (ridge) — Left face, slightly further out, y=0→hRidge ───────────
+    const hXh = -hB - D * 1.6;
+    const hZh = hL;
+    grp.add(this._buildDim(
+      new THREE.Vector3(hXh, EPS_Y,   hZh),
+      new THREE.Vector3(hXh, hRidge,  hZh),
+      new THREE.Vector3(-1, 1, 0).normalize(),
+      [
+        [new THREE.Vector3(hXhe, EPS_Y,   hZh), new THREE.Vector3(hXh, EPS_Y,   hZh)],
+        [new THREE.Vector3(hXhe, hRidge,  hZh), new THREE.Vector3(hXh, hRidge,  hZh)],
+      ],
+      `h = ${fmt(hLabel ?? hRidge)} ft`, 'dim-h', 'inp-h'
     ));
     this._dimHighlight['dim-h'] = grp.children[grp.children.length - 1];
 
-    // ── a (Zone strip width) — placed BETWEEN building face and B/L dim ────
-    // All "a" offsets use D*0.4 < D (B/L offset), placing them closer to building.
-    // Tick direction: 90° rotation in XZ from B/L ticks → (x,z)→(z,-x).
-    const aEY = hEave;  // eave height level
-    const aOFF = D * 0.4;  // offset toward building relative to B/L dim
+    const aEY  = hEave;
+    const aOFF = D * 0.4;
 
-    // A) Eave "a" on LEFT face back side — moved from Right to Left face
-    //    Shows Zone 3 strip from z=-hL to z=-hL+zone_a at x=-hB-aOFF, y=hEave
-    const aLX = -hB - aOFF;
-    grp.add(this._buildDim(
-      new THREE.Vector3(aLX, aEY, -hL),
-      new THREE.Vector3(aLX, aEY, -hL + zone_a),
-      new THREE.Vector3(1, 0, 1).normalize(),  // 90° rotated: (-1,0,1)→(1,0,1)
-      [
-        [new THREE.Vector3(-hB, aEY, -hL),          new THREE.Vector3(aLX, aEY, -hL)],
-        [new THREE.Vector3(-hB, aEY, -hL + zone_a), new THREE.Vector3(aLX, aEY, -hL + zone_a)],
-      ],
-      `a = ${zone_a.toFixed(1)} ft`, 'dim-a', null
-    ));
-    this._dimHighlight['dim-a'] = grp.children[grp.children.length - 1];
-
-    // B) Eave "a" on Front face right side — x from hB-zone_a to hB at z=hL+aOFF
+    // ── Eave "a" — Front face right side (zone 3 strip from Back toward front right) ──
     const aFZ = hL + aOFF;
     grp.add(this._buildDim(
       new THREE.Vector3(hB - zone_a, aEY, aFZ),
       new THREE.Vector3(hB,          aEY, aFZ),
-      new THREE.Vector3(1, 0, -1).normalize(), // 90° rotated: (1,0,1)→(1,0,-1)
+      new THREE.Vector3(1, 0, -1).normalize(),
       [
-        [new THREE.Vector3(hB - zone_a, aEY,  hL), new THREE.Vector3(hB - zone_a, aEY, aFZ)],
-        [new THREE.Vector3(hB,          aEY,  hL), new THREE.Vector3(hB,          aEY, aFZ)],
+        [new THREE.Vector3(hB - zone_a, aEY, hL), new THREE.Vector3(hB - zone_a, aEY, aFZ)],
+        [new THREE.Vector3(hB,          aEY, hL), new THREE.Vector3(hB,          aEY, aFZ)],
       ],
-      `a = ${zone_a.toFixed(1)} ft`, 'dim-a2', null
+      `a = ${fmt(zone_a)} ft`, 'dim-a2', null
     ));
     this._dimHighlight['dim-a2'] = grp.children[grp.children.length - 1];
 
-    // ── Zone 5 corner strip dims at building BASE (y=0) ──────────────────────
-    // Front face RIGHT corner base: x from hB-zone_a to hB at z=hL+aOFF (NOT bZ)
+    // ── Eave "a" — Right face back corner (zone 3/5 strip z=-hL to -hL+zone_a) ──
+    const aRX = hB + aOFF;
+    grp.add(this._buildDim(
+      new THREE.Vector3(aRX, aEY, -hL),
+      new THREE.Vector3(aRX, aEY, -hL + zone_a),
+      new THREE.Vector3(1, 0, 1).normalize(),
+      [
+        [new THREE.Vector3(hB, aEY, -hL),          new THREE.Vector3(aRX, aEY, -hL)],
+        [new THREE.Vector3(hB, aEY, -hL + zone_a), new THREE.Vector3(aRX, aEY, -hL + zone_a)],
+      ],
+      `a = ${fmt(zone_a)} ft`, 'dim-a', null
+    ));
+    this._dimHighlight['dim-a'] = grp.children[grp.children.length - 1];
+
+    // ── Zone 5 base dims (y = EPS_Y) ─────────────────────────────────────────
+    // Front face RIGHT corner base
     const az5FZ = hL + aOFF;
     grp.add(this._buildDim(
-      new THREE.Vector3(hB - zone_a, 0, az5FZ),
-      new THREE.Vector3(hB,          0, az5FZ),
-      new THREE.Vector3(1, 0, -1).normalize(), // 90° rotated
+      new THREE.Vector3(hB - zone_a, EPS_Y, az5FZ),
+      new THREE.Vector3(hB,          EPS_Y, az5FZ),
+      new THREE.Vector3(1, 0, -1).normalize(),
       [
-        [new THREE.Vector3(hB - zone_a, 0,  hL), new THREE.Vector3(hB - zone_a, 0, az5FZ)],
-        [new THREE.Vector3(hB,          0,  hL), new THREE.Vector3(hB,          0, az5FZ)],
+        [new THREE.Vector3(hB - zone_a, EPS_Y, hL), new THREE.Vector3(hB - zone_a, EPS_Y, az5FZ)],
+        [new THREE.Vector3(hB,          EPS_Y, hL), new THREE.Vector3(hB,          EPS_Y, az5FZ)],
       ],
-      `a = ${zone_a.toFixed(1)} ft`, 'dim-a3', null
+      `a = ${fmt(zone_a)} ft`, 'dim-a3', null
     ));
     this._dimHighlight['dim-a3'] = grp.children[grp.children.length - 1];
 
-    // Right face LEFT corner base: z from -hL to -hL+zone_a at x=hB+aOFF (NOT lX)
+    // Right face BACK corner base
     const az5RX = hB + aOFF;
     grp.add(this._buildDim(
-      new THREE.Vector3(az5RX, 0, -hL),
-      new THREE.Vector3(az5RX, 0, -hL + zone_a),
-      new THREE.Vector3(1, 0, 1).normalize(),  // 90° rotated: (-1,0,1)→(1,0,1)
+      new THREE.Vector3(az5RX, EPS_Y, -hL),
+      new THREE.Vector3(az5RX, EPS_Y, -hL + zone_a),
+      new THREE.Vector3(1, 0, 1).normalize(),
       [
-        [new THREE.Vector3(hB, 0, -hL),          new THREE.Vector3(az5RX, 0, -hL)],
-        [new THREE.Vector3(hB, 0, -hL + zone_a), new THREE.Vector3(az5RX, 0, -hL + zone_a)],
+        [new THREE.Vector3(hB, EPS_Y, -hL),          new THREE.Vector3(az5RX, EPS_Y, -hL)],
+        [new THREE.Vector3(hB, EPS_Y, -hL + zone_a), new THREE.Vector3(az5RX, EPS_Y, -hL + zone_a)],
       ],
-      `a = ${zone_a.toFixed(1)} ft`, 'dim-a4', null
+      `a = ${fmt(zone_a)} ft`, 'dim-a4', null
     ));
     this._dimHighlight['dim-a4'] = grp.children[grp.children.length - 1];
+
+    // ── θ angle dim — at front-left eave corner, in XY plane at z=hL ─────────
+    if (theta > 0) {
+      const arcR  = Math.max(3, Math.min(D * 0.5, zone_a));
+      const ax    = -hB, ay = hEave, az = hL;
+      const thRad = THREE.MathUtils.degToRad(theta);
+      // Two legs of the angle indicator
+      const legH = new THREE.Vector3(1, 0, 0);                               // horizontal
+      const legS = new THREE.Vector3(Math.cos(thRad), Math.sin(thRad), 0);  // slope
+
+      // Draw arc (10 segments, in the XY plane at z=az)
+      const N = 12;
+      const arcPts = [];
+      for (let i = 0; i <= N; i++) {
+        const a = (i / N) * thRad;
+        arcPts.push(new THREE.Vector3(ax + arcR * Math.cos(a), ay + arcR * Math.sin(a), az));
+      }
+      const arcLine = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(arcPts),
+        new THREE.LineBasicMaterial({ color: 0x000000 })
+      );
+      grp.add(arcLine);
+
+      // Two short radial legs
+      const leg1 = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(ax, ay, az),
+          new THREE.Vector3(ax + arcR * 1.2, ay, az)
+        ]),
+        new THREE.LineBasicMaterial({ color: 0x000000 })
+      );
+      const leg2 = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(ax, ay, az),
+          new THREE.Vector3(ax + arcR * 1.2 * legS.x, ay + arcR * 1.2 * legS.y, az)
+        ]),
+        new THREE.LineBasicMaterial({ color: 0x000000 })
+      );
+      grp.add(leg1);
+      grp.add(leg2);
+
+      // CSS2D label at arc midpoint
+      if (THREE.CSS2DObject) {
+        const midAngle = thRad / 2;
+        const midPt = new THREE.Vector3(
+          ax + arcR * 1.6 * Math.cos(midAngle),
+          ay + arcR * 1.6 * Math.sin(midAngle),
+          az
+        );
+        const div = document.createElement('div');
+        div.textContent = `θ = ${fmt(theta)}°`;
+        div.style.cssText = [
+          'font-family:"JetBrains Mono",monospace',
+          'font-size:13px', 'font-weight:600',
+          'color:' + THEME.dimText,
+          'background:' + THEME.dimBg,
+          'padding:2px 8px', 'border-radius:4px',
+          'border:1px solid #334155', 'white-space:nowrap',
+          'pointer-events:none',
+        ].join(';');
+        const obj = new THREE.CSS2DObject(div);
+        obj.position.copy(midPt);
+        grp.add(obj);
+      }
+    }
+
+    // ── Zone 2 "a" dims on hip roof slopes (only for hip) ───────────────────
+    if (roofShape === 'hip') {
+      const r2 = Math.max(0, hL - hB);
+
+      // --- Triangular Front slope, right hip: dim perpendicular to hip on slope surface ---
+      {
+        const Bv = new THREE.Vector3(hB, hEave, hL);
+        const Av = new THREE.Vector3(-hB, hEave, hL);
+        const Cv = new THREE.Vector3(0, hRidge, r2);
+        const hipDir = new THREE.Vector3().subVectors(Cv, Bv).normalize();
+        // Triangular slope normal
+        const e1 = new THREE.Vector3().subVectors(Bv, Av);
+        const e2 = new THREE.Vector3().subVectors(Cv, Av);
+        const sN  = new THREE.Vector3().crossVectors(e1, e2).normalize();
+        if (sN.y < 0) sN.negate();
+        // On-surface perpendicular to hip, pointing inward
+        const perpH = new THREE.Vector3().crossVectors(hipDir, sN).normalize();
+        const ctr3  = new THREE.Vector3(0, (hEave + hRidge) * 0.4, (hL + r2) * 0.5);
+        if (perpH.dot(new THREE.Vector3().subVectors(ctr3, Bv)) < 0) perpH.negate();
+        // Place the dim slightly above eave (halfway up the slope)
+        const mid   = Bv.clone().lerp(Cv, 0.3);
+        const qa1   = mid.clone();
+        const qa2   = mid.clone().addScaledVector(perpH, zone_a);
+        const stub  = hipDir.clone().multiplyScalar(0.5);
+        grp.add(this._buildDim(
+          qa1, qa2, hipDir,
+          [
+            [qa1.clone().sub(stub), qa1.clone()],
+            [qa2.clone().sub(stub), qa2.clone()],
+          ],
+          `a = ${fmt(zone_a)} ft`, 'dim-aZ2T', null
+        ));
+        this._dimHighlight['dim-aZ2T'] = grp.children[grp.children.length - 1];
+      }
+
+      // --- Trapezoidal Right slope, front-left hip: dim perpendicular to hip on slope surface ---
+      {
+        const Bv  = new THREE.Vector3(hB, hEave,  hL);
+        const BvB = new THREE.Vector3(hB, hEave, -hL);  // right-back eave corner
+        const Cv  = new THREE.Vector3(0,  hRidge,  r2);
+        const CvB = new THREE.Vector3(0,  hRidge, -r2);
+        const hipDir = new THREE.Vector3().subVectors(Cv, Bv).normalize();
+        // Trapezoidal slope normal (right slope, norm ≈ +X)
+        const e1 = new THREE.Vector3().subVectors(Cv, Bv);
+        const e2 = new THREE.Vector3().subVectors(BvB, Bv);
+        const sN  = new THREE.Vector3().crossVectors(e1, e2).normalize();
+        if (sN.x < 0) sN.negate();
+        // On-surface perpendicular to hip
+        const perpH = new THREE.Vector3().crossVectors(hipDir, sN).normalize();
+        const ctrR  = new THREE.Vector3(hB * 0.5, hEave * 0.5 + hRidge * 0.5, 0);
+        if (perpH.dot(new THREE.Vector3().subVectors(ctrR, Bv)) < 0) perpH.negate();
+        // Place at midpoint of front hip of right slope
+        const mid  = Bv.clone().lerp(Cv, 0.3);
+        const qa1  = mid.clone();
+        const qa2  = mid.clone().addScaledVector(perpH, zone_a);
+        const stub = hipDir.clone().multiplyScalar(0.5);
+        grp.add(this._buildDim(
+          qa1, qa2, hipDir,
+          [
+            [qa1.clone().sub(stub), qa1.clone()],
+            [qa2.clone().sub(stub), qa2.clone()],
+          ],
+          `a = ${fmt(zone_a)} ft`, 'dim-aZ2R', null
+        ));
+        this._dimHighlight['dim-aZ2R'] = grp.children[grp.children.length - 1];
+      }
+    }
 
     return grp;
   }
 
-  /* ── zone overlays ──────────────────────────────────────────────────────── */
+    /* ── zone overlays ──────────────────────────────────────────────────────── */
 
   _zoneQuad(u0, u1, v0, v1, ptFn, hB, hEave, hRidge, hL, norm, eps, mat, zoneType) {
     const off = norm.clone().multiplyScalar(eps);
@@ -1086,21 +1270,38 @@ class Wind3DRenderer {
       'zone-1': { bg:'rgb(6,182,212)',   fg:'#fff', text:'Zone 1' },
       'zone-2': { bg:'rgb(217,119,6)',   fg:'#fff', text:'Zone 2' },
       'zone-3': { bg:'rgb(220,38,38)',   fg:'#fff', text:'Zone 3' },
-      'zone-4': { bg:'rgb(6,182,212)',   fg:'#fff', text:'Zone 4' },
-      'zone-5': { bg:'rgb(220,38,38)',   fg:'#fff', text:'Zone 5' },
+      'zone-4': { bg:'rgb(34,197,94)',   fg:'#fff', text:'Zone 4' },
+      'zone-5': { bg:'rgb(168,85,247)',  fg:'#fff', text:'Zone 5' },
     };
     const cfg = cfgMap[zoneType];
     if (!cfg) return;
 
-    // Canvas texture — pill-shaped background + bold text
-    // Dynamic width: measure text then add equal PAD on all 4 sides
-    const CH  = 44;
-    const PAD = 10;   // equal padding, all 4 sides
-    const _cv0 = document.createElement('canvas');
-    _cv0.width = 4; _cv0.height = CH;
-    const _ctx0 = _cv0.getContext('2d');
-    _ctx0.font = 'bold 24px "JetBrains Mono",monospace';
-    const CW  = Math.ceil(_ctx0.measureText(cfg.text).width) + 2 * PAD;
+    // Zone 5 uses a vertical (portrait) canvas — text reads upward.
+    // All other zones use the standard landscape pill.
+    const isVertical = zoneType === 'zone-5';
+
+    const FONT_SIZE = 24;
+    const PAD = 10;
+    let CW, CH;
+    if (isVertical) {
+      // Portrait: fixed width, text rotated 90° CCW on canvas
+      CH = 44;   // this becomes the plane's WIDTH in world space
+      const _cv0 = document.createElement('canvas');
+      _cv0.width = 4; _cv0.height = CH;
+      const _ctx0 = _cv0.getContext('2d');
+      _ctx0.font = `bold ${FONT_SIZE}px "JetBrains Mono",monospace`;
+      CW = Math.ceil(_ctx0.measureText(cfg.text).width) + 2 * PAD;
+      // Swap so the canvas is portrait (tall)
+      [CW, CH] = [CH, CW];
+    } else {
+      CH = 44;
+      const _cv0 = document.createElement('canvas');
+      _cv0.width = 4; _cv0.height = CH;
+      const _ctx0 = _cv0.getContext('2d');
+      _ctx0.font = `bold ${FONT_SIZE}px "JetBrains Mono",monospace`;
+      CW = Math.ceil(_ctx0.measureText(cfg.text).width) + 2 * PAD;
+    }
+
     const cv  = document.createElement('canvas');
     cv.width  = CW; cv.height = CH;
     const ctx = cv.getContext('2d');
@@ -1118,15 +1319,25 @@ class Wind3DRenderer {
     ctx.fillStyle = cfg.bg;
     ctx.fill();
     ctx.fillStyle = cfg.fg;
-    ctx.font = 'bold 24px "JetBrains Mono",monospace';
+    ctx.font = `bold ${FONT_SIZE}px "JetBrains Mono",monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(cfg.text, CW / 2, CH / 2);
+    if (isVertical) {
+      // Rotate canvas 90° CCW so text reads upward on wall
+      ctx.save();
+      ctx.translate(CW / 2, CH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText(cfg.text, 0, 0);
+      ctx.restore();
+    } else {
+      ctx.fillText(cfg.text, CW / 2, CH / 2);
+    }
 
     const tex = new THREE.CanvasTexture(cv);
-    const aspect  = CW / CH;          // ≈ 3.69
-    const planeH  = 1.4;              // world units (ft) — half size
-    const planeW  = planeH * aspect;
+    // For vertical label: aspect is CH/CW (tall portrait)
+    const aspect  = isVertical ? CH / CW : CW / CH;
+    const planeH  = 1.4;              // world units — shorter side
+    const planeW  = isVertical ? planeH / aspect : planeH * aspect;
 
     const geo = new THREE.PlaneGeometry(planeW, planeH);
     const mat = new THREE.MeshBasicMaterial({
@@ -1193,7 +1404,7 @@ class Wind3DRenderer {
     }
 
     // dim lines (pass hRidge_ft so label shows real engineering value, not scaled)
-    this._dimGroup = this._buildAllDims(B, L, hEave, hRidge, zone_a, hRidge_ft);
+    this._dimGroup = this._buildAllDims(B, L, hEave, hRidge, zone_a, hRidge_ft, hEave_ft, theta, _shape);
 
     // zones — shape-specific surface mapping
     const matZ = (col, op) => new THREE.MeshBasicMaterial({
