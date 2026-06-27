@@ -173,18 +173,16 @@ class Wind3DRenderer {
       this._container.style.position = 'relative';
     }
 
-    const S    = 76;   // cube side length, px
+    const S    = 72;   // cube side, px
     const HALF = S / 2;
 
-    // Outer wrapper — perspective container
+    // Outer wrapper — perspective container, top-right with margin
     const wrap = document.createElement('div');
     wrap.style.cssText = [
-      'position:absolute', 'bottom:12px', 'right:12px',
+      'position:absolute', 'top:16px', 'right:16px',
       `width:${S}px`, `height:${S}px`,
       `perspective:${S * 3.5}px`,
       'z-index:10',
-      'box-shadow:0 3px 12px rgba(0,0,0,0.28)',
-      'border-radius:4px',
     ].join(';');
     this._container.appendChild(wrap);
 
@@ -192,47 +190,43 @@ class Wind3DRenderer {
     const cube = document.createElement('div');
     cube.style.cssText = [
       `width:${S}px`, `height:${S}px`,
-      'position:relative',
-      'transform-style:preserve-3d',
+      'position:relative', 'transform-style:preserve-3d',
       'transform:rotateX(0deg) rotateY(0deg)',
-      'transition:transform 0.05s linear',
     ].join(';');
     wrap.appendChild(cube);
     this._vcCubeEl = cube;
 
-    // Face definitions:
-    //  transform applied RIGHT-TO-LEFT in CSS, so list is [rotY, rotX, translateZ]
-    //  camDir: world direction from which the camera should view when this face is clicked
-    const faces = [
-      { label:'FRONT', ry:   0, rx:   0, camDir: new THREE.Vector3( 0, 0,  1) },
-      { label:'BACK',  ry: 180, rx:   0, camDir: new THREE.Vector3( 0, 0, -1) },
-      { label:'RIGHT', ry:  90, rx:   0, camDir: new THREE.Vector3( 1, 0,  0) },
-      { label:'LEFT',  ry: -90, rx:   0, camDir: new THREE.Vector3(-1, 0,  0) },
-      { label:'TOP',   ry:   0, rx: -90, camDir: new THREE.Vector3( 0, 1,  0) },
-      { label:'BTM',   ry:   0, rx:  90, camDir: new THREE.Vector3( 0,-1,  0) },
-    ];
+    // Transparent glass style
+    const BG   = 'rgba(14,116,144,0.06)';
+    const BGHV = 'rgba(14,116,144,0.22)';
+    const BORD = 'rgba(14,116,144,0.38)';
+    const FG   = '#0e7490';   // dark cyan text
 
-    const BG   = 'rgba(14,116,144,0.88)';
-    const BGHV = 'rgba(6,182,212,0.95)';
-    const BORD = 'rgba(255,255,255,0.22)';
+    // ── Faces ────────────────────────────────────────────────────────────────
+    const faces = [
+      { label:'FRONT', ry:   0, rx:   0, dir: new THREE.Vector3( 0, 0,  1) },
+      { label:'BACK',  ry: 180, rx:   0, dir: new THREE.Vector3( 0, 0, -1) },
+      { label:'RIGHT', ry:  90, rx:   0, dir: new THREE.Vector3( 1, 0,  0) },
+      { label:'LEFT',  ry: -90, rx:   0, dir: new THREE.Vector3(-1, 0,  0) },
+      { label:'TOP',   ry:   0, rx: -90, dir: new THREE.Vector3( 0, 1,  0) },
+      { label:'BTM',   ry:   0, rx:  90, dir: new THREE.Vector3( 0,-1,  0) },
+    ];
 
     faces.forEach(f => {
       const el = document.createElement('div');
-      const ryPart = f.ry !== 0 ? `rotateY(${f.ry}deg) ` : '';
-      const rxPart = f.rx !== 0 ? `rotateX(${f.rx}deg) ` : '';
+      const ry = f.ry !== 0 ? `rotateY(${f.ry}deg) ` : '';
+      const rx = f.rx !== 0 ? `rotateX(${f.rx}deg) ` : '';
       el.style.cssText = [
         'position:absolute',
         `width:${S}px`, `height:${S}px`,
         'display:flex', 'align-items:center', 'justify-content:center',
-        `background:${BG}`,
-        `border:1px solid ${BORD}`,
-        'color:#fff',
+        `background:${BG}`, `border:1px solid ${BORD}`,
+        `color:${FG}`,
         'font-family:"JetBrains Mono",monospace',
-        'font-size:9px', 'font-weight:700', 'letter-spacing:0.08em',
+        'font-size:8px', 'font-weight:700', 'letter-spacing:0.08em',
         'cursor:pointer', 'user-select:none', 'box-sizing:border-box',
-        `transform:${ryPart}${rxPart}translateZ(${HALF}px)`,
-        'backface-visibility:hidden',
-        'transition:background 0.12s',
+        `transform:${ry}${rx}translateZ(${HALF}px)`,
+        'backface-visibility:hidden', 'transition:background 0.12s',
       ].join(';');
       el.textContent = f.label;
 
@@ -241,14 +235,62 @@ class Wind3DRenderer {
       el.addEventListener('click', () => {
         const target = this._controls.target.clone();
         const dist   = this._camera.position.distanceTo(target);
-        // Tiny elevation offset for top/bottom so OrbitControls doesn't flip
-        const dir    = f.camDir.clone();
+        const dir    = f.dir.clone();
         if (f.label === 'TOP') dir.set(0.03, 1, 0.03).normalize();
         if (f.label === 'BTM') dir.set(0.03,-1, 0.03).normalize();
         this._animateCameraTo(target.clone().addScaledVector(dir, dist));
       });
-
       cube.appendChild(el);
+    });
+
+    // ── Corner dots — click for axonometric (isometric) views ────────────────
+    // CSS +Y is down; Three.js +Y is up → camDir.y = -(CSS cy sign)
+    // corners: [cx_css, cy_css, cz_css, tjsX, tjsY, tjsZ]
+    const corners = [
+      [ HALF, -HALF,  HALF,  1,  1,  1],  // Right-Top-Front
+      [-HALF, -HALF,  HALF, -1,  1,  1],  // Left-Top-Front
+      [ HALF, -HALF, -HALF,  1,  1, -1],  // Right-Top-Back
+      [-HALF, -HALF, -HALF, -1,  1, -1],  // Left-Top-Back
+      [ HALF,  HALF,  HALF,  1, -1,  1],  // Right-Btm-Front
+      [-HALF,  HALF,  HALF, -1, -1,  1],  // Left-Btm-Front
+      [ HALF,  HALF, -HALF,  1, -1, -1],  // Right-Btm-Back
+      [-HALF,  HALF, -HALF, -1, -1, -1],  // Left-Btm-Back
+    ];
+
+    corners.forEach(([cx, cy, cz, dx, dy, dz]) => {
+      const dot = document.createElement('div');
+      dot.style.cssText = [
+        'position:absolute',
+        'width:8px', 'height:8px',
+        'border-radius:50%',
+        `background:${BORD}`,
+        'border:1px solid rgba(14,116,144,0.6)',
+        'cursor:pointer', 'box-sizing:border-box',
+        'left:50%', 'top:50%',
+        // center on corner point; CSS right-to-left: first 3D translates, then -50% centering
+        `transform:translate(-50%,-50%) translateX(${cx}px) translateY(${cy}px) translateZ(${cz}px)`,
+        'transition:background 0.12s, transform 0.12s',
+      ].join(';');
+
+      dot.addEventListener('mouseenter', () => {
+        dot.style.background = 'rgba(6,182,212,0.9)';
+        dot.style.transform =
+          `translate(-50%,-50%) translateX(${cx}px) translateY(${cy}px) translateZ(${cz}px) scale(1.5)`;
+      });
+      dot.addEventListener('mouseleave', () => {
+        dot.style.background = BORD;
+        dot.style.transform =
+          `translate(-50%,-50%) translateX(${cx}px) translateY(${cy}px) translateZ(${cz}px)`;
+      });
+      dot.addEventListener('click', e => {
+        e.stopPropagation();
+        const target = this._controls.target.clone();
+        const dist   = this._camera.position.distanceTo(target);
+        const dir    = new THREE.Vector3(dx, dy, dz).normalize();
+        this._animateCameraTo(target.clone().addScaledVector(dir, dist));
+      });
+
+      cube.appendChild(dot);
     });
   }
 
@@ -1193,8 +1235,9 @@ class Wind3DRenderer {
         addTriPart([A, Bv, E, D], 'zone-3', 0.50, 0.12);
 
         /* Flat on-surface labels for this triangular slope.
-           textDir = (1,0,0): horizontal across eave — rotated 90° from uphill.   */
-        const _triTD = new THREE.Vector3(1, 0, 0);
+           textDir along +X for front slope (zs=1), -X for back (zs=-1) so the
+           text reads correctly when each slope is viewed head-on.                 */
+        const _triTD = new THREE.Vector3(zs > 0 ? 1 : -1, 0, 0);
 
         // Zone 1 centroid: average of triangle (M_L, M_R, Mx)
         const _ctr1 = new THREE.Vector3(
@@ -1206,12 +1249,12 @@ class Wind3DRenderer {
           this._makeZoneLabelFlat('zone-1', _ctr1, tN, _triTD);
         }
 
-        // Zone 2 centroid: midpoint between Zone-2-left and Zone-2-right centroids
-        //   both quads share the same y/z values by symmetry; x = 0
+        // Zone 2 centroid: halfway between Mx (inner-boundary axis crossing) and C
+        //   (apex), placing the label in the upper Zone 2 band between Zone 1 and ridge.
         const _ctr2 = new THREE.Vector3(
           0,
-          (D.y + M_L.y + Mx.y + C.y) / 4,
-          (D.z + M_L.z + Mx.z + C.z) / 4
+          Mx.y + 0.5 * (C.y - Mx.y),
+          Mx.z + 0.5 * (C.z - Mx.z)
         );
         this._makeZoneLabelFlat('zone-2', _ctr2, tN, _triTD);
 
