@@ -860,28 +860,28 @@ class Wind3DRenderer {
           norm, 'zone-1', 0.20, 0.02
         );
 
-        /* Zone 2 — U-shaped band (three overlapping strips, all Zone 2 color):
-           top ridge strip + two tapered hip-ridge side strips.
-           Strips overlap at the two ridge-end corners; that's correct — all Zone 2.       */
+        /* Zone 2 — non-overlapping U-shaped band:
+           hip strips run only u=[_ua, 1-_ua2]; ridge block u=[1-_ua2, 1] full v.
+           Zone 3 u=[0,_ua]. All pieces share edges only — no double-alpha.             */
 
-        /* Top: ridge strip (u near 1, full v) */
+        /* Back hip strip: u=[_ua, 1-_ua2], v=[0 → _ve.._vr] */
+        addQuadMesh(
+          ptFn(_ua,      0, 0,0,0,0), ptFn(_ua,     _ve, 0,0,0,0),
+          ptFn(1-_ua2, _vr, 0,0,0,0), ptFn(1-_ua2,    0, 0,0,0,0),
+          norm, 'zone-2', 0.35, 0.07
+        );
+
+        /* Front hip strip: u=[_ua, 1-_ua2], v=[1-_ve..1-_vr → 1] */
+        addQuadMesh(
+          ptFn(_ua,    1-_ve, 0,0,0,0), ptFn(_ua,        1, 0,0,0,0),
+          ptFn(1-_ua2,     1, 0,0,0,0), ptFn(1-_ua2, 1-_vr, 0,0,0,0),
+          norm, 'zone-2', 0.35, 0.07
+        );
+
+        /* Ridge block: u=[1-_ua2, 1], full v — meets hip strips at u=1-_ua2 exactly */
         addZone(1-_ua2, 1, 0, 1, THEME.zone2, 0.35, 'zone-2', 0.07, ptFn, norm, doLbl);
 
-        /* Left: back hip ridge — tapered quad outer=v=0, inner=v=_ve→_vr */
-        addQuadMesh(
-          ptFn(0,    0,   0,0,0,0), ptFn(0,  _ve,  0,0,0,0),
-          ptFn(1,  _vr,   0,0,0,0), ptFn(1,    0,  0,0,0,0),
-          norm, 'zone-2', 0.35, 0.07
-        );
-
-        /* Right: front hip ridge — tapered quad outer=v=1, inner=v=(1-_ve)→(1-_vr) */
-        addQuadMesh(
-          ptFn(0, 1-_ve, 0,0,0,0), ptFn(0,    1,  0,0,0,0),
-          ptFn(1,    1,  0,0,0,0), ptFn(1, 1-_vr, 0,0,0,0),
-          norm, 'zone-2', 0.35, 0.07
-        );
-
-        /* Zone 3: eave strip (full v, drawn last → covers hip-ridge corners at eave) */
+        /* Zone 3: eave strip u=[0, _ua] — meets hip strips at u=_ua exactly */
         addZone(0, _ua, 0, 1, THEME.zone3, 0.50, 'zone-3', 0.12, ptFn, norm, doLbl);
       };
 
@@ -954,25 +954,27 @@ class Wind3DRenderer {
           this._zoneMeshes.push(mesh);
         };
 
-        /* Zone 1: interior quadrilateral between the two Zone 2 strips
-           Bounded below by Zone 3, on sides by Zone 2 inner boundaries (P_L_top, P_R_top) */
-        if (P_L_base.x < P_R_base.x - 0.1) {
-          addTriPart([P_L_base, P_R_base, P_R_top, P_L_top], 'zone-1', 0.20, 0.02);
+        /* M_L / M_R: Zone 2 inner boundary at Zone 3 level — Zone 2 starts here,
+           no overlap with Zone 3 (they share the D–M_L and E–M_R edges only)          */
+        const t_inn = Math.min(t_b / Math.max(s_top, 0.01), 0.99);
+        const M_L   = lerp3(P_L_base, P_L_top, t_inn);
+        const M_R   = lerp3(P_R_base, P_R_top, t_inn);
+
+        /* Zone 1: interior quad (M_L, M_R, P_R_top, P_L_top) */
+        if (M_L.x < M_R.x - 0.1) {
+          addTriPart([M_L, M_R, P_R_top, P_L_top], 'zone-1', 0.20, 0.02);
         }
 
-        /* Zone 2: left hip ridge — PARALLELOGRAM (A, P_L_base, P_L_top, C)
-           Inner boundary P_L_base→P_L_top is PARALLEL to AC → constant width a       */
-        addTriPart([A, P_L_base, P_L_top, C], 'zone-2', 0.35, 0.07);
+        /* Zone 2 left: (D, M_L, P_L_top, C) — starts at Zone 3 boundary D, no overlap */
+        addTriPart([D, M_L, P_L_top, C], 'zone-2', 0.35, 0.07);
 
-        /* Zone 2: right hip ridge — PARALLELOGRAM (P_R_base, Bv, C, P_R_top)
-           Inner boundary P_R_base→P_R_top is PARALLEL to BC → constant width a       */
-        addTriPart([P_R_base, Bv, C, P_R_top], 'zone-2', 0.35, 0.07);
+        /* Zone 2 right: (M_R, E, C, P_R_top) — starts at Zone 3 boundary E, no overlap */
+        addTriPart([M_R, E, C, P_R_top], 'zone-2', 0.35, 0.07);
 
-        /* Zone 2: apex overlap triangle (P_L_top, P_R_top, C)
-           Both Zone 2 strips meet at the apex; this fills the gap between them         */
+        /* Zone 2 apex: (P_L_top, P_R_top, C) — shares edges only with left/right */
         addTriPart([P_L_top, P_R_top, C], 'zone-2', 0.35, 0.07);
 
-        /* Zone 3: base eave strip — trapezoid (A, Bv, E, D), drawn last → covers corners */
+        /* Zone 3: (A, Bv, E, D) — meets Zone 2 exactly at the D–E edge, no overlap */
         addTriPart([A, Bv, E, D], 'zone-3', 0.50, 0.12);
       }
 
