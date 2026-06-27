@@ -825,14 +825,16 @@ class Wind3DRenderer {
     for (const p of [p1, p2]) {
       const ta = p.clone().addScaledVector(td,  TICK);
       const tb = p.clone().addScaledVector(td, -TICK);
-      const tk = this._tube(ta, tb, 0x000000, 0.20);  // 3× thicker than line
+      const tk = this._tube(ta, tb, 0x000000, 0.10);  // bold tick tube
       if (tk) grp.add(tk);
     }
 
-    // extension lines (solid black, no dash)
+    // extension lines (solid black) — extend TICK past the dim-line endpoint
     for (const [a, b] of extLines) {
+      const extDir = new THREE.Vector3().subVectors(b, a).normalize();
+      const bExt   = b.clone().addScaledVector(extDir, TICK);
       grp.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([a, b]), extMat()
+        new THREE.BufferGeometry().setFromPoints([a, bExt]), extMat()
       ));
     }
 
@@ -923,32 +925,33 @@ class Wind3DRenderer {
     ));
     this._dimHighlight['dim-h'] = grp.children[grp.children.length - 1];
 
-    // ── a (Zone 3 eave strip width) ────────────────────────────────────────
-    // Two annotations:
-    //   A) Right face, LEFT side (z=-hL): shows a at eave level on right wall
-    //   B) Front face, RIGHT side (x=+hB): shows a at eave level on front wall
+    // ── a (Zone strip width) — placed BETWEEN building face and B/L dim ────
+    // All "a" offsets use D*0.4 < D (B/L offset), placing them closer to building.
+    // Tick direction: 90° rotation in XZ from B/L ticks → (x,z)→(z,-x).
     const aEY = hEave;  // eave height level
+    const aOFF = D * 0.4;  // offset toward building relative to B/L dim
 
-    // A) Right face left side — dim parallel to Z at x=hB+D, y=hEave
-    const aRX = hB + D * 0.6;
+    // A) Eave "a" on LEFT face back side — moved from Right to Left face
+    //    Shows Zone 3 strip from z=-hL to z=-hL+zone_a at x=-hB-aOFF, y=hEave
+    const aLX = -hB - aOFF;
     grp.add(this._buildDim(
-      new THREE.Vector3(aRX, aEY, -hL),
-      new THREE.Vector3(aRX, aEY, -hL + zone_a),
-      new THREE.Vector3(-1, 0, 1).normalize(), // tick: 45° in XZ
+      new THREE.Vector3(aLX, aEY, -hL),
+      new THREE.Vector3(aLX, aEY, -hL + zone_a),
+      new THREE.Vector3(1, 0, 1).normalize(),  // 90° rotated: (-1,0,1)→(1,0,1)
       [
-        [new THREE.Vector3(hB, aEY, -hL),          new THREE.Vector3(aRX, aEY, -hL)],
-        [new THREE.Vector3(hB, aEY, -hL + zone_a), new THREE.Vector3(aRX, aEY, -hL + zone_a)],
+        [new THREE.Vector3(-hB, aEY, -hL),          new THREE.Vector3(aLX, aEY, -hL)],
+        [new THREE.Vector3(-hB, aEY, -hL + zone_a), new THREE.Vector3(aLX, aEY, -hL + zone_a)],
       ],
       `a = ${zone_a.toFixed(1)} ft`, 'dim-a', null
     ));
     this._dimHighlight['dim-a'] = grp.children[grp.children.length - 1];
 
-    // B) Front face right side — dim parallel to X at z=hL+D, y=hEave
-    const aFZ = hL + D * 0.6;
+    // B) Eave "a" on Front face right side — x from hB-zone_a to hB at z=hL+aOFF
+    const aFZ = hL + aOFF;
     grp.add(this._buildDim(
       new THREE.Vector3(hB - zone_a, aEY, aFZ),
       new THREE.Vector3(hB,          aEY, aFZ),
-      new THREE.Vector3(1, 0, 1).normalize(),  // tick: 45° in XZ
+      new THREE.Vector3(1, 0, -1).normalize(), // 90° rotated: (1,0,1)→(1,0,-1)
       [
         [new THREE.Vector3(hB - zone_a, aEY,  hL), new THREE.Vector3(hB - zone_a, aEY, aFZ)],
         [new THREE.Vector3(hB,          aEY,  hL), new THREE.Vector3(hB,          aEY, aFZ)],
@@ -958,27 +961,29 @@ class Wind3DRenderer {
     this._dimHighlight['dim-a2'] = grp.children[grp.children.length - 1];
 
     // ── Zone 5 corner strip dims at building BASE (y=0) ──────────────────────
-    // Front face RIGHT corner: x from hB-zone_a to hB at z=bZ, y=0
+    // Front face RIGHT corner base: x from hB-zone_a to hB at z=hL+aOFF (NOT bZ)
+    const az5FZ = hL + aOFF;
     grp.add(this._buildDim(
-      new THREE.Vector3(hB - zone_a, 0, bZ),
-      new THREE.Vector3(hB,          0, bZ),
-      new THREE.Vector3(1, 0, 1).normalize(),  // tick: 45° in XZ
+      new THREE.Vector3(hB - zone_a, 0, az5FZ),
+      new THREE.Vector3(hB,          0, az5FZ),
+      new THREE.Vector3(1, 0, -1).normalize(), // 90° rotated
       [
-        [new THREE.Vector3(hB - zone_a, 0,  hL), new THREE.Vector3(hB - zone_a, 0, bZ)],
-        [new THREE.Vector3(hB,          0,  hL), new THREE.Vector3(hB,          0, bZ)],
+        [new THREE.Vector3(hB - zone_a, 0,  hL), new THREE.Vector3(hB - zone_a, 0, az5FZ)],
+        [new THREE.Vector3(hB,          0,  hL), new THREE.Vector3(hB,          0, az5FZ)],
       ],
       `a = ${zone_a.toFixed(1)} ft`, 'dim-a3', null
     ));
     this._dimHighlight['dim-a3'] = grp.children[grp.children.length - 1];
 
-    // Right face LEFT corner: z from -hL to -hL+zone_a at x=lX, y=0
+    // Right face LEFT corner base: z from -hL to -hL+zone_a at x=hB+aOFF (NOT lX)
+    const az5RX = hB + aOFF;
     grp.add(this._buildDim(
-      new THREE.Vector3(lX, 0, -hL),
-      new THREE.Vector3(lX, 0, -hL + zone_a),
-      new THREE.Vector3(-1, 0, 1).normalize(), // tick: 45° in XZ
+      new THREE.Vector3(az5RX, 0, -hL),
+      new THREE.Vector3(az5RX, 0, -hL + zone_a),
+      new THREE.Vector3(1, 0, 1).normalize(),  // 90° rotated: (-1,0,1)→(1,0,1)
       [
-        [new THREE.Vector3(hB, 0, -hL),          new THREE.Vector3(lX, 0, -hL)],
-        [new THREE.Vector3(hB, 0, -hL + zone_a), new THREE.Vector3(lX, 0, -hL + zone_a)],
+        [new THREE.Vector3(hB, 0, -hL),          new THREE.Vector3(az5RX, 0, -hL)],
+        [new THREE.Vector3(hB, 0, -hL + zone_a), new THREE.Vector3(az5RX, 0, -hL + zone_a)],
       ],
       `a = ${zone_a.toFixed(1)} ft`, 'dim-a4', null
     ));
