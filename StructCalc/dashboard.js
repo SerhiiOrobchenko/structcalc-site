@@ -202,3 +202,20 @@ document.getElementById('dbRail').addEventListener('click', function(e) {
   document.querySelectorAll('.rail-item').forEach(function(r){ r.classList.remove('active'); });
   item.classList.add('active');
 });
+
+/* ── Application startup ─────────────────────────────────────────────── */
+// DOMContentLoaded fires after ALL defer scripts finish (success or fail).
+// Placing init here means a crash in workspace.js / wind-workspace.js can
+// never prevent the dashboard from rendering.
+document.addEventListener('DOMContentLoaded', function() {
+  try {
+    renderDashboard();
+  } catch (e) {
+    console.error('[SC] renderDashboard init error:', e);
+  }
+  var initials = 'SO';
+  var av1 = document.getElementById('dbAvatar');
+  var av2 = document.getElementById('wsAvatar');
+  if (av1) av1.textContent = initials;
+  if (av2) av2.textContent = initials;
+});

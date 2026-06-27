@@ -5,6 +5,7 @@
    Depends on: projects.js, workspace.js (loaded before)
    Rule: edit only for wind workspace UI/results/3D changes.
    ===================================================================== */
+console.log('[SC] wind-workspace.js START');
 
 var windScriptsLoaded = false;
 var windEngineLoaded  = false;
@@ -834,3 +835,4 @@ async function openWindWorkspace(proj, calc) {
   }
   recalcWind();
 }
+console.log('[SC] wind-workspace.js END');
