@@ -817,13 +817,15 @@ class Wind3DRenderer {
     );
     grp.add(mainLine);
 
-    // bold tube tick marks at each end (CylinderGeometry, radius 0.26)
-    const td = tickDir.clone().normalize();
-    const TICK = 1.8;  // half-length of tick (was line ±3; now bold tube ±1.8)
+    // Architectural 45° tick marks — tube centered on dim-line endpoint,
+    // in the same plane as the dim line, at 45° to the dim line direction.
+    // tickDir is already set to the 45° in-plane direction by _buildAllDims.
+    const td   = tickDir.clone().normalize();
+    const TICK = 0.6;   // half-length (3× shorter than previous 1.8)
     for (const p of [p1, p2]) {
       const ta = p.clone().addScaledVector(td,  TICK);
       const tb = p.clone().addScaledVector(td, -TICK);
-      const tk = this._tube(ta, tb, 0x000000, 0.30);
+      const tk = this._tube(ta, tb, 0x000000, 0.20);  // 3× thicker than line
       if (tk) grp.add(tk);
     }
 
@@ -882,7 +884,7 @@ class Wind3DRenderer {
     grp.add(this._buildDim(
       new THREE.Vector3(-hB, 0, bZ),
       new THREE.Vector3( hB, 0, bZ),
-      new THREE.Vector3(0, 1, 0),           // tick: vertical
+      new THREE.Vector3(1, 0, -1).normalize(), // tick: 45° in XZ plane (in-plane slash)
       [
         [new THREE.Vector3(-hB, 0,  hL), new THREE.Vector3(-hB, 0, bZ)],
         [new THREE.Vector3( hB, 0,  hL), new THREE.Vector3( hB, 0, bZ)],
@@ -896,7 +898,7 @@ class Wind3DRenderer {
     grp.add(this._buildDim(
       new THREE.Vector3(lX, 0, -hL),
       new THREE.Vector3(lX, 0,  hL),
-      new THREE.Vector3(1, 0, 0),           // tick: along X
+      new THREE.Vector3(1, 0, 1).normalize(),  // tick: 45° in XZ plane
       [
         [new THREE.Vector3(hB, 0, -hL), new THREE.Vector3(lX, 0, -hL)],
         [new THREE.Vector3(hB, 0,  hL), new THREE.Vector3(lX, 0,  hL)],
@@ -912,7 +914,7 @@ class Wind3DRenderer {
     grp.add(this._buildDim(
       new THREE.Vector3(hXh, 0,       hZh),
       new THREE.Vector3(hXh, hRidge,  hZh),
-      new THREE.Vector3(0, 0, -1),          // tick: along -Z (into building)
+      new THREE.Vector3(-1, 1, 0).normalize(), // tick: 45° in XY plane
       [
         [new THREE.Vector3(-hB, 0,       hZh), new THREE.Vector3(hXh, 0,       hZh)],
         [new THREE.Vector3(  0, hRidge,    0), new THREE.Vector3(hXh, hRidge,  hZh)],
@@ -932,7 +934,7 @@ class Wind3DRenderer {
     grp.add(this._buildDim(
       new THREE.Vector3(aRX, aEY, -hL),
       new THREE.Vector3(aRX, aEY, -hL + zone_a),
-      new THREE.Vector3(0, -1, 0),          // tick: vertical down
+      new THREE.Vector3(-1, 0, 1).normalize(), // tick: 45° in XZ
       [
         [new THREE.Vector3(hB, aEY, -hL),          new THREE.Vector3(aRX, aEY, -hL)],
         [new THREE.Vector3(hB, aEY, -hL + zone_a), new THREE.Vector3(aRX, aEY, -hL + zone_a)],
@@ -946,7 +948,7 @@ class Wind3DRenderer {
     grp.add(this._buildDim(
       new THREE.Vector3(hB - zone_a, aEY, aFZ),
       new THREE.Vector3(hB,          aEY, aFZ),
-      new THREE.Vector3(0, -1, 0),          // tick: vertical down
+      new THREE.Vector3(1, 0, 1).normalize(),  // tick: 45° in XZ
       [
         [new THREE.Vector3(hB - zone_a, aEY,  hL), new THREE.Vector3(hB - zone_a, aEY, aFZ)],
         [new THREE.Vector3(hB,          aEY,  hL), new THREE.Vector3(hB,          aEY, aFZ)],
@@ -954,6 +956,33 @@ class Wind3DRenderer {
       `a = ${zone_a.toFixed(1)} ft`, 'dim-a2', null
     ));
     this._dimHighlight['dim-a2'] = grp.children[grp.children.length - 1];
+
+    // ── Zone 5 corner strip dims at building BASE (y=0) ──────────────────────
+    // Front face RIGHT corner: x from hB-zone_a to hB at z=bZ, y=0
+    grp.add(this._buildDim(
+      new THREE.Vector3(hB - zone_a, 0, bZ),
+      new THREE.Vector3(hB,          0, bZ),
+      new THREE.Vector3(1, 0, 1).normalize(),  // tick: 45° in XZ
+      [
+        [new THREE.Vector3(hB - zone_a, 0,  hL), new THREE.Vector3(hB - zone_a, 0, bZ)],
+        [new THREE.Vector3(hB,          0,  hL), new THREE.Vector3(hB,          0, bZ)],
+      ],
+      `a = ${zone_a.toFixed(1)} ft`, 'dim-a3', null
+    ));
+    this._dimHighlight['dim-a3'] = grp.children[grp.children.length - 1];
+
+    // Right face LEFT corner: z from -hL to -hL+zone_a at x=lX, y=0
+    grp.add(this._buildDim(
+      new THREE.Vector3(lX, 0, -hL),
+      new THREE.Vector3(lX, 0, -hL + zone_a),
+      new THREE.Vector3(-1, 0, 1).normalize(), // tick: 45° in XZ
+      [
+        [new THREE.Vector3(hB, 0, -hL),          new THREE.Vector3(lX, 0, -hL)],
+        [new THREE.Vector3(hB, 0, -hL + zone_a), new THREE.Vector3(lX, 0, -hL + zone_a)],
+      ],
+      `a = ${zone_a.toFixed(1)} ft`, 'dim-a4', null
+    ));
+    this._dimHighlight['dim-a4'] = grp.children[grp.children.length - 1];
 
     return grp;
   }
@@ -1059,8 +1088,14 @@ class Wind3DRenderer {
     if (!cfg) return;
 
     // Canvas texture — pill-shaped background + bold text
-    // CW=152, CH=44: tighter equal padding (~8px each side)
-    const CW = 152, CH = 44;
+    // Dynamic width: measure text then add equal PAD on all 4 sides
+    const CH  = 44;
+    const PAD = 10;   // equal padding, all 4 sides
+    const _cv0 = document.createElement('canvas');
+    _cv0.width = 4; _cv0.height = CH;
+    const _ctx0 = _cv0.getContext('2d');
+    _ctx0.font = 'bold 24px "JetBrains Mono",monospace';
+    const CW  = Math.ceil(_ctx0.measureText(cfg.text).width) + 2 * PAD;
     const cv  = document.createElement('canvas');
     cv.width  = CW; cv.height = CH;
     const ctx = cv.getContext('2d');
