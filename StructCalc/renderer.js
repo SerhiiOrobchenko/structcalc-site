@@ -920,10 +920,13 @@ class Wind3DRenderer {
         const P_L_base = new THREE.Vector3(P_L_x, hEave, zA);
         const P_R_base = new THREE.Vector3(P_R_x, hEave, zA);
 
-        /* Inner boundary of Zone 2 strips at Zone 3 level:
-           M_L and M_R are the inner boundary points at height D/E (parameterized by t_b) */
-        const M_L = new THREE.Vector3(P_L_x*(1-t_b), D.y, D.z);
-        const M_R = new THREE.Vector3(P_R_x*(1-t_b), E.y, E.z);
+        /* Zone 2 inner boundary endpoints — parallelogram approach:
+           P_L_top: where Zone 2-left inner boundary exits the triangle (on BC)
+           P_R_top: where Zone 2-right inner boundary exits the triangle (on AC)
+           s_top = 1 - zone_a/L_hip gives constant-width strip parallel to each hip ridge */
+        const s_top   = Math.max(0.01, 1 - zone_a / L_hip);
+        const P_L_top = lerp3(Bv, C, s_top);   // on right hip ridge BC
+        const P_R_top = lerp3(A,  C, s_top);   // on left hip ridge AC
 
         const addTriPart = (pts, zt, op, eps) => {
           const off_ = tN.clone().multiplyScalar(eps);
@@ -951,17 +954,23 @@ class Wind3DRenderer {
           this._zoneMeshes.push(mesh);
         };
 
-        /* Zone 1: interior triangle (M_L, M_R, C) — between the two Zone 2 strips */
-        if (M_L.x < M_R.x - 0.1) {
-          addTriPart([M_L, M_R, C], 'zone-1', 0.20, 0.02);
+        /* Zone 1: interior quadrilateral between the two Zone 2 strips
+           Bounded below by Zone 3, on sides by Zone 2 inner boundaries (P_L_top, P_R_top) */
+        if (P_L_base.x < P_R_base.x - 0.1) {
+          addTriPart([P_L_base, P_R_base, P_R_top, P_L_top], 'zone-1', 0.20, 0.02);
         }
 
-        /* Zone 2: left hip ridge — full triangle (A, P_L_base, C)
-           Constant-width strip along AC; lower corner covered by Zone 3 drawn last   */
-        addTriPart([A, P_L_base, C], 'zone-2', 0.35, 0.07);
+        /* Zone 2: left hip ridge — PARALLELOGRAM (A, P_L_base, P_L_top, C)
+           Inner boundary P_L_base→P_L_top is PARALLEL to AC → constant width a       */
+        addTriPart([A, P_L_base, P_L_top, C], 'zone-2', 0.35, 0.07);
 
-        /* Zone 2: right hip ridge — full triangle (P_R_base, Bv, C) */
-        addTriPart([P_R_base, Bv, C], 'zone-2', 0.35, 0.07);
+        /* Zone 2: right hip ridge — PARALLELOGRAM (P_R_base, Bv, C, P_R_top)
+           Inner boundary P_R_base→P_R_top is PARALLEL to BC → constant width a       */
+        addTriPart([P_R_base, Bv, C, P_R_top], 'zone-2', 0.35, 0.07);
+
+        /* Zone 2: apex overlap triangle (P_L_top, P_R_top, C)
+           Both Zone 2 strips meet at the apex; this fills the gap between them         */
+        addTriPart([P_L_top, P_R_top, C], 'zone-2', 0.35, 0.07);
 
         /* Zone 3: base eave strip — trapezoid (A, Bv, E, D), drawn last → covers corners */
         addTriPart([A, Bv, E, D], 'zone-3', 0.50, 0.12);
