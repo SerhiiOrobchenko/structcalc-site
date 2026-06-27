@@ -101,16 +101,16 @@ function loadProjects() {
 function saveProjects() {
   try {
     localStorage.setItem(LS_PROJECTS, JSON.stringify(projects));
-    showSavePill('Saved');
+    if (typeof showSavePill === 'function') showSavePill('Saved');
   } catch (e) {
-    showSavePill('Save failed!', true);
+    if (typeof showSavePill === 'function') showSavePill('Save failed!', true);
     console.error('StructCalc: save failed', e);
   }
 }
 
 var saveTimer = null;
 function scheduleSave() {
-  showSavePill('Saving…');
+  if (typeof showSavePill === 'function') showSavePill('Saving…');
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveProjects, 500);
 }
@@ -200,8 +200,4 @@ var elStatusMsg    = document.getElementById('statusMsg');
 var elStatusDetail = document.getElementById('statusDetail');
 var elCtxMenu      = document.getElementById('ctx-menu');
 var elWsContent    = document.getElementById('wsContent');
-var elWsMain       = document.getElementById('wsWindWorkspace');
-
-var activeCalcId   = null;
-var loadedScripts  = {};
-var ctxTargetId    = null;
+var elWsMain       = docu
