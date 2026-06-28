@@ -889,6 +889,10 @@ class Wind3DRenderer {
       let   lNorm = new THREE.Vector3().crossVectors(lDir, lTick).normalize();
       // Ensure label faces roughly toward default camera (+X+Y+Z)
       if (lNorm.dot(new THREE.Vector3(1, 1, 1)) < 0) lNorm.negate();
+      // Fix upside-down text: ensure reading direction aligns with camera-right
+      // Camera at (100,75,120) → right vector ≈ (0.768, 0, -0.640)
+      const CAM_R = new THREE.Vector3(0.768, 0, -0.640);
+      if (lDir.dot(CAM_R) < -0.01) lDir.negate();  // flip; lNorm unchanged
       const lUp = new THREE.Vector3().crossVectors(lNorm, lDir).normalize();
 
       // Build canvas with pill background + text
@@ -938,7 +942,13 @@ class Wind3DRenderer {
       lmesh.setRotationFromMatrix(
         new THREE.Matrix4().makeBasis(lDir, lUp, lNorm)
       );
-      lmesh.position.copy(p1).lerp(p2, 0.5).addScaledVector(lNorm, 0.25);
+      // Position label above/beside the dim line (not crossing it)
+      // Vertical dims: offset sideways in lUp direction; horizontal: offset up in lNorm
+      const CLEAR = 0.70;  // lH/2 (0.55) + 0.15 gap
+      const isVert = Math.abs(lDir.y) > 0.5;
+      lmesh.position.copy(p1).lerp(p2, 0.5)
+        .addScaledVector(isVert ? lUp  : lNorm, CLEAR)
+        .addScaledVector(isVert ? lNorm : new THREE.Vector3(), isVert ? 0.05 : 0);
       lmesh.renderOrder = 4;
       lmesh.userData.inputId = inputId || null;
       lmesh.userData.dimId   = dimId;
@@ -995,7 +1005,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(-hB, EPS_Y,  hL), new THREE.Vector3(-hB, EPS_Y, bZ)],
         [new THREE.Vector3( hB, EPS_Y,  hL), new THREE.Vector3( hB, EPS_Y, bZ)],
       ],
-      `B = ${fmt(B)} ft`, 'dim-B', 'wind-B'
+      `B=${fmt(B)}ft`, 'dim-B', 'wind-B'
     ));
     this._dimHighlight['dim-B'] = grp.children[grp.children.length - 1];
 
@@ -1009,7 +1019,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(hB, EPS_Y, -hL), new THREE.Vector3(lX, EPS_Y, -hL)],
         [new THREE.Vector3(hB, EPS_Y,  hL), new THREE.Vector3(lX, EPS_Y,  hL)],
       ],
-      `L = ${fmt(L)} ft`, 'dim-L', 'wind-L'
+      `L=${fmt(L)}ft`, 'dim-L', 'wind-L'
     ));
     this._dimHighlight['dim-L'] = grp.children[grp.children.length - 1];
 
@@ -1024,7 +1034,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(-hB, EPS_Y,  hZhe), new THREE.Vector3(hXhe, EPS_Y,  hZhe)],
         [new THREE.Vector3(-hB, hEave,  hZhe), new THREE.Vector3(hXhe, hEave,  hZhe)],
       ],
-      `h_eave = ${fmt(hEaveLabel ?? hEave)} ft`, 'dim-h-eave', 'wind-h'
+      `h_eave=${fmt(hEaveLabel ?? hEave)}ft`, 'dim-h-eave', 'wind-h'
     ));
     this._dimHighlight['dim-h-eave'] = grp.children[grp.children.length - 1];
 
@@ -1042,7 +1052,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(hXhe, EPS_Y,  hZh), new THREE.Vector3(hXh, EPS_Y,  hZh)],
         [new THREE.Vector3(-hB,  hMean,  hZh), new THREE.Vector3(hXh, hMean,  hZh)],
       ],
-      `h = ${fmt(hMeanFt ?? hMean)} ft`, 'dim-h', 'wind-h'
+      `h=${fmt(hMeanFt ?? hMean)}ft`, 'dim-h', 'wind-h'
     ));
     this._dimHighlight['dim-h'] = grp.children[grp.children.length - 1];
 
@@ -1059,7 +1069,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(hB - zone_a, aEY, hL), new THREE.Vector3(hB - zone_a, aEY, aFZ)],
         [new THREE.Vector3(hB,          aEY, hL), new THREE.Vector3(hB,          aEY, aFZ)],
       ],
-      `a = ${fmt(zone_a)} ft`, 'dim-a2', null
+      `a=${fmt(zone_a)}ft`, 'dim-a2', null
     ));
     this._dimHighlight['dim-a2'] = grp.children[grp.children.length - 1];
 
@@ -1073,7 +1083,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(hB, aEY, hL - zone_a), new THREE.Vector3(aRX, aEY, hL - zone_a)],
         [new THREE.Vector3(hB, aEY, hL),          new THREE.Vector3(aRX, aEY, hL)],
       ],
-      `a = ${fmt(zone_a)} ft`, 'dim-a', null
+      `a=${fmt(zone_a)}ft`, 'dim-a', null
     ));
     this._dimHighlight['dim-a'] = grp.children[grp.children.length - 1];
 
@@ -1088,7 +1098,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(hB - zone_a, EPS_Y, hL), new THREE.Vector3(hB - zone_a, EPS_Y, az5FZ)],
         [new THREE.Vector3(hB,          EPS_Y, hL), new THREE.Vector3(hB,          EPS_Y, az5FZ)],
       ],
-      `a = ${fmt(zone_a)} ft`, 'dim-a3', null
+      `a=${fmt(zone_a)}ft`, 'dim-a3', null
     ));
     this._dimHighlight['dim-a3'] = grp.children[grp.children.length - 1];
 
@@ -1102,7 +1112,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(hB, EPS_Y, hL - zone_a), new THREE.Vector3(az5RX, EPS_Y, hL - zone_a)],
         [new THREE.Vector3(hB, EPS_Y, hL),          new THREE.Vector3(az5RX, EPS_Y, hL)],
       ],
-      `a = ${fmt(zone_a)} ft`, 'dim-a4', null
+      `a=${fmt(zone_a)}ft`, 'dim-a4', null
     ));
     this._dimHighlight['dim-a4'] = grp.children[grp.children.length - 1];
 
@@ -1155,7 +1165,7 @@ class Wind3DRenderer {
           az
         );
         const div = document.createElement('div');
-        div.textContent = `θ = ${fmt(theta)}°`;
+        div.textContent = `θ=${fmt(theta)}°`;
         div.style.cssText = [
           'font-family:"JetBrains Mono",monospace',
           'font-size:13px', 'font-weight:600',
@@ -1203,7 +1213,7 @@ class Wind3DRenderer {
             [qa1.clone().sub(stub), qa1.clone()],
             [qa2.clone().sub(stub), qa2.clone()],
           ],
-          `a = ${fmt(zone_a)} ft`, 'dim-aZ2T', null
+          `a=${fmt(zone_a)}ft`, 'dim-aZ2T', null
         ));
         this._dimHighlight['dim-aZ2T'] = grp.children[grp.children.length - 1];
       }
@@ -1237,7 +1247,7 @@ class Wind3DRenderer {
             [qa1.clone().sub(stub), qa1.clone()],
             [qa2.clone().sub(stub), qa2.clone()],
           ],
-          `a = ${fmt(zone_a)} ft`, 'dim-aZ2R', null
+          `a=${fmt(zone_a)}ft`, 'dim-aZ2R', null
         ));
         this._dimHighlight['dim-aZ2R'] = grp.children[grp.children.length - 1];
       }
@@ -1841,18 +1851,4 @@ class Wind3DRenderer {
     }
   }
 
-  /* ── cleanup ─────────────────────────────────────────────────────── */
-
-  dispose() {
-    cancelAnimationFrame(this._animId);
-    window.removeEventListener('resize', this._onResize);
-    if (this._ro) { this._ro.disconnect(); this._ro = null; }
-    this._renderer.dispose();
-    [this._renderer.domElement, this._labelRenderer?.domElement]
-      .filter(Boolean).forEach(el => el.parentNode?.removeChild(el));
-    [this._building, this._zones, this._dimGroup, this._labelGroup]
-      .filter(Boolean).forEach(g => { this._scene.remove(g); disposeGroup(g); });
-    this._container.innerHTML = '';
-  }
-
-} // end Wind3DRenderer
+  /* ── cleanup ───────────────────────────────────�
