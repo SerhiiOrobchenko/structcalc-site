@@ -360,6 +360,276 @@ function renderProjectSummary(r, s) {
   host.innerHTML = html;
 }
 
+/* ── Ch.28 Envelope Procedure Step Report — Table 28.2-1 (8 steps) ─────── */
+function buildCh28StepReport(r, s) {
+  function fv(v, d) { return (typeof v === 'number') ? v.toFixed(d != null ? d : 2) : '—'; }
+  function fpf(v) { return fv(v) + ' psf'; }
+  function warn(msg) {
+    return '<div class="report-warn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>' + msg + '</span></div>';
+  }
+  if (!r || !r.mwfrsLC1) return warn('Calculation error — check your inputs.');
+
+  var h   = s.h || 20, B = s.minDim || 40, L = s.buildingL || 60;
+  var kztV = s.kzt || 1.0;
+  var encMap = {enclosed:'Enclosed', partiallyEnclosed:'Partially Enclosed', partiallyOpen:'Partially Open', open:'Open'};
+  var encLabel = encMap[s.enclosure] || s.enclosure;
+  var gcpiObj = r.gcpi || { pos: 0.18, neg: -0.18 };
+  var addrEl = document.getElementById('wind-address');
+  var addr   = addrEl ? addrEl.value.trim() : '';
+  var html   = '';
+
+  /* header */
+  html += '<div class="report-proc-head">';
+  html += '<div class="report-proc-title">MWFRS — Envelope Procedure (Low-Rise)</div>';
+  html += '<div class="report-proc-sub">ASCE 7-22 Chapter 28 — Low-Rise Buildings (h ≤ 60 ft, h ≤ min(B,L)) — ' + escHtml(encLabel) + ' Building</div>';
+  if (addr) html += '<div style="font-size:.73rem;color:var(--text-muted);margin-top:3px;">📍 ' + escHtml(addr) + '</div>';
+  html += '</div>';
+  html += '<div class="report-bldg-sketch">' + buildElevationSVG(s) + '</div>';
+  html += '<p style="font-size:.72rem;color:var(--text-muted);text-align:center;margin:-4px 0 14px;">Procedure per Table 28.2-1, ASCE 7-22</p>';
+
+  /* STEP 1 */
+  var rcFig = {I:'26.5-1A', II:'26.5-1B', III:'26.5-1B', IV:'26.5-1C'}[s.riskCategory] || '26.5-1B';
+  html += stepBlock(1, 'Determine Risk Category of the building', '&#167;Table 1.5-1',
+    '<p>Risk Category: <strong class="step-result">' + escHtml(s.riskCategory||'II') + '</strong></p>');
+
+  /* STEP 2 */
+  html += stepBlock(2, 'Determine basic wind speed V for the applicable risk category', '&#167;26.5, Fig. ' + rcFig,
+    '<div class="step-formula">V = <span class="step-result">' + fv(s.V,0) + ' mph</span></div>' +
+    '<p class="step-sub">Risk Category ' + escHtml(s.riskCategory||'II') + ' — Figure ' + rcFig + '</p>');
+
+  /* STEP 3 */
+  var expDesc = {B:'Suburban/wooded areas (Sec. 26.7)', C:'Open terrain with scattered obstructions (Sec. 26.7)', D:'Flat, unobstructed areas near water (Sec. 26.7)'}[s.exposure] || '';
+  var kztNote = s.kztMode === 'auto' ? 'K<sub>zt</sub> = (1+K₁K₂K₃)\xb2 from hill geometry (Fig. 26.8-1).' : 'Flat terrain, K<sub>zt</sub> = 1.0 (Sec. 26.8.1).';
+  var gcpiStr = {enclosed:'\xb10.18', partiallyEnclosed:'\xb10.55', partiallyOpen:'0.00', open:'0.00'}[s.enclosure] || ('\xb1'+fv(gcpiObj.pos,2));
+  html += stepBlock(3, 'Determine wind load parameters', '&#167;26.6 – 26.13',
+    '<table class="step-tbl"><thead><tr><th>Parameter</th><th>Value</th><th>Reference</th></tr></thead><tbody>' +
+    '<tr><td>Directionality factor K<sub>d</sub></td><td><strong>0.85</strong></td><td>Table 26.6-1, Buildings (MWFRS)</td></tr>' +
+    '<tr><td>Exposure category</td><td><strong>' + escHtml(s.exposure||'C') + '</strong></td><td>' + expDesc + '</td></tr>' +
+    '<tr><td>Topographic factor K<sub>zt</sub></td><td><strong>' + fv(kztV,3) + '</strong></td><td>' + kztNote + '</td></tr>' +
+    '<tr><td>Ground elevation factor K<sub>e</sub></td><td><strong>' + fv(r.ke,3) + '</strong></td><td>K<sub>e</sub> = e<sup>−0.000119\xd7' + fv(s.groundElev||0,0) + '</sup>, z<sub>e</sub> = ' + fv(s.groundElev||0,0) + ' ft AMSL</td></tr>' +
+    '<tr><td>Gust factor G</td><td><strong>0.85</strong></td><td>Rigid structure (f ≥ 1 Hz), Sec. 26.11.1</td></tr>' +
+    '<tr><td>Enclosure classification</td><td><strong>' + escHtml(encLabel) + '</strong></td><td>Sec. 26.12</td></tr>' +
+    '<tr><td>Internal pressure coeff. (GC<sub>pi</sub>)</td><td><strong>' + gcpiStr + '</strong></td><td>Table 26.13-1</td></tr>' +
+    '</tbody></table>');
+
+  /* STEP 4 */
+  var expZg = {B:1200, C:900, D:700}[s.exposure] || 900;
+  var expAlpha = {B:7.0, C:9.5, D:11.5}[s.exposure] || 9.5;
+  html += stepBlock(4, 'Determine velocity pressure exposure coefficient K<sub>h</sub>', '&#167;26.10, Table 26.10-1',
+    '<p>Exposure ' + escHtml(s.exposure||'C') + ': z<sub>g</sub> = ' + expZg + ' ft, α = ' + expAlpha + '</p>' +
+    '<div class="step-formula">K<sub>h</sub> = 2.01 \xd7 (' + fv(h,1) + ' / ' + expZg + ')<sup>2/' + expAlpha + '</sup> = <span class="step-result">' + fv(r.kh,3) + '</span> &nbsp; at h = ' + fv(h,1) + ' ft</div>' +
+    '<p class="step-sub">Ch. 28 uses K<sub>h</sub> (at mean roof height) for all surfaces — single velocity pressure q<sub>h</sub>.</p>');
+
+  /* STEP 5 */
+  html += stepBlock(5, 'Determine velocity pressure q<sub>h</sub>', '&#167;26.10, Eq. 26.10-1',
+    '<div class="step-formula">q<sub>h</sub> = 0.00256 \xd7 K<sub>h</sub> \xd7 K<sub>zt</sub> \xd7 K<sub>e</sub> \xd7 V\xb2</div>' +
+    '<div class="step-formula">q<sub>h</sub> = 0.00256 \xd7 ' + fv(r.kh,3) + ' \xd7 ' + fv(kztV,3) + ' \xd7 ' + fv(r.ke,3) + ' \xd7 ' + fv(s.V,0) + '\xb2 = <span class="step-result">' + fpf(r.qh) + '</span></div>');
+
+  /* STEP 6 — GCpf */
+  var a = r.a || 0;
+  var wallSet = {'4':1,'5':1,'6':1,'4E':1,'5E':1,'6E':1};
+  var zDesc = {
+    '1':'Roof end zone (windward)', '2':'Roof interior', '3':'Roof end zone (leeward)',
+    '4':'Wall end zone', '5':'Wall interior zone (PTR)', '6':'Wall leeward zone (PTR)',
+    '1E':'Roof corner zone (WW)','2E':'Roof corner zone (interior)','3E':'Roof corner zone (LW)',
+    '4E':'Wall corner zone','5E':'Wall interior corner (PTR)','6E':'Wall leeward corner (PTR)'
+  };
+
+  function gcpfTbl(zones, label) {
+    var t = '<p style="margin-top:8px;"><strong>' + label + ':</strong></p>';
+    t += '<table class="step-tbl"><thead><tr><th>Zone</th><th>Type</th><th>(GCpf)</th></tr></thead><tbody>';
+    zones.forEach(function(z) {
+      t += '<tr><td><strong>' + z.zone + '</strong></td>' +
+           '<td>' + (wallSet[z.zone] ? 'Wall' : 'Roof') + ' — ' + escHtml(zDesc[z.zone]||z.zone) + '</td>' +
+           '<td class="' + (z.gcpf < 0 ? 't-neg' : 't-pos') + '">' + fv(z.gcpf,3) + '</td></tr>';
+    });
+    t += '</tbody></table>';
+    return t;
+  }
+
+  html += stepBlock(6, 'Determine external pressure coefficients (GCpf)', '&#167;28.3, Fig. 28.3-1',
+    '<p>Zone dimension: <strong>a = min[0.1\xd7min(B,L), 0.4h] = <span class="step-result">' + fv(a,2) + ' ft</span></strong> (Fig. 28.3-1 Notation)</p>' +
+    '<p class="step-sub">B = ' + fv(B,1) + ' ft, L = ' + fv(L,1) + ' ft, h = ' + fv(h,1) + ' ft, θ = ' + fv(s.theta||0,1) + '\xb0</p>' +
+    gcpfTbl(r.mwfrsLC1, 'Load Case 1 — Wind Normal to Ridge (θ-dependent, Fig. 28.3-1)') +
+    gcpfTbl(r.mwfrsLC2, 'Load Case 2 — Wind Parallel to Ridge (θ-independent, Fig. 28.3-1)'));
+
+  /* STEP 7 — pressures */
+  function pressTbl(zones, lcLabel) {
+    var t = '<p style="margin-top:8px;"><strong>' + lcLabel + ':</strong></p>';
+    t += '<table class="step-tbl"><thead><tr>' +
+         '<th>Zone</th><th>Type</th><th>(GCpf)</th>' +
+         '<th>p min (psf)</th><th>p max (psf)</th><th>Gov. (psf)</th></tr></thead><tbody>';
+    zones.forEach(function(z) {
+      var isWall = !!wallSet[z.zone];
+      var pMin = z.p.min, pMax = z.p.max;
+      var gov = isWall ? pMax : pMin;   // walls: max inward; roof: min (suction governs)
+      t += '<tr><td><strong>' + z.zone + '</strong></td>' +
+           '<td>' + (isWall ? 'Wall' : 'Roof') + '</td>' +
+           '<td>' + fv(z.gcpf,3) + '</td>' +
+           '<td class="t-neg">' + fv(pMin,2) + '</td>' +
+           '<td class="t-pos">' + fv(pMax,2) + '</td>' +
+           '<td class="t-gov">' + fv(gov,2) + '</td></tr>';
+    });
+    t += '</tbody></table>';
+    return t;
+  }
+
+  html += stepBlock(7, 'Calculate wind pressure p on each surface', '&#167;28.3, Eq. 28.3-1',
+    '<div class="step-formula">p = q<sub>h</sub> \xd7 K<sub>d</sub> \xd7 [(GCpf) − (GCpi)]</div>' +
+    '<div class="step-formula">p = ' + fpf(r.qh) + ' \xd7 0.85 \xd7 [(GCpf) − (\xb1' + fv(gcpiObj.pos,2) + ')]</div>' +
+    '<p class="step-sub">p min: pairs GCpf with +GCpi (worst suction). &nbsp; p max: pairs GCpf with −GCpi (worst inward).</p>' +
+    pressTbl(r.mwfrsLC1, 'Load Case 1 — Wind Normal to Ridge') +
+    pressTbl(r.mwfrsLC2, 'Load Case 2 — Wind Parallel to Ridge') +
+    (r.torsionApplies
+      ? '<p style="margin-top:10px;">⚠️ h = ' + fv(h,1) + ' ft &gt; 30 ft — <strong>Torsional Load Cases 3 &amp; 4 apply (Fig. 28.3-2).</strong> ' +
+        'Use 75 % of LC1/LC2 pressures plus torsional moment M<sub>T</sub>.</p>'
+      : '<p class="step-sub">h = ' + fv(h,1) + ' ft ≤ 30 ft — torsional load cases (LC3/LC4) not required.</p>'));
+
+  /* STEP 8 */
+  var minW = r.mwfrsMinGoverns ? '<span class="step-result">✅ 16.0 psf minimum governs</span>' : '16.0 psf minimum — does not govern';
+  html += stepBlock(8, 'Minimum design wind loads', '&#167;28.3.4',
+    '<p>Walls: ' + minW + '</p>' +
+    '<p>Roof: Minimum roof pressures checked per Sec. 28.3.4.</p>');
+
+  /* Summary */
+  html += '<div class="report-summary-box">';
+  html += '<div class="report-summary-title">Design Wind Pressures Summary — MWFRS Envelope Procedure (Ch. 28)</div>';
+  html += '<table class="pres-tbl"><thead><tr><th>Zone</th><th>Type</th><th>Load Case</th><th>p min (psf)</th><th>p max (psf)</th></tr></thead><tbody>';
+
+  function summRows(zones, lc) {
+    zones.forEach(function(z) {
+      var isW = !!wallSet[z.zone];
+      html += '<tr' + (isW ? '' : ' class="s-gov-row"') + '>' +
+        '<td class="s-label">' + z.zone + '</td>' +
+        '<td>' + (isW ? 'Wall' : 'Roof') + '</td>' +
+        '<td>' + lc + '</td>' +
+        '<td class="s-neg">' + fv(z.p.min,1) + '</td>' +
+        '<td class="s-pos">' + fv(z.p.max,1) + '</td></tr>';
+    });
+  }
+  summRows(r.mwfrsLC1, 'LC1');
+  summRows(r.mwfrsLC2, 'LC2');
+  html += '</tbody></table></div>';
+  return html;
+}
+
+/* ── C&C Ch.30 Step Report — Table 30.2-1 ──────────────────────────────── */
+function buildCCStepReport(r, s) {
+  function fv(v, d) { return (typeof v === 'number') ? v.toFixed(d != null ? d : 2) : '—'; }
+  function fpf(v) { return fv(v) + ' psf'; }
+  function warn(msg) {
+    return '<div class="report-warn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>' + msg + '</span></div>';
+  }
+  if (!r || (!r.ccWall && !r.ccRoof)) return warn('Calculation error — check your inputs.');
+
+  var h   = s.h || 20, B = s.minDim || 40, L = s.buildingL || 60;
+  var kztV = s.kzt || 1.0;
+  var encMap = {enclosed:'Enclosed', partiallyEnclosed:'Partially Enclosed', partiallyOpen:'Partially Open', open:'Open'};
+  var encLabel = encMap[s.enclosure] || s.enclosure;
+  var gcpiObj = r.gcpi || { pos: 0.18, neg: -0.18 };
+  var addrEl = document.getElementById('wind-address');
+  var addr   = addrEl ? addrEl.value.trim() : '';
+  var html   = '';
+
+  var partLabel = (r.ccProcedure === 'part2') ? 'Part 2 (h > 60 ft, Fig. 30.6-1)' : 'Part 1 (h ≤ 60 ft, Fig. 30.3-1)';
+  html += '<div class="report-proc-head">';
+  html += '<div class="report-proc-title">Components &amp; Cladding (C&amp;C)</div>';
+  html += '<div class="report-proc-sub">ASCE 7-22 Chapter 30 ' + partLabel + ' — ' + escHtml(encLabel) + ' Building</div>';
+  if (addr) html += '<div style="font-size:.73rem;color:var(--text-muted);margin-top:3px;">📍 ' + escHtml(addr) + '</div>';
+  html += '</div>';
+  html += '<div class="report-bldg-sketch">' + buildElevationSVG(s) + '</div>';
+  html += '<p style="font-size:.72rem;color:var(--text-muted);text-align:center;margin:-4px 0 14px;">Procedure per Table 30.2-1, ASCE 7-22</p>';
+
+  var rcFig = {I:'26.5-1A', II:'26.5-1B', III:'26.5-1B', IV:'26.5-1C'}[s.riskCategory] || '26.5-1B';
+  html += stepBlock(1, 'Determine Risk Category', '&#167;Table 1.5-1',
+    '<p>Risk Category: <strong class="step-result">' + escHtml(s.riskCategory||'II') + '</strong></p>');
+
+  html += stepBlock(2, 'Determine basic wind speed V', '&#167;26.5, Fig. ' + rcFig,
+    '<div class="step-formula">V = <span class="step-result">' + fv(s.V,0) + ' mph</span></div>');
+
+  var expDesc = {B:'Suburban/wooded areas', C:'Open terrain with scattered obstructions', D:'Flat, unobstructed areas near water'}[s.exposure] || '';
+  var kztNote = s.kztMode === 'auto' ? 'Hill geometry; K<sub>zt</sub> = (1+K₁K₂K₃)\xb2' : 'Flat terrain — K<sub>zt</sub> = 1.0';
+  var gcpiStr = {enclosed:'\xb10.18', partiallyEnclosed:'\xb10.55', partiallyOpen:'0.00', open:'0.00'}[s.enclosure] || ('\xb1'+fv(gcpiObj.pos,2));
+  html += stepBlock(3, 'Determine wind load parameters', '&#167;26.6 – 26.13',
+    '<table class="step-tbl"><thead><tr><th>Parameter</th><th>Value</th><th>Reference</th></tr></thead><tbody>' +
+    '<tr><td>K<sub>d</sub></td><td><strong>0.85</strong></td><td>Table 26.6-1</td></tr>' +
+    '<tr><td>Exposure</td><td><strong>' + escHtml(s.exposure||'C') + '</strong></td><td>' + expDesc + ' (Sec. 26.7)</td></tr>' +
+    '<tr><td>K<sub>zt</sub></td><td><strong>' + fv(kztV,3) + '</strong></td><td>' + kztNote + ' (Sec. 26.8)</td></tr>' +
+    '<tr><td>K<sub>e</sub></td><td><strong>' + fv(r.ke,3) + '</strong></td><td>z<sub>e</sub> = ' + fv(s.groundElev||0,0) + ' ft AMSL (Sec. 26.9)</td></tr>' +
+    '<tr><td>Enclosure</td><td><strong>' + escHtml(encLabel) + '</strong></td><td>Sec. 26.12</td></tr>' +
+    '<tr><td>(GC<sub>pi</sub>)</td><td><strong>' + gcpiStr + '</strong></td><td>Table 26.13-1</td></tr>' +
+    '</tbody></table>');
+
+  var expZg = {B:1200, C:900, D:700}[s.exposure] || 900;
+  var expAlpha = {B:7.0, C:9.5, D:11.5}[s.exposure] || 9.5;
+  html += stepBlock(4, 'Determine velocity pressure exposure coefficient K<sub>h</sub>', '&#167;26.10, Table 26.10-1',
+    '<div class="step-formula">K<sub>h</sub> = 2.01 \xd7 (' + fv(h,1) + ' / ' + expZg + ')<sup>2/' + expAlpha + '</sup> = <span class="step-result">' + fv(r.kh,3) + '</span></div>');
+
+  html += stepBlock(5, 'Determine velocity pressure q<sub>h</sub>', '&#167;26.10, Eq. 26.10-1',
+    '<div class="step-formula">q<sub>h</sub> = 0.00256 \xd7 ' + fv(r.kh,3) + ' \xd7 ' + fv(kztV,3) + ' \xd7 ' + fv(r.ke,3) + ' \xd7 ' + fv(s.V,0) + '\xb2 = <span class="step-result">' + fpf(r.qh) + '</span></div>');
+
+  /* GCp and Effective area */
+  var Aw = s.areaWall || 20, Ar = s.areaRoof || 50;
+  var a  = r.a || 0;
+  html += stepBlock(6, 'Determine external pressure coefficients (GCp)', '&#167;30.3, Fig. 30.3-1 – 30.3-7',
+    '<p>Zone dimension a = <strong>' + fv(a,2) + ' ft</strong> (Fig. 30.3-1 Notation)</p>' +
+    '<p>Effective wall area A<sub>w</sub> = ' + fv(Aw,0) + ' ft\xb2 &nbsp; | &nbsp; Effective roof area A<sub>r</sub> = ' + fv(Ar,0) + ' ft\xb2</p>' +
+    '<p class="step-sub">GCp values interpolated from figures for the specified effective area and zone.</p>');
+
+  /* C&C pressures */
+  function ccZoneTbl(zones, label, wallFlag) {
+    if (!zones || !zones.length) return '';
+    var zDesc = wallFlag
+      ? {'4':'Zone 4 — Wall field', '5':'Zone 5 — Wall corner'}
+      : {'1p':'Zone 1′ — Roof field (low)', '1':'Zone 1 — Roof field', '2':'Zone 2 — Roof edge', '3':'Zone 3 — Roof corner'};
+    var t = '<p style="margin-top:10px;"><strong>' + label + ':</strong></p>';
+    t += '<table class="step-tbl"><thead><tr><th>Zone</th><th>Description</th>' +
+         '<th>(GCp) min</th><th>(GCp) max</th>' +
+         '<th>p min (psf)</th><th>p max (psf)</th></tr></thead><tbody>';
+    zones.forEach(function(z) {
+      var gcpMin = z.gcp ? z.gcp.neg : null;
+      var gcpMax = z.gcp ? z.gcp.pos : null;
+      t += '<tr><td><strong>' + z.zone + '</strong></td>' +
+           '<td>' + escHtml(zDesc[z.zone] || ('Zone ' + z.zone)) + '</td>' +
+           '<td class="t-neg">' + (gcpMin != null ? fv(gcpMin,3) : '—') + '</td>' +
+           '<td class="t-pos">' + (gcpMax != null ? fv(gcpMax,3) : '—') + '</td>' +
+           '<td class="t-neg">' + fv(z.p.min,2) + '</td>' +
+           '<td class="t-pos">' + fv(z.p.max,2) + '</td></tr>';
+    });
+    t += '</tbody></table>';
+    return t;
+  }
+
+  html += stepBlock(7, 'Calculate C&amp;C design wind pressures', '&#167;30.3, Eq. 30.3-1',
+    '<div class="step-formula">p = q<sub>h</sub> \xd7 K<sub>d</sub> \xd7 [(GCp) − (GCpi)]</div>' +
+    '<div class="step-formula">p = ' + fpf(r.qh) + ' \xd7 0.85 \xd7 [(GCp) − (\xb1' + fv(gcpiObj.pos,2) + ')]</div>' +
+    ccZoneTbl(r.ccWall, 'Walls (Fig. 30.3-1, zones 4 &amp; 5)', true) +
+    ccZoneTbl(r.ccRoof, 'Roof (Fig. 30.3-2, zones 1’3)', false));
+
+  html += stepBlock(8, 'Minimum C&amp;C design wind pressures', '&#167;30.2.2',
+    '<p>All C&amp;C surfaces: |p| ≥ <strong>16 psf</strong>, acting inward or outward.' +
+    (r.ccMinGoverns ? ' <span class="step-result">⚠️ Minimum governs for one or more zones.</span>' : ' Minimum does not govern.') + '</p>');
+
+  /* Summary */
+  html += '<div class="report-summary-box">';
+  html += '<div class="report-summary-title">Design Wind Pressures Summary — C&amp;C (Ch. 30)</div>';
+  html += '<table class="pres-tbl"><thead><tr><th>Surface / Zone</th><th>(GCp)</th><th>p min (psf)</th><th>p max (psf)</th></tr></thead><tbody>';
+  var wallDsc = {'4':'Wall Zone 4 — field', '5':'Wall Zone 5 — corner'};
+  var roofDsc = {'1p':'Roof Zone 1′ — field (low)', '1':'Roof Zone 1 — field', '2':'Roof Zone 2 — edge', '3':'Roof Zone 3 — corner'};
+  (r.ccWall||[]).forEach(function(z) {
+    html += '<tr class="s-gov-row"><td class="s-label">' + escHtml(wallDsc[z.zone]||('Wall zone '+z.zone)) + '</td>' +
+      '<td>' + (z.gcp ? fv(z.gcp.neg,3)+' / +'+fv(z.gcp.pos,3) : '—') + '</td>' +
+      '<td class="s-neg">' + fv(z.p.min,1) + '</td><td class="s-pos">' + fv(z.p.max,1) + '</td></tr>';
+  });
+  (r.ccRoof||[]).forEach(function(z) {
+    html += '<tr><td class="s-label">' + escHtml(roofDsc[z.zone]||('Roof zone '+z.zone)) + '</td>' +
+      '<td>' + (z.gcp ? fv(z.gcp.neg,3)+' / +'+fv(z.gcp.pos,3) : '—') + '</td>' +
+      '<td class="s-neg">' + fv(z.p.min,1) + '</td><td class="s-pos">' + fv(z.p.max,1) + '</td></tr>';
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
 /* ── Ch.27 Directional Step Report — Table 27.2-1 (8 steps) ─────────── */
 function buildWindStepReport(r, s) {
   function fv(v, d) { return (typeof v === 'number') ? v.toFixed(d != null ? d : 2) : '—'; }
@@ -371,10 +641,9 @@ function buildWindStepReport(r, s) {
   if (!s.h || s.h <= 0)       return warn('Enter the building eave height h on the <strong>Geometry</strong> tab.');
 
   var proc = s.mode === 'cc' ? 'cc' : (s.mwfrsProcedure || 'envelope');
-  if (proc !== 'directional') {
-    return warn('This panel shows <strong>MWFRS Directional (Ch. 27)</strong>. Switch procedure above to see the full step-by-step calculation.') +
-      '<p style="font-size:.78rem;color:var(--text-muted);padding:4px 2px;line-height:1.55;">Reports for MWFRS Envelope (Ch. 28) and C&amp;C (Ch. 30) — coming soon.</p>';
-  }
+  if (proc === 'envelope') return buildCh28StepReport(r, s);
+  if (proc === 'cc')       return buildCCStepReport(r, s);
+  if (proc !== 'directional') return warn('Unknown procedure — please select a calculation method above.');
   if (!r || !r.ch27) return warn('Calculation error — please check your inputs.');
 
   var c   = r.ch27;
