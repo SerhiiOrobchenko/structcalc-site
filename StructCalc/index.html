@@ -735,15 +735,18 @@
 
             <!-- PAGE SETTINGS -->
             <div class="panel-section">
-              <div class="panel-section-head"><h4>PAGE SETTINGS</h4></div>
-              <div class="field-row">
+              <div class="panel-section-head">
+                <h4>Page Settings</h4>
+                <span class="panel-section-note">Layout</span>
+              </div>
+              <div class="field">
                 <label>Page size</label>
                 <select id="rpt-pageSize" onchange="renderPrintPreview(window._windLastR,window._windLastS)">
                   <option value="A4">A4  (210 × 297 mm)</option>
                   <option value="letter">Letter  (8.5 × 11 in)</option>
                 </select>
               </div>
-              <div class="field-row">
+              <div class="field">
                 <label>Orientation</label>
                 <select id="rpt-orientation" onchange="renderPrintPreview(window._windLastR,window._windLastS)">
                   <option value="portrait">Portrait</option>
@@ -754,38 +757,46 @@
 
             <!-- TITLE BLOCK -->
             <div class="panel-section">
-              <div class="panel-section-head"><h4>TITLE BLOCK</h4></div>
-              <div class="field-row">
+              <div class="panel-section-head">
+                <h4>Title Block</h4>
+                <span class="panel-section-note">Stamp</span>
+              </div>
+              <div class="field">
                 <label>Engineer</label>
                 <input type="text" id="rpt-engineer" placeholder="Full name" oninput="renderPrintPreview(window._windLastR,window._windLastS)">
               </div>
-              <div class="field-row">
+              <div class="field">
                 <label>Company</label>
                 <input type="text" id="rpt-company" placeholder="Firm / company" oninput="renderPrintPreview(window._windLastR,window._windLastS)">
               </div>
               <div class="field-row">
-                <label>Checked by</label>
-                <input type="text" id="rpt-checker" placeholder="Initials" oninput="renderPrintPreview(window._windLastR,window._windLastS)">
-              </div>
-              <div class="field-row">
-                <label>Job No.</label>
-                <input type="text" id="rpt-jobNo" placeholder="Project / job number" oninput="renderPrintPreview(window._windLastR,window._windLastS)">
+                <div class="field">
+                  <label>Checked by</label>
+                  <input type="text" id="rpt-checker" placeholder="Initials" oninput="renderPrintPreview(window._windLastR,window._windLastS)">
+                </div>
+                <div class="field">
+                  <label>Job No.</label>
+                  <input type="text" id="rpt-jobNo" placeholder="e.g. 2025-042" oninput="renderPrintPreview(window._windLastR,window._windLastS)">
+                </div>
               </div>
             </div>
 
-            <!-- EXPORT — pushed to bottom -->
+            <!-- EXPORT -->
             <div class="panel-section rpt-export-section">
-              <div class="panel-section-head"><h4>EXPORT</h4></div>
-              <div class="field-row">
+              <div class="panel-section-head">
+                <h4>Export</h4>
+                <span class="panel-section-note">Output</span>
+              </div>
+              <div class="field">
                 <label>Format</label>
                 <select id="rpt-format">
-                  <option value="pdf">PDF (browser print)</option>
+                  <option value="pdf">PDF (browser print dialog)</option>
                 </select>
               </div>
             </div>
 
-            <div style="padding:0 14px 14px;margin-top:auto;">
-              <button class="btn btn-primary" id="windBtnPrintReport" onclick="windPrintReport()" style="width:100%;gap:8px;">
+            <div style="padding:0 14px 16px;margin-top:auto;">
+              <button class="btn btn-primary" id="windBtnPrintReport" onclick="windPrintReport()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;">
                 <svg class="ic-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>
                 Print / Save PDF
               </button>
