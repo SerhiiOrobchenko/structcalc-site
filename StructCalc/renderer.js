@@ -896,7 +896,7 @@ class Wind3DRenderer {
       const lUp = new THREE.Vector3().crossVectors(lNorm, lDir).normalize();
 
       // Build canvas with pill background + text
-      const LF   = 'bold 22px "JetBrains Mono",monospace';
+      const LF   = 'bold 20px "JetBrains Mono",monospace';
       const LPAD = 8;
       const LCH  = 34;
       const _cv0 = document.createElement('canvas');
@@ -944,11 +944,14 @@ class Wind3DRenderer {
       );
       // Position label above/beside the dim line (not crossing it)
       // Vertical dims: offset sideways in lUp direction; horizontal: offset up in lNorm
+      // lSide: in-plane direction perp to dim line, pointing outward from building
+      const midPt3 = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
+      let lSide = new THREE.Vector3().crossVectors(lNorm, lDir).normalize();
+      if (lSide.dot(midPt3) < 0) lSide.negate();  // ensure outward
       const CLEAR = 0.70;  // lH/2 (0.55) + 0.15 gap
-      const isVert = Math.abs(lDir.y) > 0.5;
-      lmesh.position.copy(p1).lerp(p2, 0.5)
-        .addScaledVector(isVert ? lUp  : lNorm, CLEAR)
-        .addScaledVector(isVert ? lNorm : new THREE.Vector3(), isVert ? 0.05 : 0);
+      lmesh.position.copy(midPt3)
+        .addScaledVector(lSide, CLEAR)
+        .addScaledVector(lNorm, 0.02);  // tiny lift to prevent z-fighting
       lmesh.renderOrder = 4;
       lmesh.userData.inputId = inputId || null;
       lmesh.userData.dimId   = dimId;
