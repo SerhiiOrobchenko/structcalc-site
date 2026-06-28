@@ -1051,11 +1051,11 @@
   text-align: center; margin-bottom: 16px;
 }
 .report-proc-title {
-  font-size: .95rem; font-weight: 700; color: var(--text-primary);
+  font-size: 1.05rem; font-weight: 700; color: var(--text-primary);
   margin-bottom: 3px;
 }
 .report-proc-sub {
-  font-size: .73rem; color: var(--text-muted);
+  font-size: .8rem; color: var(--text-muted);
 }
 .report-warn {
   background: rgba(239,68,68,.08);
@@ -1090,14 +1090,14 @@
   align-items: center; justify-content: center; flex-shrink: 0;
 }
 .step-title {
-  font-size: .8rem; font-weight: 600; color: var(--text-primary); flex: 1;
+  font-size: .875rem; font-weight: 600; color: var(--text-primary); flex: 1;
 }
 .step-ref {
-  font-size: .68rem; color: var(--text-muted);
+  font-size: .75rem; color: var(--text-muted);
   background: var(--bg-input); border-radius: 3px; padding: 2px 6px;
 }
 .step-body {
-  padding: 10px 13px; font-size: .78rem;
+  padding: 10px 13px; font-size: .875rem;
   color: var(--text-secondary); line-height: 1.55;
 }
 .step-body p { margin: 0 0 5px; }
@@ -1106,22 +1106,22 @@
   font-family: 'Georgia', 'Times New Roman', serif;
   background: var(--slate-50); border: 1px solid var(--border-subtle);
   border-radius: 4px; padding: 7px 11px;
-  margin: 7px 0; font-size: .82rem; color: var(--text-primary);
+  margin: 7px 0; font-size: .9rem; color: var(--text-primary);
   line-height: 1.6;
 }
 .step-result { font-weight: 700; color: var(--accent-blue); }
-.step-sub { font-size: .72rem; color: var(--text-muted); margin-top: 3px; }
+.step-sub { font-size: .78rem; color: var(--text-muted); margin-top: 3px; }
 
 /* Tables inside steps */
 .step-tbl {
   width: 100%; border-collapse: collapse;
-  font-size: .75rem; margin: 8px 0;
+  font-size: .82rem; margin: 8px 0;
 }
 .step-tbl th {
   background: var(--bg-section); color: var(--text-muted);
   font-weight: 600; padding: 4px 8px;
   border: 1px solid var(--border-subtle);
-  text-align: right; white-space: nowrap; font-size: .72rem;
+  text-align: right; white-space: nowrap; font-size: .78rem;
 }
 .step-tbl th:first-child { text-align: left; }
 .step-tbl td {
@@ -1140,21 +1140,21 @@
   border-radius: 8px; padding: 14px 16px; margin-top: 16px;
 }
 .report-summary-title {
-  font-size: .82rem; font-weight: 700; color: var(--text-primary);
+  font-size: .9rem; font-weight: 700; color: var(--text-primary);
   margin-bottom: 10px; text-align: center;
 }
 .pres-tbl {
-  width: 100%; border-collapse: collapse; font-size: .77rem;
+  width: 100%; border-collapse: collapse; font-size: .85rem;
 }
 .pres-tbl th {
-  background: var(--bg-section); font-size: .72rem;
+  background: var(--bg-section); font-size: .78rem;
   color: var(--text-muted); font-weight: 600;
   padding: 5px 9px; border: 1px solid var(--border-subtle);
   text-align: center;
 }
 .pres-tbl th:first-child { text-align: left; }
 .pres-tbl td {
-  padding: 5px 9px; border: 1px solid var(--border-subtle);
+  padding: 6px 10px; border: 1px solid var(--border-subtle);
   text-align: center;
 }
 .pres-tbl td.s-label { text-align: left; font-weight: 600; color: var(--text-primary); }
@@ -1176,7 +1176,7 @@
 }
 .proj-sum-row {
   display: flex; justify-content: space-between; align-items: baseline;
-  font-size: .78rem; padding: 2px 0;
+  font-size: .85rem; padding: 2px 0;
 }
 .proj-sum-row .k { color: var(--text-secondary); }
 .proj-sum-row .v { font-weight: 600; color: var(--text-primary); text-align: right; }
