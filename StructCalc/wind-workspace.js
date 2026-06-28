@@ -485,7 +485,7 @@ function computeEnclosureFromOpenings() {
   res.className = 'enclosure-calc-result ' + cls;
   res.innerHTML = 'Classification: <strong>' + label + '</strong>';
   if (encEl) encEl.value = val;
-  document.querySelectorAll('.enc-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.enc === val); });
+  updateCCDependentUI();
 }
 
 /* ── Zone options by surface ────────────────────────────────────────────── */
@@ -633,25 +633,21 @@ function wireWindInputs() {
     syncOtherParams();
   }
 
-  /* Enclosure buttons */
-  document.querySelectorAll('.enc-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      document.querySelectorAll('.enc-btn').forEach(function(b){ b.classList.remove('active'); });
-      btn.classList.add('active');
-      var encEl = document.getElementById('wind-enclosure');
-      if (encEl) encEl.value = btn.dataset.enc;
+  /* Enclosure select */
+  var encSelEl = document.getElementById('wind-enclosure');
+  if (encSelEl) {
+    encSelEl.addEventListener('change', function() {
       updateCCDependentUI();
       recalcWind();
     });
-  });
+  }
 
   /* Calculate openings toggle */
   var chkOp = document.getElementById('wind-calcOpenings');
   if (chkOp) {
     chkOp.addEventListener('change', function() {
       setVisible('openingsTable', this.checked);
-      document.querySelectorAll('.enc-btn').forEach(function(b){ b.disabled = chkOp.checked; b.style.opacity = chkOp.checked ? '.45' : ''; });
-    });
+      });
     ['wind-Ao','wind-Aoi','wind-Ag','wind-Agi'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('input', function(){ computeEnclosureFromOpenings(); recalcWind(); });

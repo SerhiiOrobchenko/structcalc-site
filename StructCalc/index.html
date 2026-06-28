@@ -369,21 +369,13 @@
                   <span class="panel-section-note">§26.12 / Table 26.13-1</span>
                 </div>
 
-                <div class="enclosure-btns" id="enclosureBtns">
-                  <button class="enc-btn active" data-enc="enclosed">
-                    <span class="enc-label">Enclosed</span>
-                    <span class="enc-gcpi">GC<sub>pi</sub> = ±0.18</span>
-                  </button>
-                  <button class="enc-btn" data-enc="partiallyEnclosed">
-                    <span class="enc-label">Partially Enclosed</span>
-                    <span class="enc-gcpi">GC<sub>pi</sub> = ±0.55</span>
-                  </button>
-                  <button class="enc-btn" data-enc="open">
-                    <span class="enc-label">Open</span>
-                    <span class="enc-gcpi">GC<sub>pi</sub> = 0.00</span>
-                  </button>
+                <div class="field">
+                  <select id="wind-enclosure">
+                    <option value="enclosed">Enclosed — GC&#x3C0;&#x1D62; = ±0.18</option>
+                    <option value="partiallyEnclosed">Partially Enclosed — GC&#x3C0;&#x1D62; = ±0.55</option>
+                    <option value="open">Open — GC&#x3C0;&#x1D62; = 0.00</option>
+                  </select>
                 </div>
-                <input type="hidden" id="wind-enclosure" value="enclosed">
 
                 <label class="toggle-label" style="margin-top:14px;">
                   <input type="checkbox" id="wind-calcOpenings"> Calculate from opening areas
@@ -504,7 +496,7 @@
                     <label>Eave height, h <span class="unit">(ft)</span></label>
                     <input class="num" id="wind-h" value="20" min="1" max="500" data-dim="h">
                   </div>
-                  <div class="field">
+                  <div class="field field-stacked">
                     <div class="pitch-label-row">
                       <label id="wind-theta-label">Roof pitch, &#952; <span class="unit">(&#176;)</span></label>
                       <div class="view-toggle pitch-unit-toggle" id="pitchUnitToggle">

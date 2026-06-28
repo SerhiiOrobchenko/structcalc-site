@@ -342,6 +342,24 @@
 .tornado-status.pending      { background: var(--slate-100); color: var(--slate-500); border: 1px solid var(--slate-200); }
 
 /* ── Enclosure buttons ───────────────────────────────────────────────── */
+
+/* Paired fields: label and input on one line ─────────────────────────────── */
+.field-row .field {
+  display: flex; flex-direction: row; align-items: center; gap: 6px;
+  margin-bottom: 6px;
+}
+.field-row .field > label {
+  flex: 1; margin-bottom: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.field-row .field > input.num,
+.field-row .field > select { width: 76px; flex: none; }
+/* Stacked override for complex fields (e.g. pitch with unit toggle) */
+.field-row .field.field-stacked {
+  flex-direction: column; align-items: stretch; gap: 0;
+}
+.field-row .field.field-stacked > label { margin-bottom: 4px; white-space: normal; }
+.field-row .field.field-stacked > input.num { width: 100%; }
 .enclosure-btns { display: flex; flex-direction: column; gap: 6px; }
 .enc-btn {
   display: flex; align-items: center; justify-content: space-between;
