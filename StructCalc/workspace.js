@@ -6,7 +6,6 @@
    Depends on: projects.js, dashboard.js (loaded before)
    Rule: edit only for workspace/sidebar/routing changes.
    ===================================================================== */
-console.log('[SC] workspace.js START');
 
 /* ── Navigation ──────────────────────────────────────────────────────── */
 function goWorkspace(projectId, calcId) {
@@ -472,4 +471,3 @@ document.getElementById('treeAddBtn').addEventListener('click', openAddCalcModal
 
 /* ── Workspace top-bar wiring ────────────────────────────────────────── */
 document.getElementById('wsBack').addEventListener('click', goDashboard);
-console.log('[SC] workspace.js END');
