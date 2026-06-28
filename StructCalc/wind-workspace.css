@@ -1181,3 +1181,194 @@
 .proj-sum-row .k { color: var(--text-secondary); }
 .proj-sum-row .v { font-weight: 600; color: var(--text-primary); text-align: right; }
 .proj-sum-not-set { font-size: .75rem; color: var(--text-muted); font-style: italic; }
+
+
+/* =====================================================================
+   PRINT PREVIEW — Tekla Tedds-style paginated preview
+   ===================================================================== */
+
+/* Scrollable dark background area filling col-diagram */
+.pp-area {
+  position: absolute; inset: 0;
+  background: #4b5563;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 20px 48px;
+  gap: 0;
+}
+
+/* Individual A4/Letter page sheet */
+.pp-page {
+  background: #fff;
+  box-shadow: 0 4px 28px rgba(0,0,0,.45);
+  position: relative;
+  box-sizing: border-box;
+  padding: 18px;          /* space between edge and frame */
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Outer frame (Tekla Tedds double-border style) */
+.pp-frame {
+  flex: 1;
+  border: 2px solid #1e3a5f;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  position: relative;
+}
+
+/* Second inner border line (Tedds style) */
+.pp-frame::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1px solid #1e3a5f;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Content area (fills frame above title block) */
+.pp-content {
+  flex: 1;
+  padding: 14px 18px 10px;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+}
+
+/* Reduce margins inside step blocks on pages */
+.pp-content .step-block       { margin-bottom: 7px; }
+.pp-content .report-proc-head { margin-bottom: 10px; }
+.pp-content .report-summary-box { margin-top: 8px; }
+
+/* Title block — fixed height at bottom of frame */
+.pp-titleblock {
+  height: 60px;
+  border-top: 2px solid #1e3a5f;
+  display: flex;
+  align-items: stretch;
+  background: #f8fafc;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+.pp-tb-main {
+  flex: 1;
+  padding: 5px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-right: 1px solid #1e3a5f;
+}
+.pp-tb-proj {
+  font-size: .78rem;
+  font-weight: 700;
+  color: #1e3a5f;
+  line-height: 1.2;
+}
+.pp-tb-title {
+  font-size: .67rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.pp-tb-meta {
+  padding: 4px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  border-right: 1px solid #1e3a5f;
+  min-width: 140px;
+}
+.pp-tb-row {
+  display: flex;
+  gap: 4px;
+  font-size: .63rem;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+.pp-tb-k {
+  color: var(--text-muted);
+  width: 52px;
+  flex-shrink: 0;
+}
+.pp-tb-v { font-weight: 600; }
+.pp-tb-page {
+  width: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+.pp-tb-pnum {
+  font-size: .72rem;
+  font-weight: 700;
+  color: #1e3a5f;
+}
+.pp-tb-job {
+  font-size: .6rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Break zone between pages */
+.pp-break-zone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 794px;
+  padding: 6px 0;
+  z-index: 2;
+}
+.pp-break-line {
+  flex: 1;
+  height: 0;
+  border-top: 2px dashed #60a5fa;
+}
+.pp-break-btn {
+  background: #dbeafe;
+  border: 1px solid #3b82f6;
+  color: #1d4ed8;
+  font-size: .68rem;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background .15s;
+}
+.pp-break-btn:hover { background: #bfdbfe; }
+.pp-break-btn.auto {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #475569;
+}
+.pp-break-btn.auto:hover {
+  background: #e2e8f0;
+  border-color: #60a5fa;
+  color: #1d4ed8;
+}
+.pp-break-btn.manual {
+  background: #fef9c3;
+  border-color: #ca8a04;
+  color: #854d0e;
+}
+.pp-break-btn.manual:hover { background: #fef08a; }
+
+/* Report tab: export section pushed down */
+#tab-report { height: 100%; }
+.rpt-export-section { border-top: 1px solid var(--border-subtle); }
+
+/* ── @media print — actual browser print ─────────────────────────────── */
+@media print {
+  /* Hide everything except the print iframe content */
+  body > *:not(iframe) { display: none !important; }
+}
+

@@ -175,6 +175,7 @@ function recalcWind() {
   var s = gatherWindState(windSavedState || {});
   var r = null;
   try { r = window.compute(s); } catch(e) { console.warn('Wind compute error', e); }
+  window._windLastR = r; window._windLastS = s;
 
   var B  = s.minDim    || 40;
   var L  = s.buildingL || 60;
@@ -236,6 +237,8 @@ function recalcWind() {
   var reportEl = document.getElementById('windReportScroll');
   if (reportEl) reportEl.innerHTML = buildWindStepReport(r, s);
   renderProjectSummary(r, s);
+  /* Refresh print preview if Report tab active */
+  if (document.querySelector('.itab.active[data-tab="report"]')) renderPrintPreview(r, s);
 
   if (!windActiveCalc.state) windActiveCalc.state = {};
   windActiveCalc.state['ASCE 7-22'] = { state: s, unitSystem: s.unitSystem };
@@ -1642,14 +1645,18 @@ function activateInputTab(tabName) {
   var mapTb = document.getElementById('mapToolbar');
   var diagramTb = document.getElementById('diagramToolbar');
   var isResults = (tabName === 'results');
+  var isReport  = (tabName === 'report');
   var reportPanelEl = document.getElementById('windReportPanel');
+  var printPreviewEl = document.getElementById('windPrintPreviewArea');
   var captEl = document.getElementById('windDiagramCaption');
   if (mapEl)          mapEl.classList.toggle('hidden', !isMap);
-  if (threeEl)        threeEl.classList.toggle('hidden', isMap || isResults);
+  if (threeEl)        threeEl.classList.toggle('hidden', isMap || isResults || isReport);
   if (mapTb)          mapTb.classList.toggle('hidden', !isMap);
-  if (diagramTb)      diagramTb.classList.toggle('hidden', isMap || isResults);
+  if (diagramTb)      diagramTb.classList.toggle('hidden', isMap || isResults || isReport);
   if (reportPanelEl)  reportPanelEl.classList.toggle('hidden', !isResults);
-  if (captEl)         captEl.classList.toggle('hidden', isResults);
+  if (printPreviewEl) printPreviewEl.classList.toggle('hidden', !isReport);
+  if (captEl)         captEl.classList.toggle('hidden', isResults || isReport);
+  if (isReport) renderPrintPreview(window._windLastR, window._windLastS);
   /* Init / resize Leaflet map when Site tab becomes visible */
   if (isMap && typeof initWindMap === 'function') {
     setTimeout(function(){ initWindMap('map-container'); }, 50);
@@ -2123,3 +2130,244 @@ async function openWindWorkspace(proj, calc) {
   }
   recalcWind();
 }
+
+
+/* ── Print Preview ─────────────────────────────────────────────────────── */
+window._windPageBreaks = window._windPageBreaks || new Set();
+
+function parseReportSegments(html) {
+  var tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  var segs = [];
+  Array.from(tmp.children).forEach(function(node) {
+    segs.push({ html: node.outerHTML, id: segs.length });
+  });
+  return segs;
+}
+
+function windTogglePageBreak(segIdx) {
+  if (window._windPageBreaks.has(segIdx)) {
+    window._windPageBreaks.delete(segIdx);
+  } else {
+    window._windPageBreaks.add(segIdx);
+  }
+  renderPrintPreview(window._windLastR, window._windLastS);
+}
+
+function renderPrintPreview(r, s) {
+  var area = document.getElementById('windPrintPreviewArea');
+  if (!area || area.classList.contains('hidden')) return;
+
+  var pgSz  = (document.getElementById('rpt-pageSize')    || {}).value || 'A4';
+  var pgOr  = (document.getElementById('rpt-orientation') || {}).value || 'portrait';
+  var engr  = (document.getElementById('rpt-engineer')    || {}).value || '';
+  var co    = (document.getElementById('rpt-company')     || {}).value || '';
+  var chk   = (document.getElementById('rpt-checker')     || {}).value || '';
+  var job   = (document.getElementById('rpt-jobNo')       || {}).value || '';
+  var calcTitle = 'ASCE 7-22 · Wind Load';
+  var projEl = document.getElementById('windBannerText');
+  var proj   = projEl ? projEl.textContent : 'Wind Loads';
+  var dateStr = new Date().toLocaleDateString('en-US', {year:'numeric', month:'short', day:'numeric'});
+
+  /* Page dimensions at 96 dpi */
+  var DIMS = {
+    'A4-portrait':     {w: 794,  h: 1123},
+    'A4-landscape':    {w: 1123, h: 794 },
+    'letter-portrait': {w: 816,  h: 1056},
+    'letter-landscape':{w: 1056, h: 816 }
+  };
+  var dim = DIMS[pgSz + '-' + pgOr] || DIMS['A4-portrait'];
+
+  /* Layout constants (px) */
+  var FRAME_MARGIN  = 18;   /* outer whitespace inside page edge */
+  var FRAME_BORDER  = 2;    /* frame border thickness */
+  var CONTENT_PAD   = 12;   /* padding inside frame */
+  var TITLE_H       = 60;   /* title block height */
+  var TITLE_BORDER  = 2;
+
+  var contentW = dim.w - 2*FRAME_MARGIN - 2*FRAME_BORDER - 2*CONTENT_PAD;
+  var contentH = dim.h - 2*FRAME_MARGIN - 2*FRAME_BORDER - 2*CONTENT_PAD - TITLE_H - TITLE_BORDER - 8;
+
+  /* Build report HTML */
+  var reportHtml = '';
+  if (r && s) {
+    reportHtml = buildWindStepReport(r, s);
+  } else {
+    reportHtml = '<p style="color:var(--slate-400);text-align:center;padding:40px 0;font-size:.9rem;">Enter inputs on the Site and Geometry tabs to generate report.</p>';
+  }
+
+  /* Parse into segments */
+  var segs = parseReportSegments(reportHtml);
+  if (!segs.length) {
+    area.innerHTML = '<div style="color:#aaa;text-align:center;padding:60px 0;font-size:.9rem;">No report content yet.</div>';
+    return;
+  }
+
+  /* Measure segment heights */
+  var meas = document.createElement('div');
+  meas.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + contentW + 'px;visibility:hidden;z-index:-1;background:#fff;padding:0;';
+  document.body.appendChild(meas);
+  var segH = segs.map(function(seg) {
+    meas.innerHTML = seg.html;
+    return meas.offsetHeight + 10; /* +10 gap */
+  });
+  document.body.removeChild(meas);
+
+  /* Paginate */
+  var pages = [];     /* array of arrays of segment indices */
+  var curPage = [];
+  var curH = 0;
+  segs.forEach(function(seg, i) {
+    var h = segH[i];
+    var forceBreak = window._windPageBreaks.has(i) && i > 0;
+    if (forceBreak && curPage.length > 0) {
+      pages.push(curPage);
+      curPage = [i];
+      curH = h;
+    } else if (curH + h > contentH && curPage.length > 0) {
+      pages.push(curPage);
+      curPage = [i];
+      curH = h;
+    } else {
+      curPage.push(i);
+      curH += h;
+    }
+  });
+  if (curPage.length > 0) pages.push(curPage);
+  var totalPages = pages.length;
+
+  /* Build set of auto-break positions (first seg of each page except page 0) */
+  var autoBreaks = new Set();
+  pages.forEach(function(pg, pi) {
+    if (pi > 0 && pg.length > 0) autoBreaks.add(pg[0]);
+  });
+
+  /* Render HTML */
+  /* Set preview area class for @media print page size */
+  area.dataset.pageSize = pgSz;
+  area.dataset.orient   = pgOr;
+
+  var html = '';
+  pages.forEach(function(pageSegs, pi) {
+    html += '<div class="pp-page" style="width:' + dim.w + 'px;min-height:' + dim.h + 'px;">';
+    html += '<div class="pp-frame">';
+    html += '<div class="pp-content" style="width:' + contentW + 'px;">';
+    pageSegs.forEach(function(si) {
+      html += segs[si].html;
+    });
+    html += '</div>'; /* pp-content */
+    /* Title block */
+    html += '<div class="pp-titleblock">';
+    html += '<div class="pp-tb-main">';
+    html += '<div class="pp-tb-proj">' + escHtml(proj) + '</div>';
+    html += '<div class="pp-tb-title">' + escHtml(calcTitle) + (co ? ' &nbsp;·&nbsp; ' + escHtml(co) : '') + '</div>';
+    html += '</div>';
+    html += '<div class="pp-tb-meta">';
+    html += '<div class="pp-tb-row"><span class="pp-tb-k">Engineer</span><span class="pp-tb-v">' + (engr ? escHtml(engr) : '&mdash;') + '</span></div>';
+    html += '<div class="pp-tb-row"><span class="pp-tb-k">Checked</span><span class="pp-tb-v">' + (chk ? escHtml(chk) : '&mdash;') + '</span></div>';
+    html += '<div class="pp-tb-row"><span class="pp-tb-k">Date</span><span class="pp-tb-v">' + dateStr + '</span></div>';
+    html += '</div>';
+    html += '<div class="pp-tb-page">';
+    html += '<div class="pp-tb-pnum">Page ' + (pi+1) + ' / ' + totalPages + '</div>';
+    if (job) html += '<div class="pp-tb-job">Job: ' + escHtml(job) + '</div>';
+    html += '</div>';
+    html += '</div>'; /* pp-titleblock */
+    html += '</div>'; /* pp-frame */
+    html += '</div>'; /* pp-page */
+
+    /* Page break zone BETWEEN pages — shows break info and allows adjusting */
+    if (pi < pages.length - 1) {
+      var nextFirst = pages[pi+1][0];
+      /* Segment name for tooltip */
+      var segName = 'Step ' + (nextFirst+1);
+      var m = segs[nextFirst] && segs[nextFirst].html.match(/class="step-num"[^>]*>(\d+)</);
+      if (m) segName = 'Step ' + m[1];
+      else if (segs[nextFirst] && segs[nextFirst].html.indexOf('report-summary-box') >= 0) segName = 'Summary';
+      else if (segs[nextFirst] && segs[nextFirst].html.indexOf('report-proc-head') >= 0) segName = 'Header';
+      var isManual = window._windPageBreaks.has(nextFirst);
+      html += '<div class="pp-break-zone" data-seg="' + nextFirst + '">' +
+              '<div class="pp-break-line"></div>' +
+              '<button class="pp-break-btn ' + (isManual ? 'manual' : 'auto') + '" onclick="windTogglePageBreak(' + nextFirst + ')">' +
+              (isManual ? '✕ Remove break before ' + segName : '↕ Page break · ' + segName) +
+              '</button>' +
+              '<div class="pp-break-line"></div>' +
+              '</div>';
+    }
+  });
+
+  /* Also add subtle break handles WITHIN pages */
+  /* Re-render with intra-page break zones */
+  /* For now done with the inter-page zones above */
+
+  area.innerHTML = html;
+}
+
+function windPrintReport() {
+  var r = window._windLastR, s = window._windLastS;
+  if (!r || !s) { alert('Calculate first (enter inputs and switch to any tab).'); return; }
+  var pgSz = (document.getElementById('rpt-pageSize') || {}).value || 'A4';
+  var pgOr = (document.getElementById('rpt-orientation') || {}).value || 'portrait';
+
+  /* Build a print-only iframe */
+  var reportHtml = buildWindStepReport(r, s);
+  var engineer = (document.getElementById('rpt-engineer') || {}).value || '';
+  var company  = (document.getElementById('rpt-company')  || {}).value || '';
+  var checker  = (document.getElementById('rpt-checker')  || {}).value || '';
+  var job      = (document.getElementById('rpt-jobNo')    || {}).value || '';
+  var projEl   = document.getElementById('windBannerText');
+  var proj     = projEl ? projEl.textContent : 'Wind Loads';
+  var dateStr  = new Date().toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'});
+  var pageSize = (pgSz === 'letter' ? '8.5in 11in' : 'A4');
+  if (pgOr === 'landscape') pageSize = (pgSz === 'letter' ? '11in 8.5in' : 'A4 landscape');
+
+  /* Inject manual page breaks into the HTML */
+  var segs = parseReportSegments(reportHtml);
+  var processedHtml = '';
+  segs.forEach(function(seg, i) {
+    if (window._windPageBreaks.has(i) && i > 0) {
+      processedHtml += '<div style="break-before:page;page-break-before:always;"></div>';
+    }
+    processedHtml += seg.html;
+  });
+
+  /* Get computed styles from main document */
+  var cssLinks = '';
+  Array.from(document.querySelectorAll('link[rel="stylesheet"]')).forEach(function(l) {
+    cssLinks += '<link rel="stylesheet" href="' + l.href + '">';
+  });
+
+  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Wind Load Report</title>' + cssLinks + '<style>' +
+    '@page{size:' + pageSize + ';margin:15mm 15mm 20mm 15mm}' +
+    'body{background:#fff;margin:0;padding:0}' +
+    '.print-wrapper{font-family:inherit}' +
+    '.step-block{break-inside:avoid;page-break-inside:avoid}' +
+    '.report-summary-box{break-inside:avoid;page-break-inside:avoid}' +
+    '.report-bldg-sketch{break-inside:avoid}' +
+    /* Title block that appears at bottom of EVERY printed page via @page running element */
+    '.print-title-block{position:running(titleblock);width:100%;height:55px;border-top:2px solid #1e3a5f;display:flex;align-items:stretch;font-size:.72rem;background:#fff}' +
+    '.ptb-main{flex:1;padding:4px 10px;display:flex;flex-direction:column;justify-content:center;border-right:1px solid #1e3a5f}' +
+    '.ptb-meta{padding:4px 10px;display:flex;flex-direction:column;justify-content:space-around;border-right:1px solid #1e3a5f;font-size:.65rem}' +
+    '.ptb-page{width:80px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center}' +
+    '.print-outer-frame{border:2px solid #1e3a5f;min-height:calc(100vh - 40px);display:flex;flex-direction:column;padding:14px 18px 0}' +
+    '.print-content{flex:1}' +
+    '</style></head><body>' +
+    '<div class="print-outer-frame">' +
+    '<div class="print-content">' + processedHtml + '</div>' +
+    '<div class="print-title-block">' +
+    '<div class="ptb-main"><div style="font-weight:700;color:#1e3a5f;">' + escHtml(proj) + '</div>' +
+    '<div style="color:#64748b;font-size:.68rem;">ASCE 7-22 Wind Load Calculation' + (company ? ' · ' + escHtml(company) : '') + '</div></div>' +
+    '<div class="ptb-meta"><div><b>Engineer:</b> ' + (engineer||'—') + '</div><div><b>Checked:</b> ' + (checker||'—') + '</div><div><b>Date:</b> ' + dateStr + '</div></div>' +
+    '<div class="ptb-page" style="font-size:.8rem;font-weight:700;">' + (job ? '<div style="font-size:.65rem;color:#64748b;">Job: ' + escHtml(job) + '</div>' : '') + '</div>' +
+    '</div>' +
+    '</div>' +
+    '<script>window.onload=function(){window.print();window.onafterprint=function(){window.close();}}<\/script>' +
+    '</body></html>';
+
+  var iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;';
+  document.body.appendChild(iframe);
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+}
+
