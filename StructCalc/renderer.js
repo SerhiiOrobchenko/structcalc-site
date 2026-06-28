@@ -995,7 +995,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(-hB, EPS_Y,  hL), new THREE.Vector3(-hB, EPS_Y, bZ)],
         [new THREE.Vector3( hB, EPS_Y,  hL), new THREE.Vector3( hB, EPS_Y, bZ)],
       ],
-      `B = ${fmt(B)} ft`, 'dim-B', 'inp-B'
+      `B = ${fmt(B)} ft`, 'dim-B', 'wind-B'
     ));
     this._dimHighlight['dim-B'] = grp.children[grp.children.length - 1];
 
@@ -1009,7 +1009,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(hB, EPS_Y, -hL), new THREE.Vector3(lX, EPS_Y, -hL)],
         [new THREE.Vector3(hB, EPS_Y,  hL), new THREE.Vector3(lX, EPS_Y,  hL)],
       ],
-      `L = ${fmt(L)} ft`, 'dim-L', 'inp-L'
+      `L = ${fmt(L)} ft`, 'dim-L', 'wind-L'
     ));
     this._dimHighlight['dim-L'] = grp.children[grp.children.length - 1];
 
@@ -1024,7 +1024,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(-hB, EPS_Y,  hZhe), new THREE.Vector3(hXhe, EPS_Y,  hZhe)],
         [new THREE.Vector3(-hB, hEave,  hZhe), new THREE.Vector3(hXhe, hEave,  hZhe)],
       ],
-      `h_eave = ${fmt(hEaveLabel ?? hEave)} ft`, 'dim-h-eave', 'inp-h'
+      `h_eave = ${fmt(hEaveLabel ?? hEave)} ft`, 'dim-h-eave', 'wind-h'
     ));
     this._dimHighlight['dim-h-eave'] = grp.children[grp.children.length - 1];
 
@@ -1042,7 +1042,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(hXhe, EPS_Y,  hZh), new THREE.Vector3(hXh, EPS_Y,  hZh)],
         [new THREE.Vector3(-hB,  hMean,  hZh), new THREE.Vector3(hXh, hMean,  hZh)],
       ],
-      `h = ${fmt(hMeanFt ?? hMean)} ft`, 'dim-h', 'inp-h'
+      `h = ${fmt(hMeanFt ?? hMean)} ft`, 'dim-h', 'wind-h'
     ));
     this._dimHighlight['dim-h'] = grp.children[grp.children.length - 1];
 

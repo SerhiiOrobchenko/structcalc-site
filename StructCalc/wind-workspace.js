@@ -719,12 +719,6 @@ function wireWindInputs() {
     });
   });
 
-  /* ── 3D renderer: zone click → switch to geometry tab ───────────────── */
-  if (windRenderer) {
-    windRenderer.onZoneClick(function(zoneType) {
-      activateInputTab('geometry');
-    });
-  }
 }
 
 /* ── Pitch toggle: deg ↔ X:12 with live conversion display ────────────── */
@@ -831,6 +825,12 @@ async function openWindWorkspace(proj, calc) {
   if (!elWsMain._inputsWired) {
     wireWindInputs();
     elWsMain._inputsWired = true;
+  }
+  // Re-register zone click on every new renderer instance
+  if (windRenderer) {
+    windRenderer.onZoneClick(function(zoneType) {
+      activateInputTab('geometry');
+    });
   }
   recalcWind();
 }
