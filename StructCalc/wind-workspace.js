@@ -206,7 +206,7 @@ function recalcWind() {
   }
 
   /* K_e auto on first calc */
-  computeKe();
+  wsComputeKe();
 
   // Renderer signature: update3DModel(B, L, ridgeHeight, thetaDegrees, zone_a, roofShape)
   var specialExtras = ['stepped', 'multispan', 'sawtooth', 'dome'];
@@ -433,7 +433,7 @@ function updateTornadoAlert() {
 }
 
 /* ── K_e auto-calc ──────────────────────────────────────────────────────── */
-function computeKe() {
+function wsComputeKe() {
   var z  = parseFloat((document.getElementById('wind-groundElev') || {}).value) || 0;
   var ke = Math.exp(-0.0000362 * z);
   var d  = document.getElementById('wind-ke-display');
@@ -442,7 +442,7 @@ function computeKe() {
 }
 
 /* ── K_zt calc (ASCE 7-22 Fig. 26.8-1) ────────────────────────────────── */
-function computeKzt() {
+function wsComputeKzt() {
   var shape = (document.getElementById('wind-kztShape') || {}).value || '2dRidge';
   var H   = parseFloat((document.getElementById('wind-kztH')  || {}).value) || 0;
   var Lh  = parseFloat((document.getElementById('wind-kztLh') || {}).value) || 1;
@@ -692,17 +692,17 @@ function wireWindInputs() {
     chkKzt.addEventListener('change', function() {
       setVisible('kztManualBlock', !this.checked);
       setVisible('kztCalcBlock',    this.checked);
-      if (this.checked) computeKzt();
+      if (this.checked) wsComputeKzt();
     });
     ['wind-kztShape','wind-kztH','wind-kztLh','wind-kztX','wind-kztZ'].forEach(function(id) {
       var el = document.getElementById(id);
-      if (el) el.addEventListener('input', function(){ computeKzt(); recalcWind(); });
+      if (el) el.addEventListener('input', function(){ wsComputeKzt(); recalcWind(); });
     });
   }
 
   /* Ground elevation → K_e */
   var elevEl = document.getElementById('wind-groundElev');
-  if (elevEl) elevEl.addEventListener('input', function(){ computeKe(); recalcWind(); });
+  if (elevEl) elevEl.addEventListener('input', function(){ wsComputeKe(); recalcWind(); });
 
   /* Risk Category → tornado alert + recalc */
   var rcEl = document.getElementById('wind-riskCategory');
