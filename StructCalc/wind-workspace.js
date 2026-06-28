@@ -941,6 +941,236 @@ function buildCCStepReport(r, s) {
   return html;
 }
 
+/* ── Ch.29 Other Structures Step Report ─────────────────────────────── */
+function buildCh29StepReport(r, s) {
+  function fv(v, d) { return (typeof v === 'number') ? v.toFixed(d != null ? d : 2) : '—'; }
+  function fpf(v)   { return fv(v, 2) + ' psf'; }
+  function warn(msg) {
+    return '<div class="report-warn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>' + msg + '</span></div>';
+  }
+  var c = r && r.ch29;
+  if (!c) return warn('Ch. 29 data not available — verify "Other Structure" is selected and inputs are complete.');
+
+  var kztV  = s.kzt || 1.0;
+  var expZg    = {B:1200, C:900, D:700}[s.exposure] || 900;
+  var expAlpha = {B:7.0,  C:9.5, D:11.5}[s.exposure] || 9.5;
+  var expDesc  = {B:'Suburban/wooded', C:'Open terrain, scattered obstructions', D:'Flat/unobstructed near water'}[s.exposure] || '';
+  var addrEl   = document.getElementById('wind-address');
+  var addr     = addrEl ? addrEl.value.trim() : '';
+  var structH  = s.ch29H || s.h || 20;
+
+  var typeNames = {
+    solidSign:    'Solid Freestanding Sign / Wall (Sec. 29.3)',
+    chimney:      'Chimney, Tank, or Rooftop Structure (Sec. 29.4.1)',
+    openSign:     'Open Sign or Lattice Framework (Sec. 29.4.2)',
+    trussedTower: 'Trussed Tower (Sec. 29.4.4)',
+    rooftopEquip: 'Rooftop Equipment (Sec. 29.4.1, Eqs. 29.4-2/3)',
+    solarPanel:   'Rooftop Solar Panels (Sec. 29.4.3)',
+    groundSolar:  'Ground-Mounted Solar Array (Sec. 29.4.5)'
+  };
+  var typeName = typeNames[c.type] || escHtml(c.type);
+
+  var html = '';
+  html += '<div class="report-proc-head">';
+  html += '<div class="report-proc-title">Other Structures — ' + typeName + '</div>';
+  html += '<div class="report-proc-sub">ASCE 7-22 Chapter 29 — Wind Loads on Other Structures &amp; Building Appurtenances</div>';
+  if (addr) html += '<div style="font-size:.73rem;color:var(--text-muted);margin-top:3px;">📍 ' + escHtml(addr) + '</div>';
+  html += '</div>';
+  html += '<p style="font-size:.72rem;color:var(--text-muted);text-align:center;margin:4px 0 14px;">Procedure per ASCE 7-22 Chapter 29</p>';
+
+  if (c.warnings && c.warnings.length) {
+    c.warnings.forEach(function(w) { html += warn(escHtml(w)); });
+  }
+
+  /* ── Step 1: Risk Category ──────────────────────────────────────────── */
+  html += stepBlock(1, 'Determine Risk Category', '§Table 1.5-1',
+    '<p>Risk Category: <strong class="step-result">' + escHtml(s.riskCategory || 'II') + '</strong></p>');
+
+  /* ── Step 2: Wind Speed ─────────────────────────────────────────────── */
+  var rcFig = {I:'26.5-1A', II:'26.5-1B', III:'26.5-1B', IV:'26.5-1C'}[s.riskCategory] || '26.5-1B';
+  html += stepBlock(2, 'Determine basic wind speed V', '§26.5, Fig. ' + rcFig,
+    '<div class="step-formula">V = <span class="step-result">' + fv(s.V, 0) + ' mph</span></div>');
+
+  /* ── Step 3: Parameters ─────────────────────────────────────────────── */
+  var kztNote = s.kztMode === 'auto'
+    ? 'K<sub>zt</sub> = (1+K₁K₂K₃)² per hill geometry'
+    : 'Flat terrain — K<sub>zt</sub> = 1.0';
+  var kdNote = {
+    solidSign:    '0.85 — Solid sign (Table 26.6-1)',
+    chimney:      (c.KD === 0.90 ? '0.90 — Square cross-section (Table 26.6-1)' : '0.95 — Chimney/tank/rooftop structure (Table 26.6-1)'),
+    openSign:     '0.85 — Open sign (Table 26.6-1)',
+    trussedTower: '0.85 — Trussed tower (Table 26.6-1)',
+    rooftopEquip: '0.90 — Rooftop equipment (Table 26.6-1)',
+    solarPanel:   '0.85 — Solar panels (Table 26.6-1)',
+    groundSolar:  '0.85 — Solar panels (Table 26.6-1)'
+  }[c.type] || fv(c.KD, 2);
+  html += stepBlock(3, 'Determine wind load parameters', '§26.6–26.11',
+    '<table class="step-tbl"><thead><tr><th>Parameter</th><th>Value</th><th>Reference</th></tr></thead><tbody>' +
+    '<tr><td>K<sub>d</sub></td><td><strong>' + fv(c.KD, 2) + '</strong></td><td>' + kdNote + '</td></tr>' +
+    '<tr><td>Exposure</td><td><strong>' + escHtml(s.exposure || 'C') + '</strong></td><td>' + expDesc + ' (Sec. 26.7)</td></tr>' +
+    '<tr><td>K<sub>zt</sub></td><td><strong>' + fv(kztV, 3) + '</strong></td><td>' + kztNote + ' (Sec. 26.8)</td></tr>' +
+    '<tr><td>K<sub>e</sub></td><td><strong>' + fv(c.ke, 3) + '</strong></td><td>z<sub>e</sub> = ' + fv(s.groundElev || 0, 0) + ' ft AMSL (Sec. 26.9)</td></tr>' +
+    (c.G !== undefined ? '<tr><td>G</td><td><strong>' + fv(c.G, 2) + '</strong></td><td>Rigid structure (Sec. 26.11.1)</td></tr>' : '') +
+    '</tbody></table>');
+
+  /* ── Step 4: Kh ─────────────────────────────────────────────────────── */
+  html += stepBlock(4, 'Determine velocity pressure exposure coefficient K<sub>h</sub>', '§26.10, Table 26.10-1',
+    '<div class="step-formula">K<sub>h</sub> = 2.01 × (' + fv(structH, 1) + ' / ' + expZg + ')<sup>2/' + expAlpha + '</sup> = <span class="step-result">' + fv(c.kh, 3) + '</span>&nbsp; at h = ' + fv(structH, 1) + ' ft</div>');
+
+  /* ── Step 5: qh ─────────────────────────────────────────────────────── */
+  html += stepBlock(5, 'Determine velocity pressure q<sub>h</sub>', '§26.10, Eq. 26.10-1',
+    '<div class="step-formula">q<sub>h</sub> = 0.00256 × K<sub>h</sub> × K<sub>zt</sub> × K<sub>e</sub> × V²</div>' +
+    '<div class="step-formula">q<sub>h</sub> = 0.00256 × ' + fv(c.kh,3) + ' × ' + fv(kztV,3) + ' × ' + fv(c.ke,3) + ' × ' + fv(s.V,0) + '² = <span class="step-result">' + fpf(c.qh) + '</span></div>');
+
+  /* ── Steps 6-7: type-specific ───────────────────────────────────────── */
+  if (c.type === 'solidSign') {
+    html += stepBlock(6, 'Determine force coefficient C<sub>f</sub>', '§29.3, Fig. 29.3-1',
+      '<table class="step-tbl"><thead><tr><th>Parameter</th><th>Value</th><th>Notes</th></tr></thead><tbody>' +
+      '<tr><td>Sign width B</td><td>' + fv(c.B,1) + ' ft</td><td>—</td></tr>' +
+      '<tr><td>Sign height h</td><td>' + fv(c.h,1) + ' ft</td><td>—</td></tr>' +
+      '<tr><td>Clearance s</td><td>' + fv(c.sc,1) + ' ft</td><td>Height above ground to bottom of sign</td></tr>' +
+      '<tr><td>s/h</td><td>' + fv(c.sh,3) + '</td><td>Used in Fig. 29.3-1</td></tr>' +
+      '<tr><td>B/s</td><td>' + fv(c.Bs,2) + '</td><td>Used in Fig. 29.3-1</td></tr>' +
+      '<tr><td>A<sub>s</sub> (projected area)</td><td>' + fv(c.As,1) + ' ft²</td><td>—</td></tr>' +
+      '<tr><td><strong>C<sub>f</sub></strong></td><td><strong class="step-result">' + fv(c.Cf,3) + '</strong></td><td>Fig. 29.3-1</td></tr>' +
+      '</tbody></table>');
+    html += stepBlock(7, 'Calculate design wind force F', '§29.3, Eq. 29.3-1',
+      '<div class="step-formula">F = q<sub>h</sub> × K<sub>d</sub> × G × C<sub>f</sub> × A<sub>s</sub></div>' +
+      '<div class="step-formula">F = ' + fpf(c.qh) + ' × ' + fv(c.KD,2) + ' × ' + fv(c.G,2) + ' × ' + fv(c.Cf,3) + ' × ' + fv(c.As,1) + ' ft² = <span class="step-result">' + fv(c.F,1) + ' lbf</span></div>' +
+      (c.minGoverns ? '<p><span class="step-result">⚠ Minimum governs: F<sub>min</sub> = 16 psf × A<sub>s</sub> = ' + fv(c.F_min,1) + ' lbf (controls over computed F).</span></p>'
+                    : '<p class="step-sub">Computed F governs over minimum (' + fv(c.F_min,1) + ' lbf).</p>') +
+      '<p><strong>F<sub>design</sub> = <span class="step-result">' + fv(c.F_design,1) + ' lbf (' + fv(c.F_design/1000,3) + ' kips)</span></strong></p>');
+
+  } else if (c.type === 'chimney' || c.type === 'openSign' || c.type === 'trussedTower') {
+    var xsecLabel = {
+      square_normal:'Square (wind normal to face)', square_diagonal:'Square (wind on diagonal)',
+      hexagonal:'Hexagonal/Octagonal', circular:'Round (circular)',
+      flat_plate:'Flat plate', round_member:'Round members', square_lattice:'Square cross-section', triangular_lattice:'Triangular cross-section'
+    };
+    var cfExtra = '';
+    if (c.type === 'chimney') {
+      cfExtra = '<tr><td>Cross-section</td><td>' + escHtml(xsecLabel[s.ch29CrossSection] || s.ch29CrossSection || '—') + '</td><td>—</td></tr>' +
+        '<tr><td>H/D ratio</td><td>' + fv(c.hD,2) + '</td><td>H=' + fv(c.h,1) + ' ft, D=' + fv(c.D,1) + ' ft — used in Fig. 29.4-1</td></tr>';
+    } else if (c.type === 'openSign') {
+      cfExtra = '<tr><td>Solidity ratio ε</td><td>' + fv(c.eps,3) + '</td><td>A<sub>solid</sub>/A<sub>gross</sub></td></tr>' +
+        '<tr><td>Member type</td><td>' + escHtml(xsecLabel[c.memberType] || c.memberType || '—') + '</td><td>Fig. 29.4-2</td></tr>';
+    } else {
+      cfExtra = '<tr><td>Solidity ratio ε</td><td>' + fv(c.eps,3) + '</td><td>A<sub>solid</sub>/A<sub>gross</sub></td></tr>' +
+        '<tr><td>Tower shape</td><td>' + escHtml(xsecLabel[c.shape] || c.shape || '—') + '</td><td>Fig. 29.4-3</td></tr>';
+    }
+    html += stepBlock(6, 'Determine force coefficient C<sub>f</sub>', '§29.4, ' + escHtml(c.cfRef || 'Fig. 29.4-1'),
+      '<table class="step-tbl"><thead><tr><th>Parameter</th><th>Value</th><th>Notes</th></tr></thead><tbody>' +
+      cfExtra +
+      '<tr><td>A<sub>f</sub> (projected area)</td><td>' + fv(c.Af,1) + ' ft²</td><td>—</td></tr>' +
+      '<tr><td><strong>C<sub>f</sub></strong></td><td><strong class="step-result">' + fv(c.Cf,3) + '</strong></td><td>' + escHtml(c.cfRef || '—') + '</td></tr>' +
+      '</tbody></table>' + (c.note ? '<p class="step-sub">' + c.note + '</p>' : ''));
+    html += stepBlock(7, 'Calculate design wind force F', '§29.4, ' + escHtml(c.eqRef || 'Eq. 29.4-1'),
+      '<div class="step-formula">F = q<sub>h</sub> × K<sub>d</sub> × G × C<sub>f</sub> × A<sub>f</sub></div>' +
+      '<div class="step-formula">F = ' + fpf(c.qh) + ' × ' + fv(c.KD,2) + ' × ' + fv(c.G,2) + ' × ' + fv(c.Cf,3) + ' × ' + fv(c.Af,1) + ' ft² = <span class="step-result">' + fv(c.F,1) + ' lbf</span></div>' +
+      (c.minGoverns ? '<p><span class="step-result">⚠ Minimum governs: F<sub>min</sub> = 16 psf × A<sub>f</sub> = ' + fv(c.F_min,1) + ' lbf.</span></p>'
+                    : '<p class="step-sub">Computed F governs over minimum (' + fv(c.F_min,1) + ' lbf).</p>') +
+      '<p><strong>F<sub>design</sub> = <span class="step-result">' + fv(c.F_design,1) + ' lbf (' + fv(c.F_design/1000,3) + ' kips)</span></strong></p>');
+
+  } else if (c.type === 'rooftopEquip') {
+    html += stepBlock(6, 'Determine combined gust factor × pressure coefficient (GCr)', '§29.4.1, Eqs. 29.4-2/3',
+      '<table class="step-tbl"><thead><tr><th>Surface</th><th>Area (ft²)</th><th>Limit 0.1×B×h</th><th>(GCr)</th><th>Notes</th></tr></thead><tbody>' +
+      '<tr><td>Horizontal (wind)</td><td>' + fv(c.Af,1) + '</td><td>' + fv(0.1*c.Bh,1) + '</td><td class="step-result"><strong>' + fv(c.GCrH,2) + '</strong></td>' +
+      '<td>' + (c.Af <= 0.1*c.Bh ? 'A<sub>f</sub> ≤ 0.1Bh → GCr = 1.9' : 'Reduced = 1.9×(0.1Bh/A<sub>f</sub>), min 1.0') + '</td></tr>' +
+      '<tr><td>Vertical (uplift)</td><td>' + fv(c.Ar,1) + '</td><td>' + fv(0.1*c.BL,1) + '</td><td class="step-result"><strong>' + fv(c.GCrV,2) + '</strong></td>' +
+      '<td>' + (c.Ar <= 0.1*c.BL ? 'A<sub>r</sub> ≤ 0.1BL → GCr = 1.5' : 'Reduced = 1.5×(0.1BL/A<sub>r</sub>), min 1.0') + '</td></tr>' +
+      '</tbody></table>');
+    html += stepBlock(7, 'Calculate design wind forces F<sub>h</sub> and F<sub>v</sub>', '§29.4.1, Eqs. 29.4-2/3',
+      '<div class="step-formula">F<sub>h</sub> = q<sub>h</sub> × K<sub>d</sub> × (GCr)<sub>H</sub> × A<sub>f</sub> = ' + fpf(c.qh) + ' × ' + fv(c.KD,2) + ' × ' + fv(c.GCrH,2) + ' × ' + fv(c.Af,1) + ' ft² = <span class="step-result">' + fv(c.Fh,1) + ' lbf</span></div>' +
+      '<div class="step-formula">F<sub>v</sub> = q<sub>h</sub> × K<sub>d</sub> × (GCr)<sub>V</sub> × A<sub>r</sub> = ' + fpf(c.qh) + ' × ' + fv(c.KD,2) + ' × ' + fv(c.GCrV,2) + ' × ' + fv(c.Ar,1) + ' ft² = <span class="step-result">' + fv(c.Fv,1) + ' lbf</span></div>' +
+      '<p class="step-sub">C&amp;C pressures (Sec. 30.8): p<sub>wall</sub> = ' + fpf(c.pWall) + '; p<sub>roof</sub> = ' + fpf(c.pRoof) + ' (uplift)</p>');
+
+  } else if (c.type === 'solarPanel') {
+    html += stepBlock(6, 'Determine net pressure coefficient (GCrn)', '§29.4.3, Eq. 29.4-6, Fig. 29.4-7',
+      '<table class="step-tbl"><thead><tr><th>Parameter</th><th>Value</th><th>Notes</th></tr></thead><tbody>' +
+      '<tr><td>Tilt ω</td><td>' + fv(c.omega,1) + '°</td><td>—</td></tr>' +
+      '<tr><td>L<sub>p</sub> (chord)</td><td>' + fv(c.Lp,2) + ' ft</td><td>Short dim. in flow direction</td></tr>' +
+      '<tr><td>Area A</td><td>' + fv(c.A,1) + ' ft²</td><td>—</td></tr>' +
+      '<tr><td>Zone</td><td>' + escHtml(String(c.zone || '—')) + '</td><td>1 = field, 2 = edge</td></tr>' +
+      '<tr><td>L<sub>b</sub></td><td>' + fv(c.Lb,2) + ' ft</td><td>min(0.4√(h·W<sub>L</sub>), h, W<sub>s</sub>)</td></tr>' +
+      '<tr><td>A<sub>n</sub></td><td>' + fv(c.An,2) + '</td><td>1000·A/max(L<sub>b</sub>,15)²</td></tr>' +
+      '<tr><td>(GCrn)<sub>nom</sub></td><td>' + fv(c.GCrnNom,3) + '</td><td>Fig. 29.4-7</td></tr>' +
+      '<tr><td>γ<sub>p</sub></td><td>' + fv(c.gammaP,3) + '</td><td>0.9 + h<sub>pt</sub>/h</td></tr>' +
+      '<tr><td>γ<sub>c</sub></td><td>' + fv(c.gammaC,3) + '</td><td>max(0.8, 0.6 + 0.06·L<sub>p</sub>)</td></tr>' +
+      '<tr><td>γ<sub>E</sub></td><td>' + fv(c.gammaE,2) + '</td><td>' + (c.exposed ? '1.5 — exposed panel position' : '1.0 — not at exposed position') + '</td></tr>' +
+      '<tr><td><strong>(GCrn)</strong></td><td><strong class="step-result">' + fv(c.GCrn,3) + '</strong></td><td>γ<sub>p</sub>·γ<sub>c</sub>·γ<sub>E</sub>·(GCrn)<sub>nom</sub></td></tr>' +
+      '</tbody></table>' +
+      (!c.setbackOK ? '<div class="report-warn"><span>⚠ d₁ = ' + fv(c.d1,2) + ' ft &lt; min setback ' + fv(c.minSetback,2) + ' ft — γ<sub>E</sub> = 1.5 applied.</span></div>'
+                    : '<p class="step-sub">Edge setback OK: d₁ = ' + fv(c.d1,2) + ' ft ≥ ' + fv(c.minSetback,2) + ' ft.</p>'));
+    html += stepBlock(7, 'Calculate net wind pressure p', '§29.4.3, Eq. 29.4-5',
+      '<div class="step-formula">p = q<sub>h</sub> × K<sub>d</sub> × (GCrn)</div>' +
+      '<div class="step-formula">p = ' + fpf(c.qh) + ' × ' + fv(c.KD,2) + ' × ' + fv(c.GCrn,3) + ' = <span class="step-result">' + fpf(c.p) + ' (±)</span></div>' +
+      '<p class="step-sub">Net pressure acts normal to panel surface. Apply both +/− directions.</p>');
+
+  } else if (c.type === 'groundSolar') {
+    html += stepBlock(6, 'Determine ground solar pressure/moment coefficients (GCgn), (GCgm)', '§29.4.5, Figs. 29.4-10/11',
+      '<table class="step-tbl"><thead><tr><th>Parameter</th><th>Value</th><th>Notes</th></tr></thead><tbody>' +
+      '<tr><td>Tilt ω</td><td>' + fv(c.omega,1) + '°</td><td>0°–60° scope</td></tr>' +
+      '<tr><td>L<sub>c</sub> (chord)</td><td>' + fv(c.Lc,2) + ' ft</td><td>6–14 ft scope</td></tr>' +
+      '<tr><td>W<sub>g</sub>/L<sub>c</sub></td><td>' + fv(c.WgLc,2) + '</td><td>≥ 7 required</td></tr>' +
+      '<tr><td>L<sub>c</sub>/S</td><td>' + fv(c.LcS,3) + '</td><td>0.20–0.60 scope</td></tr>' +
+      '<tr><td>h/L<sub>c</sub></td><td>' + fv(c.hLc,3) + '</td><td>0.5–0.8 scope</td></tr>' +
+      '<tr><td>Wind zone</td><td>' + escHtml(String(c.zone || '—')) + (c.forceZone2_LcS || c.forceZone2_Kzt ? ' <em>(forced 2)</em>' : '') + '</td>' +
+      '<td>' + (c.forceZone2_LcS ? 'L<sub>c</sub>/S < 0.25 per §29.4.5.1' : c.forceZone2_Kzt ? 'K<sub>zt</sub> > 1.0 per §29.4.5.1' : '1=interior, 2=end zone') + '</td></tr>' +
+      '<tr><td>Area A</td><td>' + fv(c.A,1) + ' ft²</td><td>—</td></tr>' +
+      '<tr><td>Nat. freq. n</td><td>' + fv(c.freq,3) + ' Hz</td><td>Lowest mode</td></tr>' +
+      '<tr><td>N<sub>s</sub> (reduced freq.)</td><td>' + fv(c.Ns,4) + '</td><td>0.682·n·L<sub>c</sub>/V</td></tr>' +
+      '<tr><td>β (damping)</td><td>' + fv((c.beta||0)*100,1) + ' %</td><td>≤ 5% scope</td></tr>' +
+      '<tr><td>(GCgn) static</td><td>' + fv(c.GCgnStatic,3) + '</td><td>Fig. 29.4-10</td></tr>' +
+      '<tr><td>(GCgn) dynamic</td><td>' + fv(c.GCgnDynamic,3) + '</td><td>Fig. 29.4-11</td></tr>' +
+      '<tr><td><strong>(GCgn) total</strong></td><td><strong class="step-result">' + fv(c.GCgn,3) + '</strong></td><td>Eq. 29.4-10: static + dynamic</td></tr>' +
+      '<tr><td>(GCgm) static</td><td>' + fv(c.GCgmStatic,3) + '</td><td>Fig. 29.4-10</td></tr>' +
+      '<tr><td>(GCgm) dynamic</td><td>' + fv(c.GCgmDynamic,3) + '</td><td>Fig. 29.4-11</td></tr>' +
+      '<tr><td><strong>(GCgm) total</strong></td><td><strong class="step-result">' + fv(c.GCgm,3) + '</strong></td><td>Eq. 29.4-11: static + dynamic</td></tr>' +
+      '</tbody></table>');
+    html += stepBlock(7, 'Calculate design force F<sub>n</sub> and moment M<sub>c</sub>', '§29.4.5, Eqs. 29.4-8/9',
+      '<div class="step-formula">F<sub>n</sub> = q<sub>h</sub> × K<sub>d</sub> × (GCgn) × A = ' + fpf(c.qh) + ' × ' + fv(c.KD,2) + ' × ' + fv(c.GCgn,3) + ' × ' + fv(c.A,1) + ' = <span class="step-result">' + fv(c.Fn,1) + ' lbf (±)</span></div>' +
+      '<div class="step-formula">M<sub>c</sub> = q<sub>h</sub> × K<sub>d</sub> × (GCgm) × A × L<sub>c</sub> = ' + fpf(c.qh) + ' × ' + fv(c.KD,2) + ' × ' + fv(c.GCgm,3) + ' × ' + fv(c.A,1) + ' × ' + fv(c.Lc,2) + ' = <span class="step-result">' + fv(c.Mc,1) + ' lbf·ft (±)</span></div>' +
+      '<p class="step-sub">Sec. 29.4.5.3: horiz. component of F<sub>n</sub> ≥ F<sub>nH,min</sub> = ' + fv(c.FnH_min,1) + ' lbf. Apply ±F<sub>n</sub> and ±M<sub>c</sub>.</p>');
+  }
+
+  /* ── Step 8: Minimum loads ──────────────────────────────────────────── */
+  var minAf = c.Af || c.As || 0;
+  if (c.type === 'solidSign' || c.type === 'chimney' || c.type === 'openSign' || c.type === 'trussedTower') {
+    html += stepBlock(8, 'Minimum design wind force', '§29.1.3',
+      '<p>F ≥ 16 psf × A<sub>f</sub> = 16 × ' + fv(minAf,1) + ' = <strong>' + fv(c.F_min,1) + ' lbf</strong>. ' +
+      (c.minGoverns ? '<span class="step-result">Minimum governs.</span>' : 'Computed force governs.') + '</p>');
+  } else {
+    html += stepBlock(8, 'Minimum design wind loads', '§29.1.3',
+      '<p>Verify design loads ≥ minimums per Sec. 29.1.3 and applicable table footnotes.</p>');
+  }
+
+  /* ── Summary ────────────────────────────────────────────────────────── */
+  html += '<div class="report-summary-box"><div class="report-summary-title">Ch. 29 Other Structures — Design Wind Load Summary</div>';
+  html += '<table class="pres-tbl"><thead><tr><th>Load</th><th>Value</th><th>Reference</th></tr></thead><tbody>';
+  html += '<tr><td class="s-label">q<sub>h</sub> at h = ' + fv(structH,1) + ' ft</td><td class="s-pos">' + fpf(c.qh) + '</td><td>Eq. 26.10-1</td></tr>';
+  if (c.type === 'solidSign' || c.type === 'chimney' || c.type === 'openSign' || c.type === 'trussedTower') {
+    html += '<tr><td class="s-label">C<sub>f</sub></td><td>' + fv(c.Cf,3) + '</td><td>' + escHtml(c.cfRef||'—') + '</td></tr>';
+    html += '<tr class="s-gov-row"><td class="s-label">F<sub>design</sub></td><td class="s-pos">' + fv(c.F_design,1) + ' lbf (' + fv(c.F_design/1000,3) + ' kips)</td><td>' + escHtml(c.eqRef||'—') + (c.minGoverns?' <em>(min. governs)</em>':'') + '</td></tr>';
+  } else if (c.type === 'rooftopEquip') {
+    html += '<tr><td class="s-label">(GCr)<sub>H</sub></td><td>' + fv(c.GCrH,2) + '</td><td>Eq. 29.4-2</td></tr>';
+    html += '<tr><td class="s-label">(GCr)<sub>V</sub></td><td>' + fv(c.GCrV,2) + '</td><td>Eq. 29.4-3</td></tr>';
+    html += '<tr class="s-gov-row"><td class="s-label">F<sub>h</sub> (horiz.)</td><td class="s-pos">' + fv(c.Fh,1) + ' lbf</td><td>Eq. 29.4-2</td></tr>';
+    html += '<tr class="s-gov-row"><td class="s-label">F<sub>v</sub> (uplift)</td><td class="s-pos">' + fv(c.Fv,1) + ' lbf</td><td>Eq. 29.4-3</td></tr>';
+    html += '<tr><td class="s-label">p<sub>wall</sub> C&amp;C</td><td>' + fpf(c.pWall) + '</td><td>Sec. 30.8</td></tr>';
+    html += '<tr><td class="s-label">p<sub>roof</sub> C&amp;C</td><td>' + fpf(c.pRoof) + '</td><td>Sec. 30.8</td></tr>';
+  } else if (c.type === 'solarPanel') {
+    html += '<tr><td class="s-label">(GCrn)</td><td>' + fv(c.GCrn,3) + '</td><td>' + escHtml(c.cfRef||'—') + '</td></tr>';
+    html += '<tr class="s-gov-row"><td class="s-label">p (net, ±)</td><td class="s-pos">' + fpf(c.p) + '</td><td>' + escHtml(c.eqRef||'—') + '</td></tr>';
+  } else if (c.type === 'groundSolar') {
+    html += '<tr><td class="s-label">(GCgn)</td><td>' + fv(c.GCgn,3) + '</td><td>Eq. 29.4-10</td></tr>';
+    html += '<tr><td class="s-label">(GCgm)</td><td>' + fv(c.GCgm,3) + '</td><td>Eq. 29.4-11</td></tr>';
+    html += '<tr class="s-gov-row"><td class="s-label">F<sub>n</sub> (±)</td><td class="s-pos">' + fv(c.Fn,1) + ' lbf</td><td>Eq. 29.4-8</td></tr>';
+    html += '<tr class="s-gov-row"><td class="s-label">M<sub>c</sub> (±)</td><td class="s-pos">' + fv(c.Mc,1) + ' lbf·ft</td><td>Eq. 29.4-9</td></tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
 /* ── Ch.27 Directional Step Report — Table 27.2-1 (8 steps) ─────────── */
 function buildWindStepReport(r, s) {
   function fv(v, d) { return (typeof v === 'number') ? v.toFixed(d != null ? d : 2) : '—'; }
@@ -949,7 +1179,9 @@ function buildWindStepReport(r, s) {
     return '<div class="report-warn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>' + msg + '</span></div>';
   }
   if (!s || !s.V || s.V <= 0) return warn('Enter the basic wind speed V on the <strong>Site</strong> tab.');
+  if (s.structureCategory === 'otherStructure') return buildCh29StepReport(r, s);
   if (!s.h || s.h <= 0)       return warn('Enter the building eave height h on the <strong>Geometry</strong> tab.');
+
 
   var proc = s.mode === 'cc' ? 'cc' : (s.mwfrsProcedure || 'envelope');
   if (proc === 'envelope') return buildCh28StepReport(r, s);
