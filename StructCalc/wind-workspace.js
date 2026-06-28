@@ -158,6 +158,15 @@ function restoreWindInputs(saved) {
     if (key === 'V' && (val === 115 || val === '' || val === null)) return;
     var inp = document.getElementById(revMap[key]);
     if (inp) inp.value = val;
+    /* Sync structure type button visuals + block visibility */
+    if (key === 'structureCategory') {
+      var isBuilding = (val !== 'otherStructure');
+      document.querySelectorAll('.struct-btn').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.struct === (isBuilding ? 'building' : 'other'));
+      });
+      setVisible('geomBuildingBlock', isBuilding);
+      setVisible('geomOtherBlock', !isBuilding);
+    }
   });
   if (saved.mode === 'cc') { setWindProc('cc'); activateInputTab('geometry'); }
   else if (saved.mwfrsProcedure) { setWindProc(saved.mwfrsProcedure); }
@@ -2359,15 +2368,4 @@ function windPrintReport() {
     '<div class="ptb-meta"><div><b>Engineer:</b> ' + (engineer||'—') + '</div><div><b>Checked:</b> ' + (checker||'—') + '</div><div><b>Date:</b> ' + dateStr + '</div></div>' +
     '<div class="ptb-page" style="font-size:.8rem;font-weight:700;">' + (job ? '<div style="font-size:.65rem;color:#64748b;">Job: ' + escHtml(job) + '</div>' : '') + '</div>' +
     '</div>' +
-    '</div>' +
-    '<script>window.onload=function(){window.print();window.onafterprint=function(){window.close();}}<\/script>' +
-    '</body></html>';
-
-  var iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;';
-  document.body.appendChild(iframe);
-  iframe.contentDocument.open();
-  iframe.contentDocument.write(html);
-  iframe.contentDocument.close();
-}
-
+    '</div>'
