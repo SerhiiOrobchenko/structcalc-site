@@ -159,7 +159,7 @@ function restoreWindInputs(saved) {
     var inp = document.getElementById(revMap[key]);
     if (inp) inp.value = val;
   });
-  if (saved.mode === 'cc') { setWindProc('cc'); activateInputTab('cc'); }
+  if (saved.mode === 'cc') { setWindProc('cc'); activateInputTab('geometry'); }
   else if (saved.mwfrsProcedure) { setWindProc(saved.mwfrsProcedure); }
 }
 
@@ -497,6 +497,30 @@ function updateZoneOptions(surface) {
     : '<option value="1">Zone 1 — Interior field</option><option value="2">Zone 2 — Edge / ridge</option><option value="3">Zone 3 — Corner</option>';
 }
 
+/* ── C&C-dependent UI visibility (enclosure classification + procedure) ──── */
+function updateCCDependentUI() {
+  var activeProc = document.querySelector('#windProcToggle button.active');
+  var proc = activeProc ? activeProc.dataset.proc : 'envelope';
+  var isCC = (proc === 'cc');
+  var encEl = document.getElementById('wind-enclosure');
+  var isOpen = encEl ? (encEl.value === 'open') : false;
+
+  /* C&C effective area section — visible only for C&C procedure */
+  var ccArea = document.getElementById('ccAreaSection');
+  if (ccArea) ccArea.classList.toggle('hidden', !isCC);
+
+  /* Open-building free roof optgroup — visible only for C&C + Open */
+  var openGrp = document.getElementById('openBldgRoofGroup');
+  if (openGrp) openGrp.style.display = (isCC && isOpen) ? '' : 'none';
+
+  /* If an open-building roof type is selected but conditions not met, reset to gable */
+  var roofSel = document.getElementById('wind-roofShape');
+  var openTypes = ['monoslope-free', 'pitched-free', 'troughed-free'];
+  if (roofSel && openTypes.indexOf(roofSel.value) !== -1 && !(isCC && isOpen)) {
+    roofSel.value = 'gable';
+  }
+}
+
 /* ── Wire inputs ────────────────────────────────────────────────────────── */
 function wireWindInputs() {
   var debounce = null;
@@ -513,6 +537,7 @@ function wireWindInputs() {
     btn.addEventListener('click', function() {
       document.querySelectorAll('#windProcToggle button').forEach(function(b){ b.classList.remove('active'); });
       btn.classList.add('active');
+      updateCCDependentUI();
       recalcWind();
     });
   });
@@ -615,6 +640,7 @@ function wireWindInputs() {
       btn.classList.add('active');
       var encEl = document.getElementById('wind-enclosure');
       if (encEl) encEl.value = btn.dataset.enc;
+      updateCCDependentUI();
       recalcWind();
     });
   });
@@ -696,6 +722,9 @@ function wireWindInputs() {
 
   /* Roof pitch unit toggle */
   wirePitchToggle();
+
+  /* Initial C&C-dependent visibility */
+  updateCCDependentUI();
 
   /* ── 3D renderer: dim highlight on input focus/blur ──────────────────── */
   var dimInputMap = {

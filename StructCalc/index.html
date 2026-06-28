@@ -144,7 +144,7 @@
     <div class="ws-main hidden" id="wsWindWorkspace">
 
       <div class="tab-strip">
-        <!-- 6 input section tabs — card style with icons -->
+        <!-- 4 input section tabs — card style with icons -->
         <div class="input-tabs">
           <button class="itab active" data-tab="site">
             <svg class="itab-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.5-8 14-8 14S4 15.5 4 10a8 8 0 0 1 8-8z"/></svg>
@@ -153,14 +153,6 @@
           <button class="itab" data-tab="geometry">
             <svg class="itab-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="13" rx="1"/><path d="M3 12h18M7 8V5l5-3 5 3v3"/></svg>
             <span>Geometry</span>
-          </button>
-          <button class="itab" data-tab="enclosure">
-            <svg class="itab-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            <span>Enclosure</span>
-          </button>
-          <button class="itab" data-tab="elements">
-            <svg class="itab-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-            <span>Elements</span>
           </button>
           <button class="itab" data-tab="results">
             <svg class="itab-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
@@ -371,6 +363,62 @@
                 </div>
               </div>
 
+              <div class="panel-section" id="enclosureSection">
+                <div class="panel-section-head">
+                  <h4>Enclosure Classification</h4>
+                  <span class="panel-section-note">§26.12 / Table 26.13-1</span>
+                </div>
+
+                <div class="enclosure-btns" id="enclosureBtns">
+                  <button class="enc-btn active" data-enc="enclosed">
+                    <span class="enc-label">Enclosed</span>
+                    <span class="enc-gcpi">GC<sub>pi</sub> = ±0.18</span>
+                  </button>
+                  <button class="enc-btn" data-enc="partiallyEnclosed">
+                    <span class="enc-label">Partially Enclosed</span>
+                    <span class="enc-gcpi">GC<sub>pi</sub> = ±0.55</span>
+                  </button>
+                  <button class="enc-btn" data-enc="open">
+                    <span class="enc-label">Open</span>
+                    <span class="enc-gcpi">GC<sub>pi</sub> = 0.00</span>
+                  </button>
+                </div>
+                <input type="hidden" id="wind-enclosure" value="enclosed">
+
+                <label class="toggle-label" style="margin-top:14px;">
+                  <input type="checkbox" id="wind-calcOpenings"> Calculate from opening areas
+                </label>
+
+                <div class="openings-table hidden" id="openingsTable">
+                  <div class="field-hint" style="margin:8px 0;">§26.12.1 — all three conditions checked automatically</div>
+                  <div class="field-row">
+                    <div class="field">
+                      <label>A<sub>o</sub> <span class="unit">(ft&#xB2;)</span></label>
+                      <div class="field-sublabel">Windward openings</div>
+                      <input class="num" id="wind-Ao" value="0" min="0">
+                    </div>
+                    <div class="field">
+                      <label>A<sub>oi</sub> <span class="unit">(ft&#xB2;)</span></label>
+                      <div class="field-sublabel">All other openings</div>
+                      <input class="num" id="wind-Aoi" value="0" min="0">
+                    </div>
+                  </div>
+                  <div class="field-row">
+                    <div class="field">
+                      <label>A<sub>g</sub> <span class="unit">(ft&#xB2;)</span></label>
+                      <div class="field-sublabel">Windward wall gross area</div>
+                      <input class="num" id="wind-Ag" value="0" min="0">
+                    </div>
+                    <div class="field">
+                      <label>A<sub>gi</sub> <span class="unit">(ft&#xB2;)</span></label>
+                      <div class="field-sublabel">Other wall gross areas</div>
+                      <input class="num" id="wind-Agi" value="0" min="0">
+                    </div>
+                  </div>
+                  <div class="enclosure-calc-result" id="enclosureCalcResult"></div>
+                </div>
+              </div>
+
               <div class="panel-section">
                 <div class="panel-section-head">
                   <h4>Building Geometry</h4>
@@ -389,6 +437,11 @@
                       <option value="multispan">Multispan gable, 2+ spans (Fig. 30.3-4)</option>
                       <option value="sawtooth">Sawtooth, 2+ spans (Fig. 30.3-6)</option>
                       <option value="dome">Domed (Fig. 30.3-7)</option>
+                    </optgroup>
+                    <optgroup label="Open Building — C&amp;C (Ch. 27/28)" id="openBldgRoofGroup" style="display:none">
+                      <option value="monoslope-free">Monoslope Free Roof (Fig. 27.3-4/28.3-3)</option>
+                      <option value="pitched-free">Pitched Free Roof (Fig. 27.3-5/28.3-4)</option>
+                      <option value="troughed-free">Troughed Free Roof (Fig. 27.3-6/28.3-5)</option>
                     </optgroup>
                   </select>
                 </div>
@@ -509,6 +562,24 @@
                   </div>
                   <div class="field-hint">Uplift added per §30.7</div>
                 </div>
+              </div>
+
+              <div class="panel-section hidden" id="ccAreaSection">
+                <div class="panel-section-head">
+                  <h4>Components &amp; Cladding — Effective Area</h4>
+                  <span class="panel-section-note">§26.2</span>
+                </div>
+                <div class="field-row">
+                  <div class="field">
+                    <label>Wall Cladding, A<sub>w</sub> <span class="unit">(ft&#xB2;)</span></label>
+                    <input class="num" id="wind-areaWall" value="20" min="1">
+                  </div>
+                  <div class="field">
+                    <label>Roof Cladding, A<sub>r</sub> <span class="unit">(ft&#xB2;)</span></label>
+                    <input class="num" id="wind-areaRoof" value="50" min="1">
+                  </div>
+                </div>
+                <div class="field-hint">Per §26.2: trib. area &#8805; span &#215; span/3. Smaller area → higher peak GC<sub>p</sub></div>
               </div>
 
             </div><!-- /geomBuildingBlock -->
@@ -651,100 +722,13 @@
           </div><!-- /tab-geometry -->
 
           <!-- ── TAB 3: OPENINGS & ENCLOSURE ── -->
-          <div class="tab-content hidden" id="tab-enclosure">
-            <div class="panel-section">
-              <div class="panel-section-head">
-                <h4>Enclosure Classification</h4>
-                <span class="panel-section-note">§26.12 / Table 26.13-1</span>
-              </div>
+          <!-- Enclosure Classification moved into Geometry tab -->
 
-              <div class="enclosure-btns" id="enclosureBtns">
-                <button class="enc-btn active" data-enc="enclosed">
-                  <span class="enc-label">Enclosed</span>
-                  <span class="enc-gcpi">GC<sub>pi</sub> = ±0.18</span>
-                </button>
-                <button class="enc-btn" data-enc="partiallyEnclosed">
-                  <span class="enc-label">Partially Enclosed</span>
-                  <span class="enc-gcpi">GC<sub>pi</sub> = ±0.55</span>
-                </button>
-                <button class="enc-btn" data-enc="open">
-                  <span class="enc-label">Open</span>
-                  <span class="enc-gcpi">GC<sub>pi</sub> = 0.00</span>
-                </button>
-              </div>
-              <input type="hidden" id="wind-enclosure" value="enclosed">
-
-              <label class="toggle-label" style="margin-top:14px;">
-                <input type="checkbox" id="wind-calcOpenings"> Calculate from opening areas
-              </label>
-
-              <div class="openings-table hidden" id="openingsTable">
-                <div class="field-hint" style="margin:8px 0;">§26.12.1 — all three conditions checked automatically</div>
-                <div class="field-row">
-                  <div class="field">
-                    <label>A<sub>o</sub> <span class="unit">(ft&#xB2;)</span></label>
-                    <div class="field-sublabel">Windward openings</div>
-                    <input class="num" id="wind-Ao" value="0" min="0">
-                  </div>
-                  <div class="field">
-                    <label>A<sub>oi</sub> <span class="unit">(ft&#xB2;)</span></label>
-                    <div class="field-sublabel">All other openings</div>
-                    <input class="num" id="wind-Aoi" value="0" min="0">
-                  </div>
-                </div>
-                <div class="field-row">
-                  <div class="field">
-                    <label>A<sub>g</sub> <span class="unit">(ft&#xB2;)</span></label>
-                    <div class="field-sublabel">Windward wall gross area</div>
-                    <input class="num" id="wind-Ag" value="0" min="0">
-                  </div>
-                  <div class="field">
-                    <label>A<sub>gi</sub> <span class="unit">(ft&#xB2;)</span></label>
-                    <div class="field-sublabel">Other wall gross areas</div>
-                    <input class="num" id="wind-Agi" value="0" min="0">
-                  </div>
-                </div>
-                <div class="enclosure-calc-result" id="enclosureCalcResult"></div>
-              </div>
-            </div>
-          </div><!-- /tab-enclosure -->
-
-          <!-- ── TAB 4: ELEMENTS & AREA ── -->
-          <div class="tab-content hidden" id="tab-elements">
-            <div class="panel-section">
-              <div class="panel-section-head">
-                <h4>Components &amp; Cladding</h4>
-                <span class="panel-section-note">Ch. 30 / §26.2</span>
-              </div>
-
-              <div class="surface-toggle" id="surfaceToggle">
-                <button class="surf-btn active" data-surface="roof">Roof</button>
-                <button class="surf-btn" data-surface="wall">Wall</button>
-              </div>
-              <input type="hidden" id="wind-surface" value="roof">
-
-              <div class="field" style="margin-top:12px;">
-                <label>Effective Wind Area, A <span class="unit">(ft&#xB2;)</span></label>
-                <input class="num" id="wind-areaEff" value="20" min="1">
-                <div class="field-hint">Per §26.2: trib. area &#8805; span &#215; span/3</div>
-              </div>
-
-              <div class="field" id="zoneSelectField">
-                <label>Pressure Zone</label>
-                <select id="wind-zone">
-                  <option value="1">Zone 1 — Interior field</option>
-                  <option value="2">Zone 2 — Edge / ridge</option>
-                  <option value="3">Zone 3 — Corner</option>
-                </select>
-              </div>
-
-              <!-- Hidden inputs for engine compat -->
-              <input type="hidden" id="wind-areaWall" value="20">
-              <input type="hidden" id="wind-areaRoof" value="50">
-
-              <div class="hint-row">Smaller A &#8594; higher peak GC<sub>p</sub> per Figs. 30.3-1/2A–G</div>
-            </div>
-          </div><!-- /tab-elements -->
+          <!-- Elements tab removed; C&C area fields moved to Geometry tab -->
+          <!-- Engine compat: zone / surface / areaEff hidden inputs -->
+          <input type="hidden" id="wind-zone" value="1">
+          <input type="hidden" id="wind-surface" value="roof">
+          <input type="hidden" id="wind-areaEff" value="20">
 
           <!-- ── TAB 5: RESULTS ── -->
           <div class="tab-content hidden" id="tab-results">
@@ -943,4 +927,6 @@
 <script src="dashboard.js" defer onerror="console.error('[SC] FATAL: dashboard.js failed')"></script>
 <script src="workspace.js" defer onerror="console.error('[SC] FATAL: workspace.js failed')"></script>
 <script src="wind-workspace.js" defer onerror="console.error('[SC] FATAL: wind-workspace.js failed')"></script>
-<script src="shell-init.js" defer onerror="console.error('[SC] FA
+<script src="shell-init.js" defer onerror="console.error('[SC] FATAL: shell-init.js failed')"></script>
+</body>
+</html>
