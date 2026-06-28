@@ -232,12 +232,402 @@ function recalcWind() {
 
   renderWindResults(r, s);
 
+  /* Update step report & project summary */
+  var reportEl = document.getElementById('windReportScroll');
+  if (reportEl) reportEl.innerHTML = buildWindStepReport(r, s);
+  renderProjectSummary(r, s);
+
   if (!windActiveCalc.state) windActiveCalc.state = {};
   windActiveCalc.state['ASCE 7-22'] = { state: s, unitSystem: s.unitSystem };
   windActiveProj.updatedAt = Date.now();
   scheduleSave();
   windSavedState = s;
 }
+
+
+/* ── Step-report helper: single numbered step block ─────────────────────── */
+function stepBlock(n, title, ref, body) {
+  return '<div class="step-block">' +
+    '<div class="step-header">' +
+    '<span class="step-num">' + n + '</span>' +
+    '<span class="step-title">' + title + '</span>' +
+    '<span class="step-ref">' + escHtml(ref) + '</span>' +
+    '</div>' +
+    '<div class="step-body">' + body + '</div>' +
+    '</div>';
+}
+
+/* ── 2-D building elevation SVG ─────────────────────────────────────────── */
+function buildElevationSVG(s) {
+  var B  = Math.max(s.minDim    || 40, 1);
+  var h  = Math.max(s.h         || 20, 1);
+  var th = s.theta || 0;
+  var shape = s.roofShape || 'gable';
+
+  var svgW = 360, svgH = 160, mL = 70, mR = 20, mT = 14, mB = 24;
+  var availW = svgW - mL - mR, availH = svgH - mT - mB;
+  var ridgeH = (shape === 'flat') ? 0 : (B / 2) * Math.tan(th * Math.PI / 180);
+  if (shape === 'monoslope') ridgeH = B * Math.tan(th * Math.PI / 180);
+  var totalH = h + ridgeH;
+  var scale  = Math.min(availW / B, availH / totalH) * 0.88;
+  var drawW  = B * scale, wallH = h * scale, ridgeDrawH = ridgeH * scale;
+  var left   = mL + (availW - drawW) / 2;
+  var bot    = svgH - mB;
+  var wallTop = bot - wallH;
+  var ridgeY  = wallTop - ridgeDrawH;
+  var ridgeX  = left + drawW / 2;
+  var blue    = 'rgba(59,130,246,0.12)';
+  var stroke  = '#3b82f6';
+  var muted   = '#94a3b8';
+
+  var d = '';
+  // ground
+  d += '<line x1="'+(left-8)+'" y1="'+bot+'" x2="'+(left+drawW+8)+'" y2="'+bot+'" stroke="'+muted+'" stroke-width="1.5"/>';
+  // walls
+  d += '<rect x="'+left+'" y="'+wallTop+'" width="'+drawW+'" height="'+wallH+'" fill="'+blue+'" stroke="'+stroke+'" stroke-width="1.5" stroke-linejoin="round"/>';
+  // roof
+  if (shape === 'flat') {
+    d += '<line x1="'+left+'" y1="'+wallTop+'" x2="'+(left+drawW)+'" y2="'+wallTop+'" stroke="'+stroke+'" stroke-width="2"/>';
+  } else if (shape === 'monoslope') {
+    d += '<polyline points="'+left+','+ridgeY+' '+(left+drawW)+','+wallTop+'" fill="none" stroke="'+stroke+'" stroke-width="1.5"/>';
+  } else {
+    d += '<polyline points="'+left+','+wallTop+' '+ridgeX+','+ridgeY+' '+(left+drawW)+','+wallTop+'" fill="'+blue+'" stroke="'+stroke+'" stroke-width="1.5" stroke-linejoin="round"/>';
+  }
+  // wind arrow
+  var aY = wallTop + wallH * 0.45;
+  d += '<defs><marker id="warr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L0,7 L7,3.5 Z" fill="#22d3ee"/></marker></defs>';
+  d += '<line x1="'+(left-48)+'" y1="'+aY+'" x2="'+(left-3)+'" y2="'+aY+'" stroke="#22d3ee" stroke-width="2" marker-end="url(#warr)"/>';
+  d += '<text x="'+(left-52)+'" y="'+(aY+4)+'" fill="#22d3ee" font-size="10" font-family="sans-serif" text-anchor="end">Wind</text>';
+  // dim: h
+  d += '<line x1="'+(left-6)+'" y1="'+wallTop+'" x2="'+(left-6)+'" y2="'+bot+'" stroke="'+muted+'" stroke-width="0.8" stroke-dasharray="3,2"/>';
+  d += '<line x1="'+(left-10)+'" y1="'+wallTop+'" x2="'+(left-2)+'" y2="'+wallTop+'" stroke="'+muted+'" stroke-width="1"/>';
+  d += '<line x1="'+(left-10)+'" y1="'+bot+'" x2="'+(left-2)+'" y2="'+bot+'" stroke="'+muted+'" stroke-width="1"/>';
+  var hV = h % 1 === 0 ? h.toFixed(0) : h.toFixed(1);
+  d += '<text x="'+(left-9)+'" y="'+((wallTop+bot)/2+4)+'" fill="'+muted+'" font-size="9.5" font-family="sans-serif" text-anchor="end">h='+hV+' ft</text>';
+  // dim: B
+  d += '<line x1="'+left+'" y1="'+(bot+10)+'" x2="'+(left+drawW)+'" y2="'+(bot+10)+'" stroke="'+muted+'" stroke-width="0.8"/>';
+  var bV = B % 1 === 0 ? B.toFixed(0) : B.toFixed(1);
+  d += '<text x="'+(left+drawW/2)+'" y="'+(bot+20)+'" fill="'+muted+'" font-size="9.5" font-family="sans-serif" text-anchor="middle">B='+bV+' ft</text>';
+  // theta
+  if (shape !== 'flat' && th > 0.5) {
+    var thV = th.toFixed(1);
+    d += '<text x="'+(ridgeX+5)+'" y="'+(wallTop-5)+'" fill="'+muted+'" font-size="9" font-family="sans-serif">&theta;='+thV+'&deg;</text>';
+  }
+  // labels
+  d += '<text x="'+(left+4)+'" y="'+(bot-4)+'" fill="'+muted+'" font-size="8.5" font-family="sans-serif">Windward</text>';
+  d += '<text x="'+(left+drawW-4)+'" y="'+(bot-4)+'" fill="'+muted+'" font-size="8.5" font-family="sans-serif" text-anchor="end">Leeward</text>';
+
+  return '<svg viewBox="0 0 '+svgW+' '+svgH+'" width="100%" xmlns="http://www.w3.org/2000/svg">'+d+'</svg>';
+}
+
+/* ── Project Summary (left panel, Results tab) ─────────────────────────── */
+function renderProjectSummary(r, s) {
+  var host = document.getElementById('windProjSummaryBody');
+  if (!host) return;
+  if (!s) { host.innerHTML = '<div style="padding:14px;font-size:.78rem;color:var(--text-muted);">Enter building parameters.</div>'; return; }
+  function row(k, v) { return '<div class="proj-sum-row"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>'; }
+  var encMap = {enclosed:'Enclosed',partiallyEnclosed:'Part. Enclosed',partiallyOpen:'Part. Open',open:'Open'};
+  var procMap = {envelope:'MWFRS Env (Ch.28)',directional:'MWFRS Dir (Ch.27)',cc:'C&C (Ch.30)'};
+  var proc = s.mode === 'cc' ? 'cc' : (s.mwfrsProcedure || 'envelope');
+  var addrEl = document.getElementById('wind-address');
+  var addr = addrEl ? addrEl.value.trim() : '';
+  var html = '';
+  if (addr) {
+    html += '<div class="proj-sum-card"><div class="proj-sum-card-title">Location</div>' +
+      '<div style="font-size:.77rem;color:var(--text-primary);word-break:break-word;">'+escHtml(addr)+'</div></div>';
+  }
+  html += '<div class="proj-sum-card"><div class="proj-sum-card-title">Site Parameters</div>' +
+    row('Basic Wind Speed V', (s.V ? s.V+' mph' : '<span class="proj-sum-not-set">not set</span>')) +
+    row('Risk Category', escHtml(s.riskCategory || '—')) +
+    row('Exposure Category', escHtml(s.exposure || '—')) +
+    row('Ground Elevation', (s.groundElev || 0)+' ft AMSL') +
+    row('K<sub>zt</sub>', r ? (r.kh ? (s.kzt||1.0).toFixed(3) : '—') : '—') +
+    '</div>';
+  var B = s.minDim||40, L = s.buildingL||60, h = s.h||20, th = s.theta||0;
+  var roofNames = {gable:'Gable',hip:'Hip',flat:'Flat',monoslope:'Monoslope',stepped:'Stepped',multispan:'Multispan',sawtooth:'Sawtooth',dome:'Dome'};
+  html += '<div class="proj-sum-card"><div class="proj-sum-card-title">Building Geometry</div>' +
+    row('Width B', B+' ft') + row('Length L', L+' ft') + row('Eave Height h', h+' ft') +
+    row('Roof Shape', escHtml(roofNames[s.roofShape]||s.roofShape||'—')) +
+    (s.roofShape !== 'flat' ? row('Roof Pitch &theta;', th.toFixed(1)+'°') : '') +
+    '</div>';
+  html += '<div class="proj-sum-card"><div class="proj-sum-card-title">Calculation</div>' +
+    row('Procedure', escHtml(procMap[proc]||proc)) +
+    row('Enclosure', escHtml(encMap[s.enclosure]||s.enclosure||'—')) +
+    (r ? row('q<sub>h</sub>', r.qh ? r.qh.toFixed(2)+' psf' : '—') : '') +
+    (r && r.kh ? row('K<sub>h</sub>', r.kh.toFixed(3)) : '') +
+    (r && r.ke ? row('K<sub>e</sub>', r.ke.toFixed(3)) : '') +
+    '</div>';
+  host.innerHTML = html;
+}
+
+/* ── Ch.27 Directional Step Report — Table 27.2-1 (8 steps) ─────────── */
+function buildWindStepReport(r, s) {
+  function fv(v, d) { return (typeof v === 'number') ? v.toFixed(d != null ? d : 2) : '—'; }
+  function fpf(v)   { return fv(v) + ' psf'; }
+  function warn(msg) {
+    return '<div class="report-warn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>' + msg + '</span></div>';
+  }
+  if (!s || !s.V || s.V <= 0) return warn('Enter the basic wind speed V on the <strong>Site</strong> tab.');
+  if (!s.h || s.h <= 0)       return warn('Enter the building eave height h on the <strong>Geometry</strong> tab.');
+
+  var proc = s.mode === 'cc' ? 'cc' : (s.mwfrsProcedure || 'envelope');
+  if (proc !== 'directional') {
+    return warn('This panel shows <strong>MWFRS Directional (Ch. 27)</strong>. Switch procedure above to see the full step-by-step calculation.') +
+      '<p style="font-size:.78rem;color:var(--text-muted);padding:4px 2px;line-height:1.55;">Reports for MWFRS Envelope (Ch. 28) and C&amp;C (Ch. 30) — coming soon.</p>';
+  }
+  if (!r || !r.ch27) return warn('Calculation error — please check your inputs.');
+
+  var c   = r.ch27;
+  var B   = c.B, L = c.L, h = s.h, th = s.theta || 0;
+  var encMap = {enclosed:'Enclosed', partiallyEnclosed:'Partially Enclosed', partiallyOpen:'Partially Open', open:'Open', openFreeRoof:'Open (Free Roof)'};
+  var encLabel = encMap[s.enclosure] || s.enclosure;
+  var roofNames = {gable:'Gable', hip:'Hip', flat:'Flat', monoslope:'Monoslope', stepped:'Stepped', multispan:'Multispan Gable', sawtooth:'Sawtooth', dome:'Domed'};
+  var roofLabel = roofNames[s.roofShape] || s.roofShape || '—';
+  var addrEl = document.getElementById('wind-address');
+  var addr   = addrEl ? addrEl.value.trim() : '';
+  var html   = '';
+
+  /* ---- Header ------------------------------------------------------------- */
+  html += '<div class="report-proc-head">';
+  html += '<div class="report-proc-title">MWFRS — Directional Procedure</div>';
+  html += '<div class="report-proc-sub">ASCE 7-22 Chapter 27 — Wind Loads on Buildings of All Heights — ' + escHtml(encLabel) + ' Building</div>';
+  if (addr) html += '<div style="font-size:.73rem;color:var(--text-muted);margin-top:3px;">&#128205; ' + escHtml(addr) + '</div>';
+  html += '</div>';
+
+  /* Building elevation sketch */
+  html += '<div class="report-bldg-sketch">' + buildElevationSVG(s) + '</div>';
+
+  /* Reference caption */
+  html += '<p style="font-size:.72rem;color:var(--text-muted);text-align:center;margin:-4px 0 14px;">Procedure per Table 27.2-1, ASCE 7-22</p>';
+
+  /* ==== STEP 1: Risk Category ============================================== */
+  var rcFig = {I:'26.5-1A', II:'26.5-1B', III:'26.5-1B', IV:'26.5-1C'}[s.riskCategory] || '26.5-1B';
+  html += stepBlock(1,
+    'Determine Risk Category of the building',
+    '&#167;Table 1.5-1',
+    '<p>Risk Category: <strong class="step-result">' + escHtml(s.riskCategory||'II') + '</strong></p>'
+  );
+
+  /* ==== STEP 2: Basic Wind Speed V ========================================= */
+  html += stepBlock(2,
+    'Determine basic wind speed V for the applicable risk category',
+    '&#167;26.5, Fig. ' + rcFig,
+    '<div class="step-formula">V = <span class="step-result">' + fv(s.V, 0) + ' mph</span></div>' +
+    '<p class="step-sub">Risk Category ' + escHtml(s.riskCategory||'II') + ' — Figure ' + rcFig + '</p>'
+  );
+
+  /* ==== STEP 3: Wind Load Parameters ======================================= */
+  var expDesc = {B:'Suburban or wooded areas (Sec. 26.7)', C:'Open terrain with scattered obstructions (Sec. 26.7)', D:'Flat, unobstructed areas near water (Sec. 26.7)'}[s.exposure] || '';
+  var kztV = s.kzt || 1.0;
+  var kztNote = s.kztMode === 'auto'
+    ? 'K<sub>zt</sub> = (1 + K&#x2081;K&#x2082;K&#x2083;)&#xB2; computed from hill geometry (Fig. 26.8-1).'
+    : 'Flat terrain, K<sub>zt</sub> = 1.0 (Condition 1, Sec. 26.8.1).';
+  var gcpiMap = {enclosed:'&#177;0.18', partiallyEnclosed:'&#177;0.55', partiallyOpen:'0.00', open:'0.00', openFreeRoof:'0.00'};
+  var s3body =
+    '<table class="step-tbl"><thead><tr><th>Parameter</th><th>Value</th><th>Reference</th></tr></thead><tbody>' +
+    '<tr><td>Directionality factor K<sub>d</sub></td><td><strong>0.85</strong></td><td>Table 26.6-1, Buildings (MWFRS)</td></tr>' +
+    '<tr><td>Exposure category</td><td><strong>' + escHtml(s.exposure||'C') + '</strong></td><td>' + expDesc + '</td></tr>' +
+    '<tr><td>Topographic factor K<sub>zt</sub></td><td><strong>' + fv(kztV,3) + '</strong></td><td>' + kztNote + '</td></tr>' +
+    '<tr><td>Ground elevation factor K<sub>e</sub></td><td><strong>' + fv(c.ke,3) + '</strong></td>' +
+      '<td>K<sub>e</sub> = e<sup>&#x2212;0.000119&#x00D7;' + fv(s.groundElev||0,0) + '</sup>, z<sub>e</sub> = ' + fv(s.groundElev||0,0) + ' ft AMSL</td></tr>' +
+    '<tr><td>Gust-effect factor G</td><td><strong>0.85</strong></td><td>Rigid structure (f &#x2265; 1 Hz), Sec. 26.11.1</td></tr>' +
+    '<tr><td>Enclosure classification</td><td><strong>' + escHtml(encLabel) + '</strong></td><td>Sec. 26.12</td></tr>' +
+    '<tr><td>Internal pressure coeff. (GC<sub>pi</sub>)</td><td><strong>' + (gcpiMap[s.enclosure]||('&#177;'+fv(c.gcpi,2))) + '</strong></td><td>Table 26.13-1</td></tr>' +
+    '</tbody></table>';
+  html += stepBlock(3, 'Determine wind load parameters', '&#167;26.6 – 26.13', s3body);
+
+  /* ==== STEP 4: K_z / K_h ================================================= */
+  var expZg    = {B:1200, C:900, D:700}[s.exposure] || 900;
+  var expAlpha = {B:7.0, C:9.5, D:11.5}[s.exposure] || 9.5;
+  var s4body =
+    '<p>Exposure ' + escHtml(s.exposure||'C') + ': z<sub>g</sub> = ' + expZg + ' ft, &#x3B1; = ' + expAlpha + '</p>' +
+    '<div class="step-formula">K<sub>z</sub> = 2.01 &#x22C5; (z / z<sub>g</sub>)<sup>2/&#x3B1;</sup> &nbsp; for z &#x2265; 15 ft</div>' +
+    '<div class="step-formula">K<sub>h</sub> = 2.01 &#x00D7; (' + fv(h,1) + ' / ' + expZg + ')<sup>2/' + expAlpha + '</sup> = <span class="step-result">' + fv(c.kh,3) + '</span> &nbsp; at h = ' + fv(h,1) + ' ft</div>' +
+    '<p class="step-sub">&#9432; For the windward wall, K<sub>z</sub> varies with height z (see Step 7 table).</p>';
+  html += stepBlock(4, 'Determine velocity pressure exposure coefficient K<sub>z</sub> or K<sub>h</sub>', '&#167;26.10, Table 26.10-1', s4body);
+
+  /* ==== STEP 5: q_z / q_h ================================================= */
+  var s5body =
+    '<div class="step-formula">q<sub>z</sub> = 0.00256 &#x22C5; K<sub>z</sub> &#x22C5; K<sub>zt</sub> &#x22C5; K<sub>e</sub> &#x22C5; V&#xB2; &nbsp;&nbsp; (Eq. 26.10-1)</div>' +
+    '<div class="step-formula">q<sub>h</sub> = 0.00256 &#x00D7; ' + fv(c.kh,3) + ' &#x00D7; ' + fv(kztV,3) + ' &#x00D7; ' + fv(c.ke,3) + ' &#x00D7; ' + fv(s.V,0) + '&#xB2; = <span class="step-result">' + fpf(c.qh) + '</span></div>';
+  html += stepBlock(5, 'Determine velocity pressure q<sub>z</sub> or q<sub>h</sub>', '&#167;26.10, Eq. 26.10-1', s5body);
+
+  /* ==== STEP 6: External pressure coefficients ============================ */
+  var lwNote = 'L/B = ' + fv(L,1) + '/' + fv(B,1) + ' = ' + fv(c.LB,2);
+  var hLNote = 'h/L = ' + fv(h,1) + '/' + fv(L,1) + ' = ' + fv(c.hL,3);
+  var figRef = s.enclosure === 'openFreeRoof'
+    ? 'Fig. 27.3-4/5/6 (open bldg)'
+    : 'Fig. 27.3-1 (' + roofLabel + ')';
+  var s6rows = '<tr><td>Windward wall</td><td>+0.80</td><td>All L/B</td></tr>' +
+    '<tr><td>Leeward wall</td><td>' + fv(c.CP_LW,2) + '</td><td>' + lwNote + ', Fig. 27.3-1</td></tr>' +
+    '<tr><td>Side walls</td><td>&#x2212;0.70</td><td>All cases</td></tr>';
+
+  /* Roof zones for Cp display */
+  var rfForCp = c.roofApplicable ? c.roofZones : (c.roofZonesPTR || []);
+  (rfForCp || []).forEach(function(z) {
+    s6rows += '<tr><td>Roof (PTR) — ' + escHtml(z.label||('Zone '+z.zone)) + '</td>' +
+      '<td>' + fv(z.cp1,2) + (z.cp2!=null ? ', '+fv(z.cp2,2) : '') + '</td>' +
+      '<td>' + hLNote + '</td></tr>';
+  });
+  if (c.roofNTR) {
+    var ww6 = c.roofNTR.ww, lw6 = c.roofNTR.lw;
+    s6rows += '<tr><td>Roof WW slope (NTR, &#x3B8;=' + fv(th,1) + '&#xB0;)</td>' +
+      '<td>' + fv(ww6.cp1,2) + (ww6.cp2!=null ? ', '+fv(ww6.cp2,2) : '') + '</td>' +
+      '<td>' + hLNote + ', Fig. 27.3-1</td></tr>';
+    s6rows += '<tr><td>Roof LW slope (NTR)</td><td>' + fv(lw6.cp,2) + '</td><td>Fig. 27.3-1</td></tr>';
+  }
+  var s6body =
+    '<p>Roof type: <strong>' + roofLabel + '</strong>, &#x3B8; = ' + fv(th,1) + '&#xB0; &nbsp;&nbsp; ' + figRef + '</p>' +
+    '<table class="step-tbl"><thead><tr><th>Surface</th><th>C<sub>p</sub></th><th>Notes</th></tr></thead><tbody>' +
+    s6rows + '</tbody></table>';
+  html += stepBlock(6, 'Determine external pressure coefficient C<sub>p</sub>', '&#167;27.3, Fig. 27.3-1 thru 27.3-7', s6body);
+
+  /* ==== STEP 7: Calculate wind pressure p ================================= */
+  /* 7a: Windward wall height profile */
+  var wwTbl = '<table class="step-tbl"><thead><tr>' +
+    '<th>z (ft)</th><th>K<sub>z</sub></th><th>q<sub>z</sub> (psf)</th>' +
+    '<th>p LC1 (psf)</th><th>p LC2 (psf)</th><th>Gov.</th>' +
+    '</tr></thead><tbody>';
+  c.wwProfile.forEach(function(row) {
+    var isH = Math.abs(row.z - h) < 0.5;
+    var gov = Math.max(row.pLC1, row.pLC2);
+    wwTbl += '<tr' + (isH ? ' class="row-h"' : '') + '>' +
+      '<td>' + fv(row.z,0) + (isH ? ' &#9654;' : '') + '</td>' +
+      '<td>' + fv(row.kz,3) + '</td>' +
+      '<td>' + fv(row.qz,2) + '</td>' +
+      '<td>' + fv(row.pLC1,2) + '</td>' +
+      '<td class="t-pos">' + fv(row.pLC2,2) + '</td>' +
+      '<td class="t-gov">' + fv(gov,2) + '</td></tr>';
+  });
+  wwTbl += '</tbody></table>';
+
+  /* 7b: Leeward / side walls */
+  var wsTbl = '<table class="step-tbl"><thead><tr><th>Surface</th><th>C<sub>p</sub></th>' +
+    '<th>p LC1 (psf)</th><th>p LC2 (psf)</th><th>Gov.</th></tr></thead><tbody>' +
+    '<tr><td>Leeward wall</td><td>' + fv(c.CP_LW,2) + '</td>' +
+    '<td class="t-neg">' + fv(c.pLW_lc1,2) + '</td><td>' + fv(c.pLW_lc2,2) + '</td>' +
+    '<td class="t-gov">' + fv(c.pLW_lc1,2) + '</td></tr>' +
+    '<tr><td>Side walls</td><td>&#x2212;0.70</td>' +
+    '<td class="t-neg">' + fv(c.pSW_lc1,2) + '</td><td>' + fv(c.pSW_lc2,2) + '</td>' +
+    '<td class="t-gov">' + fv(c.pSW_lc1,2) + '</td></tr>' +
+    '</tbody></table>';
+
+  /* 7c: Roof */
+  var rfTbl = '';
+  if (c.roofApplicable && c.roofZones) {
+    rfTbl += '<p style="margin-top:8px;"><strong>Roof (Normal to Ridge, &#x3B8; &#x2264; 10&#xB0;):</strong></p>' +
+      '<table class="step-tbl"><thead><tr><th>Zone</th><th>C<sub>p1</sub></th><th>C<sub>p2</sub></th>' +
+      '<th>p&#x2081; LC1</th><th>p&#x2081; LC2</th></tr></thead><tbody>';
+    c.roofZones.forEach(function(z) {
+      rfTbl += '<tr><td>' + escHtml(z.label||('Zone '+z.zone)) + '</td>' +
+        '<td>' + fv(z.cp1,2) + '</td><td>' + (z.cp2!=null?fv(z.cp2,2):'—') + '</td>' +
+        '<td class="t-neg">' + fv(z.p1_lc1,2) + '</td><td>' + fv(z.p1_lc2,2) + '</td></tr>';
+    });
+    rfTbl += '</tbody></table>';
+  }
+  if (c.roofNTR) {
+    var wwN = c.roofNTR.ww, lwN = c.roofNTR.lw;
+    rfTbl += '<p style="margin-top:8px;"><strong>Roof NTR (Normal to Ridge, &#x3B8; = ' + fv(th,1) + '&#xB0; &gt; 10&#xB0;):</strong></p>' +
+      '<table class="step-tbl"><thead><tr><th>Surface</th><th>C<sub>p</sub></th>' +
+      '<th>p LC1</th><th>p LC2</th><th>Gov.</th></tr></thead><tbody>';
+    rfTbl += '<tr><td>WW slope — C<sub>p1</sub></td><td>' + fv(wwN.cp1,2) + '</td>' +
+      '<td class="t-neg">' + fv(wwN.p1_lc1,2) + '</td><td>' + fv(wwN.p1_lc2,2) + '</td>' +
+      '<td class="t-gov">' + fv(Math.min(wwN.p1_lc1,wwN.p1_lc2),2) + '</td></tr>';
+    if (wwN.cp2 != null) {
+      rfTbl += '<tr><td>WW slope — C<sub>p2</sub></td><td>' + fv(wwN.cp2,2) + '</td>' +
+        '<td>' + fv(wwN.p2_lc1,2) + '</td><td class="t-pos">' + fv(wwN.p2_lc2,2) + '</td>' +
+        '<td class="t-gov">' + fv(Math.max(wwN.p2_lc1||0,wwN.p2_lc2||0),2) + '</td></tr>';
+    }
+    rfTbl += '<tr><td>LW slope</td><td>' + fv(lwN.cp,2) + '</td>' +
+      '<td class="t-neg">' + fv(lwN.lc1,2) + '</td><td>' + fv(lwN.lc2,2) + '</td>' +
+      '<td class="t-gov">' + fv(lwN.lc1,2) + '</td></tr></tbody></table>';
+    rfTbl += '<p style="margin-top:8px;"><strong>Roof PTR (Parallel to Ridge, all &#x3B8;):</strong></p>' +
+      '<table class="step-tbl"><thead><tr><th>Zone</th><th>C<sub>p1</sub></th><th>C<sub>p2</sub></th>' +
+      '<th>p&#x2081; LC1</th><th>p&#x2081; LC2</th></tr></thead><tbody>';
+    (c.roofZonesPTR||[]).forEach(function(z) {
+      rfTbl += '<tr><td>' + escHtml(z.label||('Zone '+z.zone)) + '</td>' +
+        '<td>' + fv(z.cp1,2) + '</td><td>' + (z.cp2!=null?fv(z.cp2,2):'—') + '</td>' +
+        '<td class="t-neg">' + fv(z.p1_lc1,2) + '</td><td>' + fv(z.p1_lc2,2) + '</td></tr>';
+    });
+    rfTbl += '</tbody></table>';
+  }
+  if (c.ch27Overhang) {
+    var oh = c.ch27Overhang;
+    rfTbl += '<p style="margin-top:8px;"><strong>Roof Overhang (Sec. 27.3.5):</strong></p>' +
+      '<div class="step-formula">p<sub>soffit</sub> = q<sub>h</sub>⋅G⋅K<sub>d</sub>⋅0.8 = ' + fv(oh.pSoffit,2) + ' psf</div>' +
+      '<div class="step-formula">p<sub>net,LC1</sub> = ' + fv(oh.pSoffit,2) + ' − (' + fv(oh.pTop_lc1,2) + ') = <span class="step-result">' + fv(oh.pNet_lc1,2) + ' psf</span></div>';
+  }
+
+  var s7body =
+    '<p>Eq. 27.3-1: &nbsp; p = q<sub>z</sub>⋅G⋅C<sub>p</sub> − q<sub>i</sub>⋅(GC<sub>pi</sub>) &nbsp; <span style="color:var(--text-muted)">[rigid buildings; LC1: +GC<sub>pi</sub>, LC2: −GC<sub>pi</sub>]</span></p>' +
+    '<p style="margin-bottom:6px;"><strong>Windward wall</strong> (q = q<sub>z</sub> varies with height, q<sub>i</sub> = q<sub>h</sub>; governing LC2):</p>' +
+    wwTbl +
+    '<p style="margin:8px 0 4px;"><strong>Leeward and side walls</strong> (q = q<sub>i</sub> = q<sub>h</sub>; governing LC1):</p>' +
+    wsTbl + rfTbl;
+
+  html += stepBlock(7, 'Calculate wind pressure p on each building surface', '&#167;27.3, Eq. 27.3-1', s7body);
+
+  /* ==== STEP 8: Load cases ================================================ */
+  var minWalls = c.wallMinGoverns ? ' <span class="step-result">(16.0 psf min governs)</span>' : ' (16.0 psf min — OK)';
+  var minRoof  = c.roofMinGoverns ? ' <span class="step-result">(8.0 psf min governs)</span>'  : ' (8.0 psf min — OK)';
+  var s8body =
+    '<p>Four load cases per Fig. 27.3-8 must be considered for MWFRS design. Cases 1&amp;2 apply all pressures in the directions computed above. Cases 3&amp;4 apply 75% of those pressures plus a torsional moment to account for wind from non-orthogonal directions.</p>' +
+    '<table class="step-tbl"><thead><tr><th>LC</th><th>Description</th><th>Fraction</th></tr></thead><tbody>' +
+    '<tr><td><strong>1</strong></td><td>Full wind on one face at a time (&#177; directions)</td><td>100%</td></tr>' +
+    '<tr><td><strong>2</strong></td><td>Full wind simultaneously on two perpendicular faces</td><td>100%</td></tr>' +
+    '<tr><td><strong>3</strong></td><td>Reduced wind on one face + torsional moment M<sub>T</sub></td><td>75%</td></tr>' +
+    '<tr><td><strong>4</strong></td><td>Reduced wind on two faces + torsional moment</td><td>75%</td></tr>' +
+    '</tbody></table>' +
+    '<p style="margin-top:8px;"><strong>Minimum design wind loads (Sec. 27.1.5):</strong></p>' +
+    '<p>Walls:' + minWalls + '</p><p>Roof:' + minRoof + '</p>';
+  html += stepBlock(8, 'Evaluate design wind load cases', '&#167;27.3.5, Fig. 27.3-8', s8body);
+
+  /* ==== Summary Table ===================================================== */
+  var wwAtH = c.wwProfile[c.wwProfile.length - 1];
+  var wwGov = Math.max(wwAtH.pLC1, wwAtH.pLC2);
+  html += '<div class="report-summary-box">';
+  html += '<div class="report-summary-title">Design Wind Pressures Summary — MWFRS Directional Procedure (Ch. 27)</div>';
+  html += '<table class="pres-tbl"><thead><tr><th>Surface</th><th>LC1 (psf)</th><th>LC2 (psf)</th><th>Governing (psf)</th></tr></thead><tbody>';
+
+  html += '<tr class="s-gov-row"><td class="s-label">Windward wall (at h = ' + fv(h,1) + ' ft)</td>' +
+    '<td class="s-pos">' + fv(wwAtH.pLC1,1) + '</td><td class="s-pos">' + fv(wwAtH.pLC2,1) + '</td>' +
+    '<td class="s-gov">' + fv(wwGov,1) + '</td></tr>';
+  if (c.wwProfile.length > 1) {
+    var wwBase = c.wwProfile[0];
+    html += '<tr><td class="s-label">Windward wall (at z = ' + fv(wwBase.z,0) + ' ft)</td>' +
+      '<td class="s-pos">' + fv(wwBase.pLC1,1) + '</td><td class="s-pos">' + fv(wwBase.pLC2,1) + '</td>' +
+      '<td class="s-gov">' + fv(Math.max(wwBase.pLC1,wwBase.pLC2),1) + '</td></tr>';
+  }
+  html += '<tr><td class="s-label">Leeward wall</td>' +
+    '<td class="s-neg">' + fv(c.pLW_lc1,1) + '</td><td class="s-neg">' + fv(c.pLW_lc2,1) + '</td>' +
+    '<td class="s-gov">' + fv(c.pLW_lc1,1) + '</td></tr>';
+  html += '<tr><td class="s-label">Side walls</td>' +
+    '<td class="s-neg">' + fv(c.pSW_lc1,1) + '</td><td class="s-neg">' + fv(c.pSW_lc2,1) + '</td>' +
+    '<td class="s-gov">' + fv(c.pSW_lc1,1) + '</td></tr>';
+
+  var rfSumZones = c.roofApplicable ? c.roofZones : null;
+  if (rfSumZones) {
+    rfSumZones.forEach(function(z) {
+      html += '<tr><td class="s-label">Roof — ' + escHtml(z.label||('Zone '+z.zone)) + '</td>' +
+        '<td class="s-neg">' + fv(z.p1_lc1,1) + '</td><td class="s-neg">' + fv(z.p1_lc2,1) + '</td>' +
+        '<td class="s-gov">' + fv(Math.min(z.p1_lc1,z.p1_lc2),1) + '</td></tr>';
+    });
+  }
+  if (c.roofNTR) {
+    var wwS = c.roofNTR.ww, lwS = c.roofNTR.lw;
+    html += '<tr><td class="s-label">Roof WW slope (NTR, &#x3B8;=' + fv(th,1) + '&#xB0;)</td>' +
+      '<td class="s-neg">' + fv(wwS.p1_lc1,1) + '</td>' +
+      '<td>' + fv(wwS.p2_lc2!=null?wwS.p2_lc2:wwS.p1_lc2,1) + '</td>' +
+      '<td class="s-gov">' + fv(Math.min(wwS.p1_lc1,wwS.p1_lc2),1) + '</td></tr>';
+    html += '<tr><td class="s-label">Roof LW slope (NTR)</td>' +
+      '<td class="s-neg">' + fv(lwS.lc1,1) + '</td><td class="s-neg">' + fv(lwS.lc2,1) + '</td>' +
+      '<td class="s-gov">' + fv(lwS.lc1,1) + '</td></tr>';
+  }
+  html += '</tbody></table></div>';
+
+  return html;
+}
+
 
 /* ── Results render ────────────────────────────────────────────────────── */
 function renderWindResults(r, s) {
@@ -382,10 +772,15 @@ function activateInputTab(tabName) {
   var threeEl = document.getElementById('threejs-container');
   var mapTb = document.getElementById('mapToolbar');
   var diagramTb = document.getElementById('diagramToolbar');
-  if (mapEl)    mapEl.classList.toggle('hidden', !isMap);
-  if (threeEl)  threeEl.classList.toggle('hidden', isMap);
-  if (mapTb)    mapTb.classList.toggle('hidden', !isMap);
-  if (diagramTb) diagramTb.classList.toggle('hidden', isMap);
+  var isResults = (tabName === 'results');
+  var reportPanelEl = document.getElementById('windReportPanel');
+  var captEl = document.getElementById('windDiagramCaption');
+  if (mapEl)          mapEl.classList.toggle('hidden', !isMap);
+  if (threeEl)        threeEl.classList.toggle('hidden', isMap || isResults);
+  if (mapTb)          mapTb.classList.toggle('hidden', !isMap);
+  if (diagramTb)      diagramTb.classList.toggle('hidden', isMap || isResults);
+  if (reportPanelEl)  reportPanelEl.classList.toggle('hidden', !isResults);
+  if (captEl)         captEl.classList.toggle('hidden', isResults);
   /* Init / resize Leaflet map when Site tab becomes visible */
   if (isMap && typeof initWindMap === 'function') {
     setTimeout(function(){ initWindMap('map-container'); }, 50);

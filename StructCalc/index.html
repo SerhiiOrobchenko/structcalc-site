@@ -722,15 +722,15 @@
           <input type="hidden" id="wind-surface" value="roof">
           <input type="hidden" id="wind-areaEff" value="20">
 
-          <!-- ── TAB 5: RESULTS ── -->
+          <!-- ── TAB: RESULTS ── -->
           <div class="tab-content hidden" id="tab-results">
-            <div class="panel-section" style="padding:0;border:none;">
+            <div class="proj-summary-panel" id="windProjectSummary">
               <div class="panel-section-head" style="padding:10px 14px 8px;">
-                <h4>Step-by-Step Calculation</h4>
+                <h4>Project Summary</h4>
                 <span class="panel-section-note">ASCE 7-22</span>
               </div>
-              <div class="step-trace" id="windStepTrace">
-                <div class="trace-placeholder">Run a calculation to see the step-by-step trace.</div>
+              <div id="windProjSummaryBody">
+                <div style="padding:14px;font-size:.78rem;color:var(--text-muted);">Enter building parameters to see summary.</div>
               </div>
             </div>
           </div><!-- /tab-results -->
@@ -795,6 +795,12 @@
 
           <!-- Leaflet map container -->
           <div class="diagram-canvas hidden" id="map-container"></div>
+
+
+          <!-- Step-by-step calc report (visible on Results tab) -->
+          <div class="report-panel hidden" id="windReportPanel">
+            <div class="report-scroll" id="windReportScroll"></div>
+          </div>
 
           <!-- Three.js container -->
           <div class="diagram-canvas" id="threejs-container">
