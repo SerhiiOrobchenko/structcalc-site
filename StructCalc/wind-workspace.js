@@ -297,7 +297,7 @@ function renderWindResults(r, s) {
     if (r.ccWall && r.ccWall.length) {
       html += '<div class="result-card"><div class="result-card-head">C&amp;C — Walls (Ch. 30)</div>';
       r.ccWall.forEach(function(z) {
-        html += '<div class="result-row ' + (wallCls[z.zone]||'zone-mid') + '"><span class="k">' + (wallLabel[z.zone]||'Zone '+z.zone) + '</span><span class="v">' + fmt(z.p.neg) + ' / +' + fmt(z.p.pos) + ' psf</span></div>';
+        html += '<div class="result-row ' + (wallCls[z.zone]||'zone-mid') + '"><span class="k">' + (wallLabel[z.zone]||'Zone '+z.zone) + '</span><span class="v">' + fmt(z.p.min) + ' / +' + fmt(z.p.max) + ' psf</span></div>';
       });
       html += '</div>';
     }
@@ -306,7 +306,7 @@ function renderWindResults(r, s) {
     if (r.ccRoof && r.ccRoof.length) {
       html += '<div class="result-card"><div class="result-card-head">C&amp;C — Roof (Ch. 30)</div>';
       r.ccRoof.forEach(function(z) {
-        html += '<div class="result-row ' + (roofCls[z.zone]||'zone-mid') + '"><span class="k">' + (roofLabel[z.zone]||'Zone '+z.zone) + '</span><span class="v">' + fmt(z.p.neg) + ' / +' + fmt(z.p.pos) + ' psf</span></div>';
+        html += '<div class="result-row ' + (roofCls[z.zone]||'zone-mid') + '"><span class="k">' + (roofLabel[z.zone]||'Zone '+z.zone) + '</span><span class="v">' + fmt(z.p.min) + ' / +' + fmt(z.p.max) + ' psf</span></div>';
       });
       html += '</div>';
     }
