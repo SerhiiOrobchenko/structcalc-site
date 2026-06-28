@@ -262,7 +262,7 @@ class Wind3DRenderer {
     // [css_cx, css_cy, css_cz, tjs_dx, tjs_dy, tjs_dz]
     // CSS +Y is down; Three.js +Y is up → tjs_dy = -(css_cy sign)
     // Offset by (HALF - MHALF) so each mini-cube is flush with (not protruding from) the main face.
-    const CI = HALF - MHALF;   // inset amount
+    const CI = HALF - MHALF + 2;  // +2 px protrusion outward from each face
     const corners = [
       [ CI, -CI,  CI,  1,  1,  1],
       [-CI, -CI,  CI, -1,  1,  1],
@@ -947,7 +947,7 @@ class Wind3DRenderer {
       // lSide: in-plane direction perp to dim line, pointing outward from building
       const midPt3 = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
       let lSide = new THREE.Vector3().crossVectors(lNorm, lDir).normalize();
-      if (lSide.dot(midPt3) < 0) lSide.negate();  // ensure outward
+      if (lSide.dot(midPt3) > 0) lSide.negate();  // ensure inward (building-side = above on screen)
       const CLEAR = 0.70;  // lH/2 (0.55) + 0.15 gap
       lmesh.position.copy(midPt3)
         .addScaledVector(lSide, CLEAR)
