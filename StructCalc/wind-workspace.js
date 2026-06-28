@@ -2369,3 +2369,13 @@ function windPrintReport() {
     '<div class="ptb-page" style="font-size:.8rem;font-weight:700;">' + (job ? '<div style="font-size:.65rem;color:#64748b;">Job: ' + escHtml(job) + '</div>' : '') + '</div>' +
     '</div>' +
     '</div>'
+    + '<script>window.onload=function(){window.print();window.onafterprint=function(){window.close();}}<\/script>'
+    + '</body></html>';
+
+  var iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;';
+  document.body.appendChild(iframe);
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+}
