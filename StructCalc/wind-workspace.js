@@ -1452,7 +1452,64 @@ function renderWindResults(r, s) {
   function fmt(v, d){ return (typeof v === 'number' ? v.toFixed(d != null ? d : 2) : '—'); }
   function psf(v){ return fmt(v) + ' psf'; }
   var html = '';
+  var isOther = (s.structureCategory === 'otherStructure');
 
+  /* ── Ch.29 Other Structures summary ──────────────────────────────── */
+  if (isOther) {
+    var typeNames = {
+      solidSign:'Solid Freestanding Sign', chimney:'Chimney / Tank / Rooftop Struct.',
+      openSign:'Open Sign / Lattice', trussedTower:'Trussed Tower',
+      rooftopEquip:'Rooftop Equipment', solarPanel:'Rooftop Solar Panels', groundSolar:'Ground-Mounted Solar'
+    };
+    var c29 = r.ch29;
+    var typeName = c29 ? (typeNames[c29.type] || escHtml(c29.type)) : '—';
+    html += '<div class="result-card"><div class="result-card-head">Site &amp; Parameters</div>' +
+      '<div class="result-row"><span class="k">Risk Category</span><span class="v"><span class="badge-risk">' + escHtml(s.riskCategory) + '</span></span></div>' +
+      '<div class="result-row"><span class="k">Exposure</span><span class="v">' + escHtml(s.exposure) + '</span></div>' +
+      '<div class="result-row"><span class="k">Type</span><span class="v">' + typeName + '</span></div>' +
+      '<div class="result-row"><span class="k">Procedure</span><span class="v">Ch. 29 Other Structures</span></div></div>';
+
+    if (c29) {
+      html += '<div class="result-card"><div class="result-card-head">Velocity Pressure</div>' +
+        '<div class="result-row"><span class="k">K<sub>h</sub></span><span class="v">' + fmt(c29.kh,3) + '</span></div>' +
+        '<div class="result-row"><span class="k">K<sub>e</sub></span><span class="v">' + fmt(c29.ke,3) + '</span></div>' +
+        '<div class="result-row"><span class="k">K<sub>d</sub></span><span class="v">' + fmt(c29.KD,2) + '</span></div>' +
+        '<div class="result-row"><span class="k">q<sub>h</sub></span><span class="v">' + psf(c29.qh) + '</span></div>' +
+        (c29.G !== undefined ? '<div class="result-row"><span class="k">G</span><span class="v">' + fmt(c29.G,2) + '</span></div>' : '') +
+        '</div>';
+
+      html += '<div class="result-card"><div class="result-card-head">Ch. 29 Design Loads</div>';
+      if (c29.type === 'solidSign' || c29.type === 'chimney' || c29.type === 'openSign' || c29.type === 'trussedTower') {
+        html += '<div class="result-row zone-low"><span class="k">C<sub>f</sub></span><span class="v">' + fmt(c29.Cf,3) + '</span></div>' +
+          '<div class="result-row zone-high"><span class="k">F<sub>design</sub></span><span class="v">' + fmt(c29.F_design,1) + ' lbf' + (c29.minGoverns ? ' ⚠ min' : '') + '</span></div>';
+      } else if (c29.type === 'rooftopEquip') {
+        html += '<div class="result-row zone-low"><span class="k">(GCr)<sub>H</sub></span><span class="v">' + fmt(c29.GCrH,2) + '</span></div>' +
+          '<div class="result-row zone-low"><span class="k">(GCr)<sub>V</sub></span><span class="v">' + fmt(c29.GCrV,2) + '</span></div>' +
+          '<div class="result-row zone-high"><span class="k">F<sub>h</sub> (horiz.)</span><span class="v">' + fmt(c29.Fh,1) + ' lbf</span></div>' +
+          '<div class="result-row zone-high"><span class="k">F<sub>v</sub> (uplift)</span><span class="v">' + fmt(c29.Fv,1) + ' lbf</span></div>' +
+          '<div class="result-row zone-mid"><span class="k">p<sub>wall</sub> C&amp;C</span><span class="v">' + psf(c29.pWall) + '</span></div>' +
+          '<div class="result-row zone-mid"><span class="k">p<sub>roof</sub> C&amp;C</span><span class="v">' + psf(c29.pRoof) + '</span></div>';
+      } else if (c29.type === 'solarPanel') {
+        html += '<div class="result-row zone-low"><span class="k">(GCrn)</span><span class="v">±' + fmt(c29.GCrn,3) + '</span></div>' +
+          '<div class="result-row zone-high"><span class="k">p (net, ±)</span><span class="v">' + psf(c29.p) + '</span></div>' +
+          (c29.warnings && c29.warnings.length ? '<div class="result-row zone-crit"><span class="k">⚠ Warning</span><span class="v">' + escHtml(c29.warnings[0]) + '</span></div>' : '');
+      } else if (c29.type === 'groundSolar') {
+        html += '<div class="result-row zone-low"><span class="k">(GCgn)</span><span class="v">±' + fmt(c29.GCgn,3) + '</span></div>' +
+          '<div class="result-row zone-low"><span class="k">(GCgm)</span><span class="v">±' + fmt(c29.GCgm,3) + '</span></div>' +
+          '<div class="result-row zone-high"><span class="k">F<sub>n</sub> (±)</span><span class="v">' + fmt(c29.Fn,1) + ' lbf</span></div>' +
+          '<div class="result-row zone-high"><span class="k">M<sub>c</sub> (±)</span><span class="v">' + fmt(c29.Mc,1) + ' lbf·ft</span></div>' +
+          (c29.warnings && c29.warnings.length ? '<div class="result-row zone-crit"><span class="k">⚠ ' + escHtml(c29.warnings[0]) + '</span></div>' : '');
+      }
+      html += '</div>';
+    } else {
+      html += '<div class="result-card"><div class="result-card-head">Ch. 29 Design Loads</div>' +
+        '<div class="result-row"><span class="k">—</span><span class="v">Incomplete inputs</span></div></div>';
+    }
+    host.innerHTML = html;
+    return;
+  }
+
+  /* ── Building (Ch.27/28/30) summary ──────────────────────────────── */
   var gcpiVal = r.gcpi && typeof r.gcpi === 'object' ? r.gcpi.pos : r.gcpi;
   html += '<div class="result-card"><div class="result-card-head">Site &amp; Parameters</div>' +
     '<div class="result-row"><span class="k">Risk Category</span><span class="v"><span class="badge-risk">' + escHtml(s.riskCategory) + '</span></span></div>' +
@@ -1561,9 +1618,9 @@ function renderWindResults(r, s) {
       '<div class="result-row zone-low"><span class="k">f/D</span><span class="v">' + fmt(dr.fOverD,3) + (dr.outOfRange?' &#9888; out of range':'') + '</span></div>' +
       '<div class="result-row zone-low"><span class="k">h<sub>D</sub>/D</span><span class="v">' + fmt(dr.hDoverD,3) + '</span></div>' +
       '<div class="result-row zone-low"><span class="k">q at dome top</span><span class="v">' + fmt(dr.qDome,2) + ' psf</span></div>' +
-      '<div class="result-row zone-mid"><span class="k">Neg (&#952; 0&ndash;90&deg;)</span><span class="v">' + fmt(dr.pNeg && dr.pNeg.min) + ' / +' + fmt(dr.pNeg && dr.pNeg.max) + ' psf</span></div>' +
-      '<div class="result-row zone-low"><span class="k">Pos &#952; 0&ndash;60&deg;</span><span class="v">' + fmt(dr.pPosLow && dr.pPosLow.min) + ' / +' + fmt(dr.pPosLow && dr.pPosLow.max) + ' psf</span></div>' +
-      '<div class="result-row zone-low"><span class="k">Pos &#952; 61&ndash;90&deg;</span><span class="v">' + fmt(dr.pPosHigh && dr.pPosHigh.min) + ' / +' + fmt(dr.pPosHigh && dr.pPosHigh.max) + ' psf</span></div>' +
+      '<div class="result-row zone-mid"><span class="k">Neg (&#952; 0–90°)</span><span class="v">' + fmt(dr.pNeg && dr.pNeg.min) + ' / +' + fmt(dr.pNeg && dr.pNeg.max) + ' psf</span></div>' +
+      '<div class="result-row zone-low"><span class="k">Pos &#952; 0–60°</span><span class="v">' + fmt(dr.pPosLow && dr.pPosLow.min) + ' / +' + fmt(dr.pPosLow && dr.pPosLow.max) + ' psf</span></div>' +
+      '<div class="result-row zone-low"><span class="k">Pos &#952; 61–90°</span><span class="v">' + fmt(dr.pPosHigh && dr.pPosHigh.min) + ' / +' + fmt(dr.pPosHigh && dr.pPosHigh.max) + ' psf</span></div>' +
       '</div>';
   }
 
