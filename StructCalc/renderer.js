@@ -1432,6 +1432,12 @@ class Wind3DRenderer {
   update3DModel(B, L, h, theta, zone_a, roofShape) {
     B = +B||48; L = +L||96; h = +h||66; theta = +theta||15; zone_a = +zone_a||4;
 
+    /* For hip roofs, always orient so B <= L (B = short cross-wind span that
+       sets eave height; L = long ridge axis). Apply swap before all geometry
+       so hB/hL, wall zones, dim lines, and UV mapping stay consistent. */
+    const _shape = roofShape || 'gable';
+    if (_shape === 'hip' && B > L) { [B, L] = [L, B]; }
+
     const H_SCALE  = 1.8;  // vertical exaggeration — keeps proportions readable
     const th       = THREE.MathUtils.degToRad(theta);
     const hB       = B/2, hL = L/2;
@@ -1453,7 +1459,6 @@ class Wind3DRenderer {
     this._dimLabelMeshes  = [];   // reset flat label meshes each rebuild
 
     // building — dispatch by roof shape
-    const _shape = roofShape || 'gable';
     if (_shape === 'hip') {
       this._building = this._buildStructureHip(B, L, hEave, hRidge);
     } else if (_shape === 'monoslope') {
