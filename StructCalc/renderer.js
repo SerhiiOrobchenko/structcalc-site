@@ -381,6 +381,23 @@ class Wind3DRenderer {
     this._renderer.render(this._scene, this._camera);
     if (this._labelRenderer) this._labelRenderer.render(this._scene, this._camera);
 
+    // Occlude CSS2D dim labels hidden behind building surfaces
+    if (this._buildingMeshes && this._buildingMeshes.length && this._dimGroup) {
+      const camPos = this._camera.position;
+      const _tmp   = new THREE.Vector3();
+      this._dimGroup.traverse(obj => {
+        if (!obj.isCSS2DObject) return;
+        obj.getWorldPosition(_tmp);
+        const distToLabel = camPos.distanceTo(_tmp);
+        const dir = _tmp.clone().sub(camPos).normalize();
+        this._raycaster.set(camPos, dir);
+        const hits = this._raycaster.intersectObjects(this._buildingMeshes, false);
+        const occluded = hits.some(h => h.distance < distToLabel - 1.0);
+        obj.element.style.visibility   = occluded ? 'hidden' : 'visible';
+        obj.element.style.pointerEvents = occluded ? 'none' : 'auto';
+      });
+    }
+
     // Sync CSS view cube rotation to main camera spherical orientation.
     // Formula: rotateX(−phi) rotateY(−theta), CSS right-to-left = Y first then X.
     if (this._vcCubeEl) {
@@ -473,7 +490,7 @@ class Wind3DRenderer {
     const grp = new THREE.Group();
 
     const solidMat = c => new THREE.MeshStandardMaterial({
-      color:c, transparent:true, opacity:0.96, side:THREE.FrontSide,
+      color:c, transparent:false, side:THREE.FrontSide,
     });
     const EDGE_R = 0.11; // tube radius in world units (~4-5px at normal view distance)
 
@@ -511,7 +528,7 @@ class Wind3DRenderer {
       new THREE.Vector3( hB, hEave, hL),
     );
     const roofSide = new THREE.MeshStandardMaterial({
-      color:THEME.roofFill, transparent:true, opacity:0.80, side:THREE.DoubleSide,
+      color:THEME.roofFill, transparent:false, side:THREE.DoubleSide,
     });
     for (const [g, mat] of [[leftGeo,roofSide],[rightGeo,roofSide.clone()]]) {
       const m = new THREE.Mesh(g, mat); m.castShadow=true; grp.add(m);
@@ -536,10 +553,10 @@ class Wind3DRenderer {
     const grp = new THREE.Group();
     const EDGE_R = 0.11;
     const solidMat = c => new THREE.MeshStandardMaterial({
-      color: c, transparent: true, opacity: 0.96, side: THREE.FrontSide,
+      color: c, transparent: false, side: THREE.FrontSide,
     });
     const roofMat = () => new THREE.MeshStandardMaterial({
-      color: THEME.roofFill, transparent: true, opacity: 0.80, side: THREE.DoubleSide,
+      color: THEME.roofFill, transparent: false, side: THREE.DoubleSide,
     });
 
     /* Walls — same box as gable (no gable triangles for hip) */
@@ -608,10 +625,10 @@ class Wind3DRenderer {
     const grp = new THREE.Group();
     const EDGE_R = 0.11;
     const solidMat = c => new THREE.MeshStandardMaterial({
-      color: c, transparent: true, opacity: 0.96, side: THREE.FrontSide,
+      color: c, transparent: false, side: THREE.FrontSide,
     });
     const roofMat = new THREE.MeshStandardMaterial({
-      color: THEME.roofFill, transparent: true, opacity: 0.80, side: THREE.DoubleSide,
+      color: THEME.roofFill, transparent: false, side: THREE.DoubleSide,
     });
 
     /* 4 walls — all as quads (not a box, heights differ on each side) */
@@ -1720,6 +1737,10 @@ class Wind3DRenderer {
        Zone 4: rest of wall field
        Drawn as flat quads offset 0.05 ft from each wall face.              */
     this._drawWallZones(B, L, hEave, zone_a, matZ);
+
+    // Collect opaque building meshes for per-frame label occlusion raycasting
+    this._buildingMeshes = [];
+    this._building.traverse(obj => { if (obj.isMesh) this._buildingMeshes.push(obj); });
 
     this._scene.add(this._building);
     this._scene.add(this._zones);
