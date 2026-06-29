@@ -36,16 +36,16 @@ const THEME = {
   dimText    : '#1e3a5f',  // dark navy text — readable on light bg
   dimBg      : 'rgba(255,255,255,0.92)',
 
-  zone1      : 0xa7f3d0,   // pastel green-light — interior field
-  zone2      : 0x6ee7b7,   // pastel green-med   — edges
-  zone3      : 0xfca5a5,   // pastel red          — corners
-  zone4      : 0x22d3ee,   // cyan (= old zone1)  — wall field
-  zone5      : 0x0891b2,   // dark cyan           — wall corner strip
-  zoneLabel1 : { bg:'rgba(52,211,153,0.88)',  fg:'#065f46' },  // emerald-400, dark text
-  zoneLabel2 : { bg:'rgba(16,185,129,0.88)',  fg:'#fff' },     // emerald-500
-  zoneLabel3 : { bg:'rgba(239,68,68,0.88)',   fg:'#fff' },     // red-500
-  zoneLabel4 : { bg:'rgb(6,182,212)',          fg:'#fff' },    // cyan-500 (= old zoneLabel1)
-  zoneLabel5 : { bg:'rgb(37,99,235)',          fg:'#fff' },    // blue-600
+  zone1      : 0x34d399,   // emerald-400 — interior field
+  zone2      : 0x10b981,   // emerald-500 — edges
+  zone3      : 0xef4444,   // red-500     — corners (always vivid red)
+  zone4      : 0x06b6d4,   // cyan-500    — wall field
+  zone5      : 0x1d4ed8,   // blue-700    — wall corner strip
+  zoneLabel1 : { bg:'rgba(52,211,153,0.92)',  fg:'#065f46' },  // emerald-400
+  zoneLabel2 : { bg:'rgba(16,185,129,0.92)',  fg:'#fff' },     // emerald-500
+  zoneLabel3 : { bg:'rgba(239,68,68,0.92)',   fg:'#fff' },     // red-500
+  zoneLabel4 : { bg:'rgba(6,182,212,0.92)',   fg:'#fff' },     // cyan-500
+  zoneLabel5 : { bg:'rgba(29,78,216,0.92)',   fg:'#fff' },     // blue-700
 };
 
 /* =========================================================================
@@ -875,17 +875,20 @@ class Wind3DRenderer {
     );
     grp.add(mainLine);
 
-    // Architectural 45° tick marks — direction computed as bisector of the
-    // dim-line direction and the first extension-line direction, so the angle
-    // is always exactly 45° regardless of how tickDir was passed in.
-    const TICK     = 0.6;   // half-length (world units)
-    const TICK_R   = 0.08;  // tube radius — uniform across all dims
-    const dimDir45 = new THREE.Vector3().subVectors(p2, p1).normalize();
-    let   extDir45 = tickDir.clone().normalize();   // fallback
-    if (extLines && extLines.length > 0) {
-      extDir45 = new THREE.Vector3().subVectors(extLines[0][1], extLines[0][0]).normalize();
+    // 45° tick marks — use explicit tickDir when provided (e.g. hip slope dims),
+    // otherwise bisect dim direction and first ext-line direction.
+    const TICK   = 0.6;   // half-length (world units)
+    const TICK_R = 0.08;  // tube radius — uniform across all dims
+    let td;
+    if (tickDir != null) {
+      td = tickDir.clone().normalize();
+    } else if (extLines && extLines.length > 0) {
+      const dimDir45 = new THREE.Vector3().subVectors(p2, p1).normalize();
+      const extDir45 = new THREE.Vector3().subVectors(extLines[0][1], extLines[0][0]).normalize();
+      td = new THREE.Vector3().addVectors(dimDir45, extDir45).normalize();
+    } else {
+      td = new THREE.Vector3(1, 1, 0).normalize();
     }
-    const td = new THREE.Vector3().addVectors(dimDir45, extDir45).normalize();
     for (const p of [p1, p2]) {
       const ta = p.clone().addScaledVector(td,  TICK);
       const tb = p.clone().addScaledVector(td, -TICK);
@@ -910,7 +913,7 @@ class Wind3DRenderer {
       div.style.cssText = [
         'background:' + THEME.dimBg,
         'color:' + THEME.dimText,
-        'font:bold 11px \'JetBrains Mono\',monospace',
+        'font:bold 13px \'JetBrains Mono\',monospace',
         'padding:2px 8px',
         'border-radius:10px',
         'border:1.5px solid #334155',
@@ -1002,7 +1005,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(-hB, EPS_Y,  hZhe), new THREE.Vector3(hXhe, EPS_Y,  hZhe)],
         [new THREE.Vector3(-hB, hEave,  hZhe), new THREE.Vector3(hXhe, hEave,  hZhe)],
       ],
-      `h_eave=${fmt(hEaveLabel ?? hEave)}ft`, 'dim-h-eave', 'wind-h'
+      `heave=${fmt(hEaveLabel ?? hEave)}ft`, 'dim-h-eave', 'wind-h'
     ));
     this._dimHighlight['dim-h-eave'] = grp.children[grp.children.length - 1];
 
@@ -1018,7 +1021,7 @@ class Wind3DRenderer {
       new THREE.Vector3(-1, 1, 0).normalize(),
       [
         [new THREE.Vector3(hXhe, EPS_Y,  hZh), new THREE.Vector3(hXh, EPS_Y,  hZh)],
-        [new THREE.Vector3(-hB,  hMean,  hZh), new THREE.Vector3(hXh, hMean,  hZh)],
+        [new THREE.Vector3(-hB/2, hMean,  hZh), new THREE.Vector3(hXh, hMean,  hZh)],
       ],
       `h=${fmt(hMeanFt ?? hMean)}ft`, 'dim-h', 'wind-h'
     ));
@@ -1313,75 +1316,41 @@ class Wind3DRenderer {
      The plane is oriented so: local X = textDir, local Y = n×textDir, local Z = n.
      The label rotates with the building and never faces the camera.               */
 
+  /* _makeZoneLabelFlat — converted to CSS2DObject so labels always face camera.
+     centroid   : THREE.Vector3  — centre of the zone region
+     faceNormal : THREE.Vector3  — surface outward normal (used for small offset only)
+     textDir    : THREE.Vector3  — unused (kept for call-site compatibility)        */
   _makeZoneLabelFlat(zoneType, centroid, faceNormal, textDir) {
+    if (!THREE.CSS2DObject) return;
     const cfgMap = {
-      'zone-1': { bg:'rgb(52,211,153)',  fg:'#065f46', text:'Zone 1' },  // emerald-400
-      'zone-2': { bg:'rgb(16,185,129)', fg:'#fff',    text:'Zone 2' },  // emerald-500
-      'zone-3': { bg:'rgb(239,68,68)',   fg:'#fff',    text:'Zone 3' },  // red-500
-      'zone-4': { bg:'rgb(6,182,212)',   fg:'#fff',    text:'Zone 4' },  // cyan-500
-      'zone-5': { bg:'rgb(37,99,235)',   fg:'#fff',    text:'Zone 5' },  // blue-600
+      'zone-1': { bg:'rgba(52,211,153,0.92)',  fg:'#065f46', text:'Zone 1' },
+      'zone-2': { bg:'rgba(16,185,129,0.92)',  fg:'#fff',    text:'Zone 2' },
+      'zone-3': { bg:'rgba(239,68,68,0.92)',   fg:'#fff',    text:'Zone 3' },
+      'zone-4': { bg:'rgba(6,182,212,0.92)',   fg:'#fff',    text:'Zone 4' },
+      'zone-5': { bg:'rgba(29,78,216,0.92)',   fg:'#fff',    text:'Zone 5' },
     };
     const cfg = cfgMap[zoneType];
     if (!cfg) return;
 
-    // Zone 5 uses a vertical (portrait) canvas — text reads upward.
-    // All other zones use the standard landscape pill.
-    // Uniform landscape label for all zones (zone-5 same size as 1-4)
-    const FONT_SIZE = 16;   // 1.5× smaller than original 24px
-    const PAD = 7;
-    const CH  = 30;         // canvas height (was 44, reduced 1.5×)
-    const _cv0 = document.createElement('canvas');
-    _cv0.width = 4; _cv0.height = CH;
-    const _ctx0 = _cv0.getContext('2d');
-    _ctx0.font = `bold ${FONT_SIZE}px "JetBrains Mono",monospace`;
-    const CW  = Math.ceil(_ctx0.measureText(cfg.text).width) + 2 * PAD;
+    const div = document.createElement('div');
+    div.textContent = cfg.text;
+    div.style.cssText = [
+      'font-family:"JetBrains Mono",monospace',
+      'font-size:10px',
+      'font-weight:700',
+      `color:${cfg.fg}`,
+      `background:${cfg.bg}`,
+      'padding:2px 6px',
+      'border-radius:3px',
+      'pointer-events:none',
+      'white-space:nowrap',
+    ].join(';');
 
-    const cv  = document.createElement('canvas');
-    cv.width  = CW; cv.height = CH;
-    const ctx = cv.getContext('2d');
-    const rad = 5;
-    ctx.beginPath();
-    ctx.moveTo(rad, 0); ctx.lineTo(CW-rad, 0);
-    ctx.arcTo(CW, 0, CW, rad, rad);
-    ctx.lineTo(CW, CH-rad);
-    ctx.arcTo(CW, CH, CW-rad, CH, rad);
-    ctx.lineTo(rad, CH);
-    ctx.arcTo(0, CH, 0, CH-rad, rad);
-    ctx.lineTo(0, rad);
-    ctx.arcTo(0, 0, rad, 0, rad);
-    ctx.closePath();
-    ctx.fillStyle = cfg.bg;
-    ctx.fill();
-    ctx.fillStyle = cfg.fg;
-    ctx.font = `bold ${FONT_SIZE}px "JetBrains Mono",monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(cfg.text, CW / 2, CH / 2);
-
-    const tex    = new THREE.CanvasTexture(cv);
-    const aspect = CW / CH;
-    const planeH = 0.93;              // world units (~1.4/1.5)
-    const planeW = planeH * aspect;
-
-    const geo = new THREE.PlaneGeometry(planeW, planeH);
-    const mat = new THREE.MeshBasicMaterial({
-      map: tex, transparent: true, depthWrite: false,
-      side: THREE.DoubleSide, alphaTest: 0.05,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-
-    // Orient: local X = textDir (baseline), local Y = n×textDir (uphill on slope),
-    //         local Z = faceNormal (out of surface)
-    const n  = faceNormal.clone().normalize();
-    const tx = textDir.clone().normalize();
-    const ty = new THREE.Vector3().crossVectors(n, tx).normalize();
-    // Re-orthogonalise tx in case of float drift
-    const txF = new THREE.Vector3().crossVectors(ty, n).normalize();
-    mesh.setRotationFromMatrix(new THREE.Matrix4().makeBasis(txF, ty, n));
-
-    mesh.position.copy(centroid).addScaledVector(n, 0.06); // tiny lift above surface
-    mesh.renderOrder = 3;
-    this._labelGroup.add(mesh);
+    // Offset slightly above surface so label clears the mesh face
+    const pos = centroid.clone().addScaledVector(faceNormal.clone().normalize(), 0.15);
+    const obj = new THREE.CSS2DObject(div);
+    obj.position.copy(pos);
+    this._labelGroup.add(obj);
   }
 
   /* ── public API ─────────────────────────────────────────────────────────── */
@@ -1464,10 +1433,10 @@ class Wind3DRenderer {
       addZone(u1,1,      v_zone,v1, THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
       addZone(u_zone,u1, 0,v_zone,  THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
       addZone(u_zone,u1, v1,1,      THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
-      addZone(0,u_zone,  0,v_zone,  THEME.zone3,0.50,'zone-3',0.12,ptFn,norm,doLabel);
-      addZone(0,u_zone,  v1,1,      THEME.zone3,0.50,'zone-3',0.12,ptFn,norm,false);
-      addZone(u1,1,      0,v_zone,  THEME.zone3,0.50,'zone-3',0.12,ptFn,norm,false);
-      addZone(u1,1,      v1,1,      THEME.zone3,0.50,'zone-3',0.12,ptFn,norm,false);
+      addZone(0,u_zone,  0,v_zone,  THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,doLabel);
+      addZone(0,u_zone,  v1,1,      THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,false);
+      addZone(u1,1,      0,v_zone,  THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,false);
+      addZone(u1,1,      v1,1,      THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,false);
     };
 
     if (_shape === 'monoslope') {
