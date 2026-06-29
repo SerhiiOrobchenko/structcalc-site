@@ -398,6 +398,22 @@ class Wind3DRenderer {
       });
     }
 
+    // Hide zone labels on back-facing surfaces (back-face culling via face normal)
+    if (this._labelGroup) {
+      const camPos2 = this._camera.position;
+      const _tmpL   = new THREE.Vector3();
+      this._labelGroup.traverse(obj => {
+        if (!obj.isCSS2DObject) return;
+        const fn = obj.userData.faceNormal;
+        if (!fn) return;                  // no normal stored — always visible
+        obj.getWorldPosition(_tmpL);
+        // Positive dot product → normal faces toward camera → surface is front-facing
+        const facingCamera = fn.dot(new THREE.Vector3().subVectors(camPos2, _tmpL)) > 0;
+        obj.element.style.visibility    = facingCamera ? 'visible' : 'hidden';
+        obj.element.style.pointerEvents = 'none';
+      });
+    }
+
     // Sync CSS view cube rotation to main camera spherical orientation.
     // Formula: rotateX(−phi) rotateY(−theta), CSS right-to-left = Y first then X.
     if (this._vcCubeEl) {
@@ -1295,6 +1311,7 @@ class Wind3DRenderer {
 
     const obj = new THREE.CSS2DObject(div);
     obj.position.copy(labelPos);
+    obj.userData.faceNormal = norm.clone().normalize();  // for back-face culling in _animate
     this._labelGroup.add(obj);
 
     // Leader line from label position to zone centroid (for small zones)
@@ -1350,6 +1367,7 @@ class Wind3DRenderer {
     const pos = centroid.clone().addScaledVector(faceNormal.clone().normalize(), 0.15);
     const obj = new THREE.CSS2DObject(div);
     obj.position.copy(pos);
+    obj.userData.faceNormal = faceNormal.clone().normalize();  // for back-face culling in _animate
     this._labelGroup.add(obj);
   }
 
