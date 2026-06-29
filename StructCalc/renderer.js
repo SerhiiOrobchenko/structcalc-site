@@ -875,15 +875,21 @@ class Wind3DRenderer {
     );
     grp.add(mainLine);
 
-    // Architectural 45° tick marks — tube centered on dim-line endpoint,
-    // in the same plane as the dim line, at 45° to the dim line direction.
-    // tickDir is already set to the 45° in-plane direction by _buildAllDims.
-    const td   = tickDir.clone().normalize();
-    const TICK = 0.6;   // half-length (3× shorter than previous 1.8)
+    // Architectural 45° tick marks — direction computed as bisector of the
+    // dim-line direction and the first extension-line direction, so the angle
+    // is always exactly 45° regardless of how tickDir was passed in.
+    const TICK     = 0.6;   // half-length (world units)
+    const TICK_R   = 0.08;  // tube radius — uniform across all dims
+    const dimDir45 = new THREE.Vector3().subVectors(p2, p1).normalize();
+    let   extDir45 = tickDir.clone().normalize();   // fallback
+    if (extLines && extLines.length > 0) {
+      extDir45 = new THREE.Vector3().subVectors(extLines[0][1], extLines[0][0]).normalize();
+    }
+    const td = new THREE.Vector3().addVectors(dimDir45, extDir45).normalize();
     for (const p of [p1, p2]) {
       const ta = p.clone().addScaledVector(td,  TICK);
       const tb = p.clone().addScaledVector(td, -TICK);
-      const tk = this._tube(ta, tb, 0x000000, 0.10);  // bold tick tube
+      const tk = this._tube(ta, tb, 0x000000, TICK_R);
       if (tk) grp.add(tk);
     }
 
@@ -925,8 +931,7 @@ class Wind3DRenderer {
       }
 
       const lDir  = new THREE.Vector3().subVectors(p2, p1).normalize();
-      const lTick = tickDir.clone().normalize();
-      const lNorm = new THREE.Vector3().crossVectors(lDir, lTick).normalize();
+      const lNorm = new THREE.Vector3().crossVectors(lDir, td).normalize();
       const lSide = new THREE.Vector3().crossVectors(lNorm, lDir).normalize();
       const midPt = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
       // Offset label toward the building so it sits just inside the dim line
