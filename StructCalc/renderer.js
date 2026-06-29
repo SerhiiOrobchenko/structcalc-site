@@ -880,107 +880,50 @@ class Wind3DRenderer {
       ));
     }
 
-    // ── Flat 3D label — CanvasTexture oriented along dim line ────────────
-    // Plane normal = cross(dimDir, tickDir), so text faces the viewer from
-    // the dim-line plane and rotates with the building.
-    {
+    // ── CSS2D billboard label — always faces the camera ──────────────────
+    if (THREE.CSS2DObject) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      div.style.cssText = [
+        'background:' + THEME.dimBg,
+        'color:' + THEME.dimText,
+        'font:bold 11px \'JetBrains Mono\',monospace',
+        'padding:2px 8px',
+        'border-radius:10px',
+        'border:1.5px solid #334155',
+        'white-space:nowrap',
+        'cursor:pointer',
+        'pointer-events:auto',
+        'user-select:none',
+        'box-shadow:0 1px 3px rgba(0,0,0,0.18)',
+      ].join(';');
+
+      // Click → focus the linked input
+      if (inputId) {
+        div.addEventListener('click', function(e) {
+          e.stopPropagation();
+          const el = document.getElementById(inputId);
+          if (el) { el.focus(); el.select(); }
+        });
+      }
+
       const lDir  = new THREE.Vector3().subVectors(p2, p1).normalize();
       const lTick = tickDir.clone().normalize();
-      let   lNorm = new THREE.Vector3().crossVectors(lDir, lTick).normalize();
-      // Ensure label faces roughly toward default camera (+X+Y+Z)
-      if (lNorm.dot(new THREE.Vector3(1, 1, 1)) < 0) lNorm.negate();
-      // Fix upside-down text: ensure reading direction aligns with camera-right
-      // Camera at (100,75,120) → right vector ≈ (0.768, 0, -0.640)
-      const CAM_R = new THREE.Vector3(0.768, 0, -0.640);
-      if (lDir.dot(CAM_R) < -0.01) lDir.negate();  // flip; lNorm unchanged
-      const lUp = new THREE.Vector3().crossVectors(lNorm, lDir).normalize();
+      const lNorm = new THREE.Vector3().crossVectors(lDir, lTick).normalize();
+      const lSide = new THREE.Vector3().crossVectors(lNorm, lDir).normalize();
+      const midPt = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
+      // Offset label toward the building so it sits just inside the dim line
+      const side  = lSide.clone();
+      if (side.dot(midPt) > 0) side.negate();
+      const obj = new THREE.CSS2DObject(div);
+      obj.position.copy(midPt).addScaledVector(side, 0.6);
+      grp.add(obj);
 
-      // Build canvas with pill background + text
-      const LF   = 'bold 20px "JetBrains Mono",monospace';
-      const LPAD = 8;
-      const LCH  = 34;
-      const _cv0 = document.createElement('canvas');
-      _cv0.height = LCH;
-      _cv0.width  = 4;
-      const _ctx0 = _cv0.getContext('2d');
-      _ctx0.font  = LF;
-      const LCW = Math.ceil(_ctx0.measureText(text).width) + 2 * LPAD;
-      const lcv = document.createElement('canvas');
-      lcv.width  = LCW;
-      lcv.height = LCH;
-      const lctx = lcv.getContext('2d');
-      const rad  = LCH / 2;
-      lctx.fillStyle = THEME.dimBg;
-      lctx.beginPath();
-      lctx.moveTo(rad, 0); lctx.lineTo(LCW - rad, 0);
-      lctx.arcTo(LCW, 0, LCW, LCH, rad);
-      lctx.lineTo(LCW, LCH - rad);
-      lctx.arcTo(LCW, LCH, LCW - rad, LCH, rad);
-      lctx.lineTo(rad, LCH);
-      lctx.arcTo(0, LCH, 0, LCH - rad, rad);
-      lctx.lineTo(0, rad);
-      lctx.arcTo(0, 0, rad, 0, rad);
-      lctx.closePath();
-      lctx.fill();
-      lctx.strokeStyle = '#334155';
-      lctx.lineWidth   = 1.5;
-      lctx.stroke();
-      lctx.fillStyle = THEME.dimText;
-      lctx.font      = LF;
-      lctx.textBaseline = 'middle';
-      lctx.fillText(text, LPAD, LCH / 2);
-
-      const ltex = new THREE.CanvasTexture(lcv);
-      const lH   = 1.1;
-      const lW   = lH * (LCW / LCH);
-      const lgeo = new THREE.PlaneGeometry(lW, lH);
-      const lmat = new THREE.MeshBasicMaterial({
-        map: ltex, transparent: true, depthWrite: false,
-        side: THREE.FrontSide, alphaTest: 0.05,
-      });
-      const lmesh = new THREE.Mesh(lgeo, lmat);
-      lmesh.setRotationFromMatrix(
-        new THREE.Matrix4().makeBasis(lDir, lUp, lNorm)
-      );
-      // Position label above/beside the dim line (not crossing it)
-      // Vertical dims: offset sideways in lUp direction; horizontal: offset up in lNorm
-      // lSide: in-plane direction perp to dim line, pointing outward from building
-      const midPt3 = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
-      let lSide = new THREE.Vector3().crossVectors(lNorm, lDir).normalize();
-      if (lSide.dot(midPt3) > 0) lSide.negate();  // ensure inward (building-side = above on screen)
-      const CLEAR = 0.70;  // lH/2 (0.55) + 0.15 gap
-      lmesh.position.copy(midPt3)
-        .addScaledVector(lSide, CLEAR)
-        .addScaledVector(lNorm, 0.02);  // tiny lift to prevent z-fighting
-      lmesh.renderOrder = 4;
-      lmesh.userData.inputId = inputId || null;
-      lmesh.userData.dimId   = dimId;
-      grp.add(lmesh);
-      if (this._dimLabelMeshes) this._dimLabelMeshes.push(lmesh);
-
-      // Store closure so highlightDim() can redraw the canvas texture
+      // setLabelActive: toggle highlight style for the HTML element
       grp.userData.setLabelActive = function(active) {
-        lctx.clearRect(0, 0, LCW, LCH);
-        lctx.fillStyle = active ? 'rgba(6,182,212,0.92)' : THEME.dimBg;
-        lctx.beginPath();
-        lctx.moveTo(rad, 0); lctx.lineTo(LCW - rad, 0);
-        lctx.arcTo(LCW, 0, LCW, LCH, rad);
-        lctx.lineTo(LCW, LCH - rad);
-        lctx.arcTo(LCW, LCH, LCW - rad, LCH, rad);
-        lctx.lineTo(rad, LCH);
-        lctx.arcTo(0, LCH, 0, LCH - rad, rad);
-        lctx.lineTo(0, rad);
-        lctx.arcTo(0, 0, rad, 0, rad);
-        lctx.closePath();
-        lctx.fill();
-        lctx.strokeStyle = active ? '#0891b2' : '#334155';
-        lctx.lineWidth   = 1.5;
-        lctx.stroke();
-        lctx.fillStyle    = active ? '#ffffff' : THEME.dimText;
-        lctx.font         = LF;
-        lctx.textBaseline = 'middle';
-        lctx.fillText(text, LPAD, LCH / 2);
-        ltex.needsUpdate = true;
+        div.style.background  = active ? 'rgba(6,182,212,0.92)' : THEME.dimBg;
+        div.style.borderColor = active ? '#0891b2' : '#334155';
+        div.style.color       = active ? '#ffffff'  : THEME.dimText;
       };
     }
 
@@ -1830,15 +1773,7 @@ class Wind3DRenderer {
       this._clickCB(zHits[0].object.userData.zoneType);
       return;
     }
-    // Dim label click → focus the corresponding input field
-    if (this._dimLabelMeshes && this._dimLabelMeshes.length > 0) {
-      this._raycaster.setFromCamera(ndc, this._camera);
-      const dHits = this._raycaster.intersectObjects(this._dimLabelMeshes);
-      if (dHits.length > 0) {
-        const id = dHits[0].object.userData.inputId;
-        if (id) { const el = document.getElementById(id); if (el) { el.focus(); el.select(); } }
-      }
-    }
+    // Dim label clicks are handled directly by DOM listeners on CSS2DObject elements.
   }
 
   _handleHover(e) {
