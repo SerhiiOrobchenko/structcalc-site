@@ -379,9 +379,11 @@ class Wind3DRenderer {
     this._animId = requestAnimationFrame(() => this._animate());
     this._controls.update();
     this._renderer.render(this._scene, this._camera);
-    if (this._labelRenderer) this._labelRenderer.render(this._scene, this._camera);
 
-    // Occlude CSS2D dim labels hidden behind building surfaces
+    // ── Occlusion / back-face culling — must run BEFORE labelRenderer.render()
+    // so the CSS2DRenderer sees the correct display state on each element.
+
+    // 1) Dim labels: hide if a building surface is between camera and label
     if (this._buildingMeshes && this._buildingMeshes.length && this._dimGroup) {
       const camPos = this._camera.position;
       const _tmp   = new THREE.Vector3();
@@ -393,26 +395,25 @@ class Wind3DRenderer {
         this._raycaster.set(camPos, dir);
         const hits = this._raycaster.intersectObjects(this._buildingMeshes, false);
         const occluded = hits.some(h => h.distance < distToLabel - 1.0);
-        obj.element.style.visibility   = occluded ? 'hidden' : 'visible';
-        obj.element.style.pointerEvents = occluded ? 'none' : 'auto';
+        obj.element.style.display = occluded ? 'none' : '';
       });
     }
 
-    // Hide zone labels on back-facing surfaces (back-face culling via face normal)
+    // 2) Zone labels: hide if their surface normal points away from camera
     if (this._labelGroup) {
       const camPos2 = this._camera.position;
       const _tmpL   = new THREE.Vector3();
       this._labelGroup.traverse(obj => {
         if (!obj.isCSS2DObject) return;
         const fn = obj.userData.faceNormal;
-        if (!fn) return;                  // no normal stored — always visible
+        if (!fn) return;                  // no normal stored — always show
         obj.getWorldPosition(_tmpL);
-        // Positive dot product → normal faces toward camera → surface is front-facing
         const facingCamera = fn.dot(new THREE.Vector3().subVectors(camPos2, _tmpL)) > 0;
-        obj.element.style.visibility    = facingCamera ? 'visible' : 'hidden';
-        obj.element.style.pointerEvents = 'none';
+        obj.element.style.display = facingCamera ? '' : 'none';
       });
     }
+
+    if (this._labelRenderer) this._labelRenderer.render(this._scene, this._camera);
 
     // Sync CSS view cube rotation to main camera spherical orientation.
     // Formula: rotateX(−phi) rotateY(−theta), CSS right-to-left = Y first then X.
@@ -1568,7 +1569,7 @@ class Wind3DRenderer {
         addZone(1-_ua2, 1, 0, 1, THEME.zone2, 0.35, 'zone-2', 0.07, ptFn, norm, false);
 
         /* Zone 3: eave strip u=[0, _ua] — meets hip strips at u=_ua exactly */
-        addZone(0, _ua, 0, 1, THEME.zone3, 0.50, 'zone-3', 0.12, ptFn, norm, false);
+        addZone(0, _ua, 0, 1, THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, false);
 
         /* Flat on-surface labels — glued to slope, rotate with building.
            textDir along Z (ridge direction). Flip for right slope so text reads
@@ -1681,7 +1682,7 @@ class Wind3DRenderer {
         addTriPart([M_R, E, C, Mx], 'zone-2', 0.35, 0.07);
 
         /* Zone 3: (A, Bv, E, D) — meets Zone 2 exactly at D–E edge */
-        addTriPart([A, Bv, E, D], 'zone-3', 0.50, 0.12);
+        addTriPart([A, Bv, E, D], 'zone-3', 0.65, 0.12);
 
         /* Flat on-surface labels for this triangular slope.
            textDir along +X for front slope (zs=1), -X for back (zs=-1) so the
