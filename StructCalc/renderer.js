@@ -974,7 +974,7 @@ class Wind3DRenderer {
     return grp;
   }
 
-  _buildAllDims(B, L, hEave, hRidge, zone_a, hLabel = null, hEaveLabel = null, theta = 0, roofShape = 'hip') {
+  _buildAllDims(B, L, hEave, hRidge, zone_a, hLabel = null, hEaveLabel = null, theta = 0, roofShape = 'hip', B_orig = null, L_orig = null) {
     const hB = B/2, hL = L/2;
     const grp = new THREE.Group();
     const D   = Math.max(8, Math.max(B, L) * 0.10);
@@ -982,6 +982,20 @@ class Wind3DRenderer {
 
     // Helper: remove trailing .0 from toFixed(1)
     const fmt = v => { const s = v.toFixed(1); return s.endsWith('.0') ? s.slice(0,-2) : s; };
+
+    // When B_orig > L_orig the geometry was swapped before this call: B = min(B_orig,L_orig),
+    // L = max(B_orig,L_orig). The front face width equals L_orig, not B_orig.
+    // So we label the front-face dim as "L" and the side-face dim as "B" (swapping the
+    // label text and the linked input), so the user always sees the value they entered.
+    const _swapped = (B_orig !== null && B_orig !== B);
+    const _Bval  = _swapped ? L_orig : B;       // value to show on the front-face dim line
+    const _Lval  = _swapped ? B_orig : L;       // value to show on the side-face dim line
+    const _Blbl  = _swapped ? 'L' : 'B';        // label letter for front face dim
+    const _Llbl  = _swapped ? 'B' : 'L';        // label letter for side face dim
+    const _BdimId  = _swapped ? 'dim-L' : 'dim-B';
+    const _LdimId  = _swapped ? 'dim-B' : 'dim-L';
+    const _BinpId  = _swapped ? 'wind-L' : 'wind-B';
+    const _LinpId  = _swapped ? 'wind-B' : 'wind-L';
 
     // ── B (Width) — Front face (z = +hL) ──────────────────────────────────
     const bZ = hL + D;
@@ -993,9 +1007,9 @@ class Wind3DRenderer {
         [new THREE.Vector3(-hB, EPS_Y,  hL), new THREE.Vector3(-hB, EPS_Y, bZ)],
         [new THREE.Vector3( hB, EPS_Y,  hL), new THREE.Vector3( hB, EPS_Y, bZ)],
       ],
-      `B=${fmt(B)}ft`, 'dim-B', 'wind-B'
+      `${_Blbl}=${fmt(_Bval)}ft`, _BdimId, _BinpId
     ));
-    this._dimHighlight['dim-B'] = grp.children[grp.children.length - 1];
+    this._dimHighlight[_BdimId] = grp.children[grp.children.length - 1];
 
     // ── L (Length) — Right face, parallel to Z ─────────────────────────────
     const lX = hB + D;
@@ -1007,9 +1021,9 @@ class Wind3DRenderer {
         [new THREE.Vector3(hB, EPS_Y, -hL), new THREE.Vector3(lX, EPS_Y, -hL)],
         [new THREE.Vector3(hB, EPS_Y,  hL), new THREE.Vector3(lX, EPS_Y,  hL)],
       ],
-      `L=${fmt(L)}ft`, 'dim-L', 'wind-L'
+      `${_Llbl}=${fmt(_Lval)}ft`, _LdimId, _LinpId
     ));
-    this._dimHighlight['dim-L'] = grp.children[grp.children.length - 1];
+    this._dimHighlight[_LdimId] = grp.children[grp.children.length - 1];
 
     // ── h_eave — Left face centre (z=0), y=0→hEave ───────────────────────
     const hXhe = -hB - D;
@@ -1389,11 +1403,14 @@ class Wind3DRenderer {
        sets eave height; L = long ridge axis). Apply swap before all geometry
        so hB/hL, wall zones, dim lines, and UV mapping stay consistent. */
     const _shape = roofShape || 'gable';
+    // Save original values before any swap so dim labels always show what the user entered
+    const B_orig = B, L_orig = L;
     if (_shape === 'hip' && B > L) { [B, L] = [L, B]; }
 
     const H_SCALE  = 1.8;  // vertical exaggeration — keeps proportions readable
     const th       = THREE.MathUtils.degToRad(theta);
     const hB       = B/2, hL = L/2;
+    // eave height uses the SHORT half-span (hB after swap = min(B_orig,L_orig)/2)
     const hEave_ft = Math.max(1, h - hB * Math.tan(th));  // actual eave height, ft
     const hRidge_ft = h;                                   // actual ridge height, ft
     const hEave    = hEave_ft  * H_SCALE;  // scaled for rendering
@@ -1422,7 +1439,7 @@ class Wind3DRenderer {
     }
 
     // dim lines (pass hRidge_ft so label shows real engineering value, not scaled)
-    this._dimGroup = this._buildAllDims(B, L, hEave, hRidge, zone_a, hRidge_ft, hEave_ft, theta, _shape);
+    this._dimGroup = this._buildAllDims(B, L, hEave, hRidge, zone_a, hRidge_ft, hEave_ft, theta, _shape, B_orig, L_orig);
 
     // zones — shape-specific surface mapping
     const matZ = (col, op) => new THREE.MeshBasicMaterial({
