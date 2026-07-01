@@ -1750,10 +1750,6 @@ function renderWindResults(r, s) {
     if (r.ccRoof && r.ccRoof.length) {
       var ccRoofZoneMap = {'1p':'zone-1','1':'zone-1','2':'zone-2','3':'zone-3'};
       html += '<div class="result-card"><div class="result-card-head">C&amp;C — Roof (Ch. 30)</div>';
-      /* Plan-view zone diagram for gable and flat roofs */
-      if (s.roofShape === 'gable' || s.roofType === 'flat') {
-        html += '<div style="padding:8px 6px 2px;">' + buildCCGableZonePlanSVG(s, r.a || 0) + '</div>';
-      }
       r.ccRoof.forEach(function(z) {
         var zt  = ccRoofZoneMap[z.zone] || '';
         var bSt = zt ? ' style="border-left:8px solid ' + ZONE_COLORS[zt] + ';padding-left:10px"' : '';

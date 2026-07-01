@@ -522,43 +522,82 @@ class Wind3DRenderer {
   _buildStructure(B, L, hEave, hRidge) {
     const hB = B/2, hL = L/2;
     const grp = new THREE.Group();
+    const EDGE_R = 0.11;
 
+    /* DoubleSide so each panel is visible from both directions as camera orbits */
     const solidMat = c => new THREE.MeshStandardMaterial({
-      color:c, transparent:false, side:THREE.FrontSide,
+      color:c, transparent:false, side:THREE.DoubleSide,
     });
-    const EDGE_R = 0.11; // tube radius in world units (~4-5px at normal view distance)
 
-    // -- walls (solid near-opaque: depth buffer hides back edges)
-    const boxGeo = new THREE.BoxGeometry(B, hEave, L);
-    boxGeo.translate(0, hEave/2, 0);
-    const wall = new THREE.Mesh(boxGeo, solidMat(THEME.wallFill));
-    wall.castShadow = true;
-    grp.add(wall);
-    this._tubeEdges(new THREE.EdgesGeometry(boxGeo), THEME.wallEdge, EDGE_R, grp);
+    /* Helper: add tube edges along an explicit list of [p1,p2] segments */
+    const segs = (pairs, col) => {
+      for (const [a, b] of pairs) { const t = this._tube(a, b, col, EDGE_R); if (t) grp.add(t); }
+    };
 
-    // -- gable triangles
-    for (const zs of [-1, 1]) {
-      const z = zs * hL;
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
-        -hB,hEave,z,  hB,hEave,z,  0,hRidge,z,
-      ]), 3));
-      geo.computeVertexNormals();
-      grp.add(new THREE.Mesh(geo, solidMat(THEME.gableFill)));
-      this._tubeEdges(new THREE.EdgesGeometry(geo), THEME.gableEdge, EDGE_R, grp);
+    /* ── LEFT wall (x = -hB) — rectangle ───────────────────────────────── */
+    {
+      const p = [
+        new THREE.Vector3(-hB, 0,     -hL), new THREE.Vector3(-hB, 0,      hL),
+        new THREE.Vector3(-hB, hEave,  hL), new THREE.Vector3(-hB, hEave, -hL),
+      ];
+      grp.add(new THREE.Mesh(this._quad(p[0],p[1],p[2],p[3]), solidMat(THEME.wallFill)));
+      segs([[p[0],p[1]],[p[1],p[2]],[p[2],p[3]],[p[3],p[0]]], THEME.wallEdge);
     }
 
-    // -- roof slopes
+    /* ── RIGHT wall (x = +hB) — rectangle ──────────────────────────────── */
+    {
+      const p = [
+        new THREE.Vector3(hB, 0,      hL), new THREE.Vector3(hB, 0,     -hL),
+        new THREE.Vector3(hB, hEave, -hL), new THREE.Vector3(hB, hEave,  hL),
+      ];
+      grp.add(new THREE.Mesh(this._quad(p[0],p[1],p[2],p[3]), solidMat(THEME.wallFill)));
+      segs([[p[0],p[1]],[p[1],p[2]],[p[2],p[3]],[p[3],p[0]]], THEME.wallEdge);
+    }
+
+    /* ── BACK wall (z = -hL) — rectangle, NO gable ──────────────────────
+       The leeward end has no gable triangle in this model.               */
+    {
+      const p = [
+        new THREE.Vector3( hB, 0,    -hL), new THREE.Vector3(-hB, 0,     -hL),
+        new THREE.Vector3(-hB, hEave,-hL), new THREE.Vector3( hB, hEave, -hL),
+      ];
+      grp.add(new THREE.Mesh(this._quad(p[0],p[1],p[2],p[3]), solidMat(THEME.wallFill)));
+      segs([[p[0],p[1]],[p[1],p[2]],[p[2],p[3]],[p[3],p[0]]], THEME.wallEdge);
+    }
+
+    /* ── FRONT end wall + gable (z = +hL) — PENTAGON, seamless ─────────
+       Five vertices: BL, BR, right-eave, ridge-peak, left-eave.
+       No internal horizontal edge between wall and gable.               */
+    {
+      const BL = new THREE.Vector3(-hB, 0,      hL);   // bottom-left
+      const BR = new THREE.Vector3( hB, 0,      hL);   // bottom-right
+      const RE = new THREE.Vector3( hB, hEave,  hL);   // right eave
+      const RG = new THREE.Vector3(  0, hRidge, hL);   // ridge peak
+      const LE = new THREE.Vector3(-hB, hEave,  hL);   // left eave
+      /* Fan triangulation from BL — all give outward +Z normal */
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+        BL.x,BL.y,BL.z, BR.x,BR.y,BR.z, RE.x,RE.y,RE.z,   // lower-right
+        BL.x,BL.y,BL.z, RE.x,RE.y,RE.z, RG.x,RG.y,RG.z,   // upper-right
+        BL.x,BL.y,BL.z, RG.x,RG.y,RG.z, LE.x,LE.y,LE.z,   // upper-left
+      ]), 3));
+      geo.computeVertexNormals();
+      grp.add(new THREE.Mesh(geo, solidMat(THEME.wallFill)));
+      /* Perimeter only: BL→BR→RE→RG→LE→BL (5 edges, no horizontal seam) */
+      segs([[BL,BR],[BR,RE],[RE,RG],[RG,LE],[LE,BL]], THEME.wallEdge);
+    }
+
+    /* ── Roof slopes ─────────────────────────────────────────────────── */
     const leftGeo = this._quad(
       new THREE.Vector3(-hB, hEave,-hL),
       new THREE.Vector3(-hB, hEave, hL),
-      new THREE.Vector3( 0, hRidge, hL),
-      new THREE.Vector3( 0, hRidge,-hL),
+      new THREE.Vector3(  0, hRidge, hL),
+      new THREE.Vector3(  0, hRidge,-hL),
     );
     const rightGeo = this._quad(
       new THREE.Vector3( hB, hEave,-hL),
-      new THREE.Vector3(  0, hRidge,-hL),
-      new THREE.Vector3(  0, hRidge, hL),
+      new THREE.Vector3(   0, hRidge,-hL),
+      new THREE.Vector3(   0, hRidge, hL),
       new THREE.Vector3( hB, hEave, hL),
     );
     const roofSide = new THREE.MeshStandardMaterial({
@@ -569,7 +608,7 @@ class Wind3DRenderer {
       this._tubeEdges(new THREE.EdgesGeometry(g), THEME.roofEdge, EDGE_R, grp);
     }
 
-    // -- ridge
+    /* ── Ridge ───────────────────────────────────────────────────────── */
     {
       const t = this._tube(new THREE.Vector3(0,hRidge,-hL), new THREE.Vector3(0,hRidge,hL), THEME.ridge, EDGE_R);
       if (t) grp.add(t);
@@ -778,7 +817,7 @@ class Wind3DRenderer {
      Draws Zone 5 (corner strip, width=zone_a) and Zone 4 (field) on all 4
      vertical wall faces. matZ(color, opacity) is the same factory used for
      roof zones.                                                               */
-  _drawWallZones(B, L, hEave, zone_a, matZ) {
+  _drawWallZones(B, L, hEave, hRidge, zone_a, matZ) {
     const hB = B / 2, hL = L / 2;
     const EPS = 0.06;   // tiny outward offset to avoid z-fighting with wall mesh
     const Z4_OP = 0.22, Z5_OP = 0.45;   // opacities for field and corner zones
@@ -805,38 +844,51 @@ class Wind3DRenderer {
       this._makeZoneLabelFlat(zt, ctr, norm, tDir);
     };
 
-    /* ── FRONT wall  (z = +hL, outward normal +Z) ─────────────────────────── */
+    /* ── FRONT end wall + gable (z = +hL, outward normal +Z) ────────────────
+       Zones 4 and 5 cover the full wall height including the gable triangle
+       above hEave.  The gable slope height at horizontal distance d from the
+       building corner is: hEave + (d/hB)*(hRidge-hEave).                  */
     {
       const nF = new THREE.Vector3(0, 0, 1);
       const e  = EPS;
       const z  = hL + e;
-      const a  = Math.min(zone_a, hB);  // clamp strip to half-width
+      const a  = Math.min(zone_a, hB);
       const tD = new THREE.Vector3(1, 0, 0);
 
-      // Zone 5 left strip: x=-hB … -hB+a
+      /* Gable slope height at horizontal distance d from each side corner */
+      const slopeY = d => hEave + (d / hB) * (hRidge - hEave);
+      const ya = slopeY(a);   // height at x = ±(hB - a)
+
+      // Zone 5 left: quad from ground up to gable slope
       const fz5L = [
-        new THREE.Vector3(-hB, 0, z),  new THREE.Vector3(-hB+a, 0, z),
-        new THREE.Vector3(-hB+a, hEave, z), new THREE.Vector3(-hB, hEave, z),
+        new THREE.Vector3(-hB,   0,    z), new THREE.Vector3(-hB+a, 0,  z),
+        new THREE.Vector3(-hB+a, ya,   z), new THREE.Vector3(-hB,   hEave, z),
       ];
       addWallQ(fz5L, 'zone-5', Z5_OP);
       wallLabel('zone-5', fz5L[0], fz5L[1], fz5L[2], fz5L[3], nF, tD);
 
-      // Zone 5 right strip: x=hB-a … hB
+      // Zone 5 right: quad from ground up to gable slope
       const fz5R = [
-        new THREE.Vector3(hB-a, 0, z),  new THREE.Vector3(hB, 0, z),
-        new THREE.Vector3(hB, hEave, z), new THREE.Vector3(hB-a, hEave, z),
+        new THREE.Vector3(hB-a, 0,    z), new THREE.Vector3(hB,   0,    z),
+        new THREE.Vector3(hB,   hEave, z), new THREE.Vector3(hB-a, ya,  z),
       ];
       addWallQ(fz5R, 'zone-5', Z5_OP);
       wallLabel('zone-5', fz5R[0], fz5R[1], fz5R[2], fz5R[3], nF, tD);
 
-      // Zone 4 field: x=-hB+a … hB-a (only if wide enough)
+      // Zone 4 field (if wide enough): lower rectangle + upper triangle to ridge
       if (2 * a < B - 0.1) {
-        const fz4 = [
-          new THREE.Vector3(-hB+a, 0, z),  new THREE.Vector3(hB-a, 0, z),
-          new THREE.Vector3(hB-a, hEave, z), new THREE.Vector3(-hB+a, hEave, z),
+        const fz4Lo = [
+          new THREE.Vector3(-hB+a, 0,  z), new THREE.Vector3(hB-a, 0,  z),
+          new THREE.Vector3(hB-a,  ya, z), new THREE.Vector3(-hB+a, ya, z),
         ];
-        addWallQ(fz4, 'zone-4', Z4_OP);
-        wallLabel('zone-4', fz4[0], fz4[1], fz4[2], fz4[3], nF, tD);
+        addWallQ(fz4Lo, 'zone-4', Z4_OP);
+        wallLabel('zone-4', fz4Lo[0], fz4Lo[1], fz4Lo[2], fz4Lo[3], nF, tD);
+        /* Degenerate quad (last two vertices coincide) = triangle to ridge */
+        const fz4Hi = [
+          new THREE.Vector3(-hB+a, ya,     z), new THREE.Vector3(hB-a,  ya,     z),
+          new THREE.Vector3(0,     hRidge, z), new THREE.Vector3(0,     hRidge, z),
+        ];
+        addWallQ(fz4Hi, 'zone-4', Z4_OP);
       }
     }
 
@@ -1343,9 +1395,9 @@ class Wind3DRenderer {
     if (!THREE.CSS2DObject) return;
 
     const cfgMap = {
-      'zone-1': { ...THEME.zoneLabel1, text: 'Zone 1 / Field'  },
-      'zone-2': { ...THEME.zoneLabel2, text: 'Zone 2 / Edge'   },
-      'zone-3': { ...THEME.zoneLabel3, text: 'Zone 3 / Corner' },
+      'zone-1': { ...THEME.zoneLabel1, text: 'Zone 1' },
+      'zone-2': { ...THEME.zoneLabel2, text: 'Zone 2' },
+      'zone-3': { ...THEME.zoneLabel3, text: 'Zone 3' },
     };
     const cfg = cfgMap[zoneType];
     if (!cfg) return;
@@ -1545,6 +1597,27 @@ class Wind3DRenderer {
       /* Zone 3: ONLY eave × rake corners (two per slope) */
       addZone(0,u_zone,  0,v_zone,  THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,doLabel);
       addZone(0,u_zone,  v1,1,      THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,false);
+    };
+
+    /* Gable zone layout for 7° < θ ≤ 27° (ASCE 7-22 Fig. 30.3-2B/2C):
+       Zone 3 at RIDGE × RAKE corners only.
+       Eave × rake corners are Zone 2, not Zone 3.                       */
+    const drawZonesGableRidge = (ptFn, norm, doLabel) => {
+      /* Zone 1: interior field */
+      addZone(u_zone,u1, v_zone,v1, THEME.zone1,0.20,'zone-1',0.02,ptFn,norm,doLabel);
+      /* Zone 2: eave middle strip */
+      addZone(0,u_zone,  v_zone,v1, THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
+      /* Zone 2: ridge middle strip (between zone-3 ridge corners) */
+      addZone(u1,1,      v_zone,v1, THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
+      /* Zone 2: rake middle strips */
+      addZone(u_zone,u1, 0,v_zone,  THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
+      addZone(u_zone,u1, v1,1,      THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
+      /* Zone 2: eave × rake corners (NOT zone 3 for this θ range!) */
+      addZone(0,u_zone,  0,v_zone,  THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
+      addZone(0,u_zone,  v1,1,      THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
+      /* Zone 3: ONLY ridge × rake corners */
+      addZone(u1,1,      0,v_zone,  THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,doLabel);
+      addZone(u1,1,      v1,1,      THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,false);
     };
 
     if (_shape === 'monoslope') {
@@ -1829,15 +1902,18 @@ class Wind3DRenderer {
       }
 
     } else {
-      /* Gable (theta > 7°) or flat (theta ≤ 7°): two rectangular slopes.
-         Gable uses drawZonesGable: Zone 3 only at eave×rake corners per
-         ASCE 7-22 Fig. 30.3-2B/2C.  Flat uses generic drawZones (Zone 3
-         at all 4 corners per Fig. 30.3-2A).                              */
+      /* Gable or flat — zone layout depends on roof pitch (ASCE 7-22 Ch. 30):
+         θ > 27°          → Fig. 30.3-2D: Zone 3 at eave × rake corners
+         7° < θ ≤ 27°     → Fig. 30.3-2B/C: Zone 3 at RIDGE × rake corners
+         θ ≤ 7° (flat)    → Fig. 30.3-2A: Zone 3 at all 4 corners          */
       const _leftNorm  = this._leftNormal(hB, hEave, hRidge, hL);
       const _rightNorm = new THREE.Vector3(-_leftNorm.x, _leftNorm.y, _leftNorm.z);
-      if (theta > 7) {
+      if (theta > 27) {
         drawZonesGable(this._ptL.bind(this), _leftNorm,  true);
         drawZonesGable(this._ptR.bind(this), _rightNorm, false);
+      } else if (theta > 7) {
+        drawZonesGableRidge(this._ptL.bind(this), _leftNorm,  true);
+        drawZonesGableRidge(this._ptR.bind(this), _rightNorm, false);
       } else {
         drawZones(this._ptL.bind(this), _leftNorm,  true);
         drawZones(this._ptR.bind(this), _rightNorm, false);
@@ -1848,7 +1924,7 @@ class Wind3DRenderer {
        Zone 5: vertical end strip width 'a' at each corner of every facade
        Zone 4: rest of wall field
        Drawn as flat quads offset 0.05 ft from each wall face.              */
-    this._drawWallZones(B, L, hEave, zone_a, matZ);
+    this._drawWallZones(B, L, hEave, hRidge, zone_a, matZ);
 
     // Collect opaque building meshes for per-frame label occlusion raycasting
     this._buildingMeshes = [];
