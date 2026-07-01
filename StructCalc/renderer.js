@@ -1684,12 +1684,17 @@ class Wind3DRenderer {
 
         /* Zone 2 left strip inner boundary on base AB:
            Perp distance a from hip ridge AC in plan →
-           P_L_base_x = -_hipHB + zone_a * L_hip / _triH = -_hipHB + zone_a*sqrt(2)  */
-        const dOff     = zone_a * L_hip / _triH;           // = zone_a * sqrt(2) for equal pitch
-        const P_L_x    = Math.min(-_hipHB + dOff, 0);      // clamp at x=0
-        const P_R_x    = Math.max( _hipHB - dOff, 0);
-        const P_L_base = new THREE.Vector3(P_L_x, hEave, zA);
-        const P_R_base = new THREE.Vector3(P_R_x, hEave, zA);
+           B<=L: base spans X → boundary offset along X
+           B>L (xzSwap): base spans Z → boundary offset along Z             */
+        const dOff   = zone_a * L_hip / _triH;            // = zone_a*sqrt(2) for equal pitch
+        const _bndN  = Math.min(-_hipHB + dOff, 0);       // inner boundary, negative-side
+        const _bndP  = Math.max( _hipHB - dOff, 0);       // inner boundary, positive-side
+        const P_L_base = xzSwap
+          ? new THREE.Vector3(zA, hEave, _bndN)
+          : new THREE.Vector3(_bndN, hEave, zA);
+        const P_R_base = xzSwap
+          ? new THREE.Vector3(zA, hEave, _bndP)
+          : new THREE.Vector3(_bndP, hEave, zA);
 
         /* Zone 2 inner boundary endpoints — parallelogram approach:
            P_L_top: where Zone 2-left inner boundary exits the triangle (on BC)
@@ -1730,15 +1735,17 @@ class Wind3DRenderer {
         const M_L   = lerp3(P_L_base, P_L_top, t_inn);
         const M_R   = lerp3(P_R_base, P_R_top, t_inn);
 
-        /* Mx: where Zone 2-left inner boundary crosses the apex axis x=0.
-           Splitting both Zone 2 strips at this axis (left half → Zone 2 left,
-           right half → Zone 2 right) eliminates the apex triangle and all
-           interior overlaps. The two strips share only the edge Mx→C.              */
-        const t_x0 = Math.min(Math.max((-P_L_x) / (P_L_top.x - P_L_x + 1e-6), 0), 1);
-        const Mx   = lerp3(P_L_base, P_L_top, t_x0);   // Mx.x ≈ 0
+        /* Mx: where Zone 2-left inner boundary crosses the apex symmetry axis.
+           For B<=L that axis is x=0; for B>L (xzSwap) it is z=0.
+           Splitting here eliminates the apex triangle and all interior overlaps.
+           The two Zone 2 strips share only the edge Mx→C.                          */
+        const _plBC = xzSwap ? P_L_base.z : P_L_base.x;   // base coord on negative side
+        const _plTC = xzSwap ? P_L_top.z  : P_L_top.x;    // top  coord (positive side for B<=L)
+        const t_x0 = Math.min(Math.max((-_plBC) / (_plTC - _plBC + 1e-6), 0), 1);
+        const Mx   = lerp3(P_L_base, P_L_top, t_x0);   // Mx.x≈0 (B<=L) or Mx.z≈0 (B>L)
 
         /* Zone 1: triangle (M_L, M_R, Mx) — interior, above Zone 3 */
-        if (M_L.x < M_R.x - 0.1) {
+        if (xzSwap ? M_L.z < M_R.z - 0.1 : M_L.x < M_R.x - 0.1) {
           addTriPart([M_L, M_R, Mx], 'zone-1', 0.20, 0.02);
         }
 
@@ -1764,17 +1771,16 @@ class Wind3DRenderer {
           (M_L.y + M_R.y + Mx.y) / 3,
           (M_L.z + M_R.z + Mx.z) / 3
         );
-        if (M_L.x < M_R.x - 0.1) {
+        if (xzSwap ? M_L.z < M_R.z - 0.1 : M_L.x < M_R.x - 0.1) {
           this._makeZoneLabelFlat('zone-1', _ctr1, tN, _triTD);
         }
 
         // Zone 2 centroid: halfway between Mx (inner-boundary axis crossing) and C
         //   (apex), placing the label in the upper Zone 2 band between Zone 1 and ridge.
-        const _ctr2 = new THREE.Vector3(
-          0,
-          Mx.y + 0.4 * (C.y - Mx.y),   // 0.5→0.4: lower by 20% toward Zone 1
-          Mx.z + 0.4 * (C.z - Mx.z)
-        );
+        //   B<=L: symmetry axis is x=0 → x=0, vary z.  B>L: z=0 → z=0, vary x.
+        const _ctr2 = xzSwap
+          ? new THREE.Vector3(Mx.x + 0.4*(C.x - Mx.x), Mx.y + 0.4*(C.y - Mx.y), 0)
+          : new THREE.Vector3(0, Mx.y + 0.4*(C.y - Mx.y), Mx.z + 0.4*(C.z - Mx.z));
         this._makeZoneLabelFlat('zone-2', _ctr2, tN, _triTD);
 
         // Zone 3 centroid: average of trapezoid (A, Bv, E, D)
