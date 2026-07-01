@@ -258,7 +258,6 @@ class Wind3DRenderer {
     const MHALF = MS / 2;
     const MCBG   = 'rgb(140,185,220)';  // steel-blue void cube
     const MCBGHV = 'rgb(60,140,210)';   // deeper blue on hover
-    const MCBORD = 'rgb(80,120,170)';   // border
 
     // [css_cx, css_cy, css_cz, tjs_dx, tjs_dy, tjs_dz]
     // CSS +Y is down; Three.js +Y is up → tjs_dy = -(css_cy sign)
@@ -281,7 +280,7 @@ class Wind3DRenderer {
         'position:absolute', 'left:50%', 'top:50%',
         `width:${MS}px`, `height:${MS}px`,
         'transform-style:preserve-3d',
-        `transform:translate(-50%,-50%) translateX(${cx}px) translateY(${cy}px) translateZ(${cz}px)`,
+        `transform:translate(-50%,-50%) translateX(${cx}px) translateY(${cy}px) translateZ(${cz}px) scale(1.1)`,
         'cursor:pointer',
       ].join(';');
 
@@ -304,8 +303,6 @@ class Wind3DRenderer {
           'position:absolute',
           `width:${MS}px`, `height:${MS}px`,
           `background:${MCBG}`,
-          `border:1px solid ${MCBORD}`,
-          'box-sizing:border-box',
           `transform:${tfm}translateZ(${MHALF}px)`,
           'transition:background 0.12s',
         ].join(';');
