@@ -383,13 +383,20 @@ class Wind3DRenderer {
     // ── Occlusion / back-face culling — must run BEFORE labelRenderer.render()
     // so the CSS2DRenderer sees the correct display state on each element.
 
-    // 1) Dim labels: hide if a building surface is between camera and label
+    // 1) Dim labels: back-face cull by stored viewNormal, then raycast occlusion
     if (this._buildingMeshes && this._buildingMeshes.length && this._dimGroup) {
       const camPos = this._camera.position;
       const _tmp   = new THREE.Vector3();
       this._dimGroup.traverse(obj => {
         if (!obj.isCSS2DObject) return;
         obj.getWorldPosition(_tmp);
+        // a) face-normal culling — hide if the dim face points away from camera
+        const fn = obj.userData.faceNormal;
+        if (fn) {
+          const facingCam = fn.dot(new THREE.Vector3().subVectors(camPos, _tmp)) > 0;
+          if (!facingCam) { obj.element.style.display = 'none'; return; }
+        }
+        // b) raycast occlusion — hide if building mesh is between camera and label
         const distToLabel = camPos.distanceTo(_tmp);
         const dir = _tmp.clone().sub(camPos).normalize();
         this._raycaster.set(camPos, dir);
@@ -399,7 +406,7 @@ class Wind3DRenderer {
       });
     }
 
-    // 2) Zone labels: hide if their surface normal points away from camera
+    // 2) Zone labels: back-face cull, then raycast occlusion
     if (this._labelGroup) {
       const camPos2 = this._camera.position;
       const _tmpL   = new THREE.Vector3();
@@ -408,8 +415,20 @@ class Wind3DRenderer {
         const fn = obj.userData.faceNormal;
         if (!fn) return;                  // no normal stored — always show
         obj.getWorldPosition(_tmpL);
+        // a) back-face culling
         const facingCamera = fn.dot(new THREE.Vector3().subVectors(camPos2, _tmpL)) > 0;
-        obj.element.style.display = facingCamera ? '' : 'none';
+        if (!facingCamera) { obj.element.style.display = 'none'; return; }
+        // b) raycast occlusion (for floating labels pushed away from surface)
+        if (this._buildingMeshes && this._buildingMeshes.length) {
+          const distL = camPos2.distanceTo(_tmpL);
+          const dirL  = _tmpL.clone().sub(camPos2).normalize();
+          this._raycaster.set(camPos2, dirL);
+          const hitsL = this._raycaster.intersectObjects(this._buildingMeshes, false);
+          if (hitsL.some(h => h.distance < distL - 1.0)) {
+            obj.element.style.display = 'none'; return;
+          }
+        }
+        obj.element.style.display = '';
       });
     }
 
@@ -931,7 +950,7 @@ class Wind3DRenderer {
    *   - extension lines (dashed) from building face to dim line
    *   - CSS2DObject label at midpoint (click to focus input)
    */
-  _buildDim(p1, p2, tickDir, extLines, text, dimId, inputId) {
+  _buildDim(p1, p2, tickDir, extLines, text, dimId, inputId, viewNormal = null) {
     const grp = new THREE.Group();
     grp.userData = { dimId, defaultColor: THEME.dimLine };
 
@@ -978,7 +997,7 @@ class Wind3DRenderer {
     // ── CSS2D billboard label — always faces the camera ──────────────────
     if (THREE.CSS2DObject) {
       const div = document.createElement('div');
-      div.textContent = text;
+      div.innerHTML = text;  // allows <sub>/<sup> for engineering notation
       div.style.cssText = [
         'background:' + THEME.dimBg,
         'color:' + THEME.dimText,
@@ -1011,6 +1030,7 @@ class Wind3DRenderer {
       if (side.dot(midPt) > 0) side.negate();
       const obj = new THREE.CSS2DObject(div);
       obj.position.copy(midPt).addScaledVector(side, 0.6);
+      if (viewNormal) obj.userData.faceNormal = viewNormal.clone().normalize();
       grp.add(obj);
 
       // setLabelActive: toggle highlight style for the HTML element
@@ -1046,7 +1066,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(-hB, EPS_Y,  hL), new THREE.Vector3(-hB, EPS_Y, bZ)],
         [new THREE.Vector3( hB, EPS_Y,  hL), new THREE.Vector3( hB, EPS_Y, bZ)],
       ],
-      `B=${fmt(B)}ft`, 'dim-B', 'wind-B'
+      `B=${fmt(B)}ft`, 'dim-B', 'wind-B', new THREE.Vector3(0,0,1)
     ));
     this._dimHighlight['dim-B'] = grp.children[grp.children.length - 1];
 
@@ -1060,7 +1080,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(hB, EPS_Y, -hL), new THREE.Vector3(lX, EPS_Y, -hL)],
         [new THREE.Vector3(hB, EPS_Y,  hL), new THREE.Vector3(lX, EPS_Y,  hL)],
       ],
-      `L=${fmt(L)}ft`, 'dim-L', 'wind-L'
+      `L=${fmt(L)}ft`, 'dim-L', 'wind-L', new THREE.Vector3(1,0,0)
     ));
     this._dimHighlight['dim-L'] = grp.children[grp.children.length - 1];
 
@@ -1075,7 +1095,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(-hB, EPS_Y,  hZhe), new THREE.Vector3(hXhe, EPS_Y,  hZhe)],
         [new THREE.Vector3(-hB, hEave,  hZhe), new THREE.Vector3(hXhe, hEave,  hZhe)],
       ],
-      `heave=${fmt(hEaveLabel ?? hEave)}ft`, 'dim-h-eave', 'wind-h'
+      `h<sub>e</sub>=${fmt(hEaveLabel ?? hEave)}ft`, 'dim-h-eave', 'wind-h', new THREE.Vector3(-1,0,0)
     ));
     this._dimHighlight['dim-h-eave'] = grp.children[grp.children.length - 1];
 
@@ -1093,7 +1113,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(hXhe, EPS_Y,  hZh), new THREE.Vector3(hXh, EPS_Y,  hZh)],
         [new THREE.Vector3(-hB/2, hMean,  hZh), new THREE.Vector3(hXh, hMean,  hZh)],
       ],
-      `h=${fmt(hMeanFt ?? hMean)}ft`, 'dim-h', 'wind-h'
+      `h=${fmt(hMeanFt ?? hMean)}ft`, 'dim-h', 'wind-h', new THREE.Vector3(-1,0,0)
     ));
     this._dimHighlight['dim-h'] = grp.children[grp.children.length - 1];
 
@@ -1110,7 +1130,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(hB - zone_a, aEY, hL), new THREE.Vector3(hB - zone_a, aEY, aFZ)],
         [new THREE.Vector3(hB,          aEY, hL), new THREE.Vector3(hB,          aEY, aFZ)],
       ],
-      `a=${fmt(zone_a)}ft`, 'dim-a2', null
+      `a=${fmt(zone_a)}ft`, 'dim-a2', null, new THREE.Vector3(0,0,1)
     ));
     this._dimHighlight['dim-a2'] = grp.children[grp.children.length - 1];
 
@@ -1124,7 +1144,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(hB, aEY, hL - zone_a), new THREE.Vector3(aRX, aEY, hL - zone_a)],
         [new THREE.Vector3(hB, aEY, hL),          new THREE.Vector3(aRX, aEY, hL)],
       ],
-      `a=${fmt(zone_a)}ft`, 'dim-a', null
+      `a=${fmt(zone_a)}ft`, 'dim-a', null, new THREE.Vector3(1,0,0)
     ));
     this._dimHighlight['dim-a'] = grp.children[grp.children.length - 1];
 
@@ -1139,7 +1159,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(hB - zone_a, EPS_Y, hL), new THREE.Vector3(hB - zone_a, EPS_Y, az5FZ)],
         [new THREE.Vector3(hB,          EPS_Y, hL), new THREE.Vector3(hB,          EPS_Y, az5FZ)],
       ],
-      `a=${fmt(zone_a)}ft`, 'dim-a3', null
+      `a=${fmt(zone_a)}ft`, 'dim-a3', null, new THREE.Vector3(0,0,1)
     ));
     this._dimHighlight['dim-a3'] = grp.children[grp.children.length - 1];
 
@@ -1153,7 +1173,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(hB, EPS_Y, hL - zone_a), new THREE.Vector3(az5RX, EPS_Y, hL - zone_a)],
         [new THREE.Vector3(hB, EPS_Y, hL),          new THREE.Vector3(az5RX, EPS_Y, hL)],
       ],
-      `a=${fmt(zone_a)}ft`, 'dim-a4', null
+      `a=${fmt(zone_a)}ft`, 'dim-a4', null, new THREE.Vector3(1,0,0)
     ));
     this._dimHighlight['dim-a4'] = grp.children[grp.children.length - 1];
 
@@ -1254,7 +1274,7 @@ class Wind3DRenderer {
             [qa1.clone().sub(stub), qa1.clone()],
             [qa2.clone().sub(stub), qa2.clone()],
           ],
-          `a=${fmt(zone_a)}ft`, 'dim-aZ2T', null
+          `a=${fmt(zone_a)}ft`, 'dim-aZ2T', null, sN
         ));
         this._dimHighlight['dim-aZ2T'] = grp.children[grp.children.length - 1];
       }
@@ -1288,7 +1308,7 @@ class Wind3DRenderer {
             [qa1.clone().sub(stub), qa1.clone()],
             [qa2.clone().sub(stub), qa2.clone()],
           ],
-          `a=${fmt(zone_a)}ft`, 'dim-aZ2R', null
+          `a=${fmt(zone_a)}ft`, 'dim-aZ2R', null, sN
         ));
         this._dimHighlight['dim-aZ2R'] = grp.children[grp.children.length - 1];
       }
