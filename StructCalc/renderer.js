@@ -233,6 +233,7 @@ class Wind3DRenderer {
         'font-size:16px', 'font-weight:700', 'letter-spacing:0.02em',
         'cursor:pointer', 'user-select:none', 'box-sizing:border-box',
         `transform:${ry}${rx}translateZ(${HALF}px)`,
+        'clip-path:polygon(13px 0,59px 0,59px 13px,72px 13px,72px 59px,59px 59px,59px 72px,13px 72px,13px 59px,0 59px,0 13px,13px 13px)',
         'backface-visibility:hidden', 'transition:background 0.12s',
       ].join(';');
       el.textContent = f.label;
@@ -255,14 +256,14 @@ class Wind3DRenderer {
     // Hovering highlights the mini-cube; clicking navigates to the axonometric view.
     const MS    = 13;     // mini-cube side, px
     const MHALF = MS / 2;
-    const MCBG   = 'rgb(210,210,210)';
-    const MCBGHV = 'rgb(120,180,230)';
-    const MCBORD = 'rgb(155,155,155)';
+    const MCBG   = 'rgb(140,185,220)';  // steel-blue void cube
+    const MCBGHV = 'rgb(60,140,210)';   // deeper blue on hover
+    const MCBORD = 'rgb(80,120,170)';   // border
 
     // [css_cx, css_cy, css_cz, tjs_dx, tjs_dy, tjs_dz]
     // CSS +Y is down; Three.js +Y is up → tjs_dy = -(css_cy sign)
     // Offset by (HALF - MHALF) so each mini-cube is flush with (not protruding from) the main face.
-    const CI = HALF - MHALF + 2;  // +2 px protrusion outward from each face
+    const CI = HALF - MHALF;  // flush: outer mini-face aligns with main cube surface
     const corners = [
       [ CI, -CI,  CI,  1,  1,  1],
       [-CI, -CI,  CI, -1,  1,  1],
@@ -305,7 +306,7 @@ class Wind3DRenderer {
           `background:${MCBG}`,
           `border:1px solid ${MCBORD}`,
           'box-sizing:border-box',
-          `transform:${tfm}translateZ(${MHALF + 2}px)`,
+          `transform:${tfm}translateZ(${MHALF}px)`,
           'transition:background 0.12s',
         ].join(';');
         wrapper.appendChild(face);
