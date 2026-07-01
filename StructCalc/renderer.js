@@ -554,15 +554,23 @@ class Wind3DRenderer {
       segs([[p[0],p[1]],[p[1],p[2]],[p[2],p[3]],[p[3],p[0]]], THEME.wallEdge);
     }
 
-    /* ── BACK wall (z = -hL) — rectangle, NO gable ──────────────────────
-       The leeward end has no gable triangle in this model.               */
+    /* ── BACK end wall + gable (z = -hL) — PENTAGON, same as front ─────
+       Outward normal is -Z so vertex winding is mirrored vs. front.     */
     {
-      const p = [
-        new THREE.Vector3( hB, 0,    -hL), new THREE.Vector3(-hB, 0,     -hL),
-        new THREE.Vector3(-hB, hEave,-hL), new THREE.Vector3( hB, hEave, -hL),
-      ];
-      grp.add(new THREE.Mesh(this._quad(p[0],p[1],p[2],p[3]), solidMat(THEME.wallFill)));
-      segs([[p[0],p[1]],[p[1],p[2]],[p[2],p[3]],[p[3],p[0]]], THEME.wallEdge);
+      const BL = new THREE.Vector3( hB, 0,     -hL);   // bottom-left  (viewed from outside)
+      const BR = new THREE.Vector3(-hB, 0,     -hL);   // bottom-right
+      const RE = new THREE.Vector3(-hB, hEave, -hL);   // right eave
+      const RG = new THREE.Vector3(  0, hRidge,-hL);   // ridge peak
+      const LE = new THREE.Vector3( hB, hEave, -hL);   // left eave
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+        BL.x,BL.y,BL.z, BR.x,BR.y,BR.z, RE.x,RE.y,RE.z,
+        BL.x,BL.y,BL.z, RE.x,RE.y,RE.z, RG.x,RG.y,RG.z,
+        BL.x,BL.y,BL.z, RG.x,RG.y,RG.z, LE.x,LE.y,LE.z,
+      ]), 3));
+      geo.computeVertexNormals();
+      grp.add(new THREE.Mesh(geo, solidMat(THEME.wallFill)));
+      segs([[BL,BR],[BR,RE],[RE,RG],[RG,LE],[LE,BL]], THEME.wallEdge);
     }
 
     /* ── FRONT end wall + gable (z = +hL) — PENTAGON, seamless ─────────
@@ -892,7 +900,7 @@ class Wind3DRenderer {
       }
     }
 
-    /* ── BACK wall  (z = -hL, outward normal -Z) ──────────────────────────── */
+    /* ── BACK end wall + gable (z = -hL): same zone layout as front ──────── */
     {
       const nB = new THREE.Vector3(0, 0, -1);
       const e  = EPS;
@@ -900,27 +908,37 @@ class Wind3DRenderer {
       const a  = Math.min(zone_a, hB);
       const tD = new THREE.Vector3(-1, 0, 0);
 
+      const slopeY = d => hEave + (d / hB) * (hRidge - hEave);
+      const ya = slopeY(a);
+
+      // Zone 5 left (viewed from outside back = +X side)
       const bz5L = [
-        new THREE.Vector3(hB-a, 0, z),  new THREE.Vector3(hB, 0, z),
-        new THREE.Vector3(hB, hEave, z), new THREE.Vector3(hB-a, hEave, z),
+        new THREE.Vector3(hB-a, 0,    z), new THREE.Vector3(hB,   0,    z),
+        new THREE.Vector3(hB,   hEave, z), new THREE.Vector3(hB-a, ya,  z),
       ];
       addWallQ(bz5L, 'zone-5', Z5_OP);
       wallLabel('zone-5', bz5L[0], bz5L[1], bz5L[2], bz5L[3], nB, tD);
 
+      // Zone 5 right
       const bz5R = [
-        new THREE.Vector3(-hB, 0, z),  new THREE.Vector3(-hB+a, 0, z),
-        new THREE.Vector3(-hB+a, hEave, z), new THREE.Vector3(-hB, hEave, z),
+        new THREE.Vector3(-hB,   0,    z), new THREE.Vector3(-hB+a, 0,  z),
+        new THREE.Vector3(-hB+a, ya,   z), new THREE.Vector3(-hB,   hEave, z),
       ];
       addWallQ(bz5R, 'zone-5', Z5_OP);
       wallLabel('zone-5', bz5R[0], bz5R[1], bz5R[2], bz5R[3], nB, tD);
 
       if (2 * a < B - 0.1) {
-        const bz4 = [
-          new THREE.Vector3(-hB+a, 0, z),  new THREE.Vector3(hB-a, 0, z),
-          new THREE.Vector3(hB-a, hEave, z), new THREE.Vector3(-hB+a, hEave, z),
+        const bz4Lo = [
+          new THREE.Vector3(-hB+a, 0,  z), new THREE.Vector3(hB-a, 0,  z),
+          new THREE.Vector3(hB-a,  ya, z), new THREE.Vector3(-hB+a, ya, z),
         ];
-        addWallQ(bz4, 'zone-4', Z4_OP);
-        wallLabel('zone-4', bz4[0], bz4[1], bz4[2], bz4[3], nB, tD);
+        addWallQ(bz4Lo, 'zone-4', Z4_OP);
+        wallLabel('zone-4', bz4Lo[0], bz4Lo[1], bz4Lo[2], bz4Lo[3], nB, tD);
+        const bz4Hi = [
+          new THREE.Vector3(-hB+a, ya,     z), new THREE.Vector3(hB-a,  ya,     z),
+          new THREE.Vector3(0,     hRidge, z), new THREE.Vector3(0,     hRidge, z),
+        ];
+        addWallQ(bz4Hi, 'zone-4', Z4_OP);
       }
     }
 
@@ -2013,24 +2031,4 @@ class Wind3DRenderer {
     this._hoverZone = zone;
     if (zone) {
       this._zoneMeshes.filter(m => m.userData.zoneType === zone)
-        .forEach(m => { m.material.opacity = Math.min(0.9, m.material.opacity / 0.65); });
-      this._renderer.domElement.style.cursor = 'pointer';
-    } else {
-      this._renderer.domElement.style.cursor = '';
-    }
-  }
-
-  /* ── cleanup ─────────────────────────────────── */
-
-  dispose() {
-    cancelAnimationFrame(this._animId);
-    window.removeEventListener('resize', this._onResize);
-    if (this._ro) { this._ro.disconnect(); this._ro = null; }
-    this._renderer.dispose();
-    [this._renderer.domElement, this._labelRenderer?.domElement]
-      .filter(Boolean).forEach(el => el.parentNode?.removeChild(el));
-    [this._building, this._zones, this._dimGroup, this._labelGroup]
-      .filter(Boolean).forEach(g => { this._scene.remove(g); disposeGroup(g); });
-    this._container.innerHTML = '';
-  }
-}
+        .forEach(m => { m.materi
