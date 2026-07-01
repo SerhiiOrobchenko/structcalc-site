@@ -1454,6 +1454,21 @@ function buildWindStepReport(r, s) {
 
 
 /* ── Results render ────────────────────────────────────────────────────── */
+var ZONE_COLORS = {
+  'zone-1': '#4ade80',
+  'zone-2': '#fbbf24',
+  'zone-3': '#f87171',
+  'zone-4': '#7dd3fc',
+  'zone-5': '#a78bfa',
+};
+var ZONE_BG_COLORS = {
+  'zone-1': 'rgba(74,222,128,0.18)',
+  'zone-2': 'rgba(251,191,36,0.18)',
+  'zone-3': 'rgba(248,113,113,0.18)',
+  'zone-4': 'rgba(125,211,252,0.18)',
+  'zone-5': 'rgba(167,139,250,0.18)',
+};
+
 function renderWindResults(r, s) {
   var host = document.getElementById('windResultsContent');
   if (!host) return;
@@ -1541,12 +1556,17 @@ function renderWindResults(r, s) {
     var all2 = (r.mwfrsLC1 || []).concat(r.mwfrsLC2 || []);
     var seen = new Set();
     var uniq = all2.filter(function(z){ return !seen.has(z.zone) && seen.add(z.zone); });
+    var mwZoneMap = {'1':'zone-1','1E':'zone-1','2':'zone-2','2E':'zone-2',
+                     '3':'zone-2','3E':'zone-3','4':'zone-4','4E':'zone-4',
+                     '5':'zone-5','5E':'zone-5','6':'zone-5','6E':'zone-5'};
     html += '<div class="result-card"><div class="result-card-head">MWFRS — Envelope (Ch. 28)</div>';
     uniq.forEach(function(z) {
-      var ma  = Math.max(Math.abs(z.pos||0), Math.abs(z.neg||0));
-      var cl  = ma>30?'zone-crit':ma>20?'zone-high':ma>12?'zone-mid':'zone-low';
-      var vstr= (z.pos!=null?'+'+fmt(z.pos):'') + (z.neg!=null?' / '+fmt(z.neg):'') + ' psf';
-      html += '<div class="result-row ' + cl + '"><span class="k">' + escHtml(z.zone) + '</span><span class="v">' + vstr + '</span></div>';
+      var ma   = Math.max(Math.abs(z.pos||0), Math.abs(z.neg||0));
+      var cl   = ma>30?'zone-crit':ma>20?'zone-high':ma>12?'zone-mid':'zone-low';
+      var vstr = (z.pos!=null?'+'+fmt(z.pos):'') + (z.neg!=null?' / '+fmt(z.neg):'') + ' psf';
+      var zt   = mwZoneMap[z.zone] || '';
+      var bar  = zt ? '<span class="zone-color-bar" style="background:' + ZONE_COLORS[zt] + '"></span>' : '';
+      html += '<div class="result-row ' + cl + (zt?' zone-row-clickable':'') + '" ' + (zt?'data-zone="'+zt+'"':'') + '>' + bar + '<span class="k">' + escHtml(z.zone) + '</span><span class="v">' + vstr + '</span></div>';
     });
     html += '</div>';
   }
@@ -1566,18 +1586,24 @@ function renderWindResults(r, s) {
     var wallLabel = {'4':'Zone 4 — field','5':'Zone 5 — corner'};
     var wallCls   = {'4':'zone-low','5':'zone-high'};
     if (r.ccWall && r.ccWall.length) {
+      var ccWallZoneMap = {'4':'zone-4','5':'zone-5'};
       html += '<div class="result-card"><div class="result-card-head">C&amp;C — Walls (Ch. 30)</div>';
       r.ccWall.forEach(function(z) {
-        html += '<div class="result-row ' + (wallCls[z.zone]||'zone-mid') + '"><span class="k">' + (wallLabel[z.zone]||'Zone '+z.zone) + '</span><span class="v">' + fmt(z.p.min) + ' / +' + fmt(z.p.max) + ' psf</span></div>';
+        var zt  = ccWallZoneMap[z.zone] || '';
+        var bar = zt ? '<span class="zone-color-bar" style="background:' + ZONE_COLORS[zt] + '"></span>' : '';
+        html += '<div class="result-row ' + (wallCls[z.zone]||'zone-mid') + (zt?' zone-row-clickable':'') + '" ' + (zt?'data-zone="'+zt+'"':'') + '>' + bar + '<span class="k">' + (wallLabel[z.zone]||'Zone '+z.zone) + '</span><span class="v">' + fmt(z.p.min) + ' / +' + fmt(z.p.max) + ' psf</span></div>';
       });
       html += '</div>';
     }
     var roofLabel = {'1p':'Zone 1′ — field (low)','1':'Zone 1 — field','2':'Zone 2 — edge','3':'Zone 3 — corner'};
     var roofCls   = {'1p':'zone-low','1':'zone-low','2':'zone-mid','3':'zone-high'};
     if (r.ccRoof && r.ccRoof.length) {
+      var ccRoofZoneMap = {'1p':'zone-1','1':'zone-1','2':'zone-2','3':'zone-3'};
       html += '<div class="result-card"><div class="result-card-head">C&amp;C — Roof (Ch. 30)</div>';
       r.ccRoof.forEach(function(z) {
-        html += '<div class="result-row ' + (roofCls[z.zone]||'zone-mid') + '"><span class="k">' + (roofLabel[z.zone]||'Zone '+z.zone) + '</span><span class="v">' + fmt(z.p.min) + ' / +' + fmt(z.p.max) + ' psf</span></div>';
+        var zt  = ccRoofZoneMap[z.zone] || '';
+        var bar = zt ? '<span class="zone-color-bar" style="background:' + ZONE_COLORS[zt] + '"></span>' : '';
+        html += '<div class="result-row ' + (roofCls[z.zone]||'zone-mid') + (zt?' zone-row-clickable':'') + '" ' + (zt?'data-zone="'+zt+'"':'') + '>' + bar + '<span class="k">' + (roofLabel[z.zone]||'Zone '+z.zone) + '</span><span class="v">' + fmt(z.p.min) + ' / +' + fmt(z.p.max) + ' psf</span></div>';
       });
       html += '</div>';
     }
@@ -1637,6 +1663,24 @@ function renderWindResults(r, s) {
   }
 
   host.innerHTML = html;
+  // Wire zone row → 3D highlight + active state
+  host.querySelectorAll('[data-zone]').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var zt = el.getAttribute('data-zone');
+      var isActive = el.classList.contains('zone-row-active');
+      host.querySelectorAll('[data-zone]').forEach(function(r) {
+        r.classList.remove('zone-row-active');
+        r.style.backgroundColor = '';
+      });
+      if (!isActive) {
+        host.querySelectorAll('[data-zone="' + zt + '"]').forEach(function(r) {
+          r.classList.add('zone-row-active');
+          r.style.backgroundColor = ZONE_BG_COLORS[zt] || '';
+        });
+      }
+      if (windRenderer && windRenderer.highlightZone) windRenderer.highlightZone(isActive ? null : zt);
+    });
+  });
 }
 
 /* ── Input tab switching ───────────────────────────────────────────────── */
@@ -2135,6 +2179,22 @@ async function openWindWorkspace(proj, calc) {
   if (windRenderer) {
     windRenderer.onZoneClick(function(zoneType) {
       activateInputTab('geometry');
+      // Highlight matching rows in Results summary
+      var host = document.getElementById('windResultsContent');
+      if (host) {
+        var prevActive = host.querySelector('[data-zone].zone-row-active');
+        var prevZt = prevActive ? prevActive.getAttribute('data-zone') : null;
+        host.querySelectorAll('[data-zone]').forEach(function(r) {
+          r.classList.remove('zone-row-active');
+          r.style.backgroundColor = '';
+        });
+        if (zoneType && zoneType !== prevZt) {
+          host.querySelectorAll('[data-zone="' + zoneType + '"]').forEach(function(r) {
+            r.classList.add('zone-row-active');
+            r.style.backgroundColor = ZONE_BG_COLORS[zoneType] || '';
+          });
+        }
+      }
     });
   }
   recalcWind();
@@ -2379,3 +2439,4 @@ function windPrintReport() {
   iframe.contentDocument.write(html);
   iframe.contentDocument.close();
 }
+

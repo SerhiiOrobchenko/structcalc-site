@@ -36,16 +36,16 @@ const THEME = {
   dimText    : '#1e3a5f',  // dark navy text — readable on light bg
   dimBg      : 'rgba(255,255,255,0.92)',
 
-  zone1      : 0x34d399,   // emerald-400 — interior field
-  zone2      : 0x10b981,   // emerald-500 — edges
-  zone3      : 0xef4444,   // red-500     — corners (always vivid red)
-  zone4      : 0x06b6d4,   // cyan-500    — wall field
-  zone5      : 0x1d4ed8,   // blue-700    — wall corner strip
-  zoneLabel1 : { bg:'rgba(52,211,153,0.92)',  fg:'#065f46' },  // emerald-400
-  zoneLabel2 : { bg:'rgba(16,185,129,0.92)',  fg:'#fff' },     // emerald-500
-  zoneLabel3 : { bg:'rgba(239,68,68,0.92)',   fg:'#fff' },     // red-500
-  zoneLabel4 : { bg:'rgba(6,182,212,0.92)',   fg:'#fff' },     // cyan-500
-  zoneLabel5 : { bg:'rgba(29,78,216,0.92)',   fg:'#fff' },     // blue-700
+  zone1      : 0x4ade80,   // green-400  — interior field
+  zone2      : 0xfbbf24,   // amber-400  — edges
+  zone3      : 0xf87171,   // red-400    — corners
+  zone4      : 0x7dd3fc,   // sky-300    — wall field
+  zone5      : 0xa78bfa,   // violet-400 — wall corner strip
+  zoneLabel1 : { bg:'rgba(74,222,128,0.92)',  fg:'#14532d' },  // green-400
+  zoneLabel2 : { bg:'rgba(251,191,36,0.92)',  fg:'#78350f' },  // amber-400
+  zoneLabel3 : { bg:'rgba(248,113,113,0.92)', fg:'#7f1d1d' },  // red-400
+  zoneLabel4 : { bg:'rgba(125,211,252,0.92)', fg:'#0c4a6e' },  // sky-300
+  zoneLabel5 : { bg:'rgba(167,139,250,0.92)', fg:'#2e1065' },  // violet-400
 };
 
 /* =========================================================================
@@ -1414,11 +1414,11 @@ class Wind3DRenderer {
   _makeZoneLabelFlat(zoneType, centroid, faceNormal, textDir) {
     if (!THREE.CSS2DObject) return;
     const cfgMap = {
-      'zone-1': { bg:'rgba(52,211,153,0.92)',  fg:'#065f46', text:'Zone 1' },
-      'zone-2': { bg:'rgba(16,185,129,0.92)',  fg:'#fff',    text:'Zone 2' },
-      'zone-3': { bg:'rgba(239,68,68,0.92)',   fg:'#fff',    text:'Zone 3' },
-      'zone-4': { bg:'rgba(6,182,212,0.92)',   fg:'#fff',    text:'Zone 4' },
-      'zone-5': { bg:'rgba(29,78,216,0.92)',   fg:'#fff',    text:'Zone 5' },
+      'zone-1': { bg:'rgba(74,222,128,0.92)',  fg:'#14532d', text:'Zone 1' },
+      'zone-2': { bg:'rgba(251,191,36,0.92)',  fg:'#78350f', text:'Zone 2' },
+      'zone-3': { bg:'rgba(248,113,113,0.92)', fg:'#7f1d1d', text:'Zone 3' },
+      'zone-4': { bg:'rgba(125,211,252,0.92)', fg:'#0c4a6e', text:'Zone 4' },
+      'zone-5': { bg:'rgba(167,139,250,0.92)', fg:'#2e1065', text:'Zone 5' },
     };
     const cfg = cfgMap[zoneType];
     if (!cfg) return;
@@ -1858,6 +1858,23 @@ class Wind3DRenderer {
   }
 
   onZoneClick(cb) { this._clickCB = cb; }
+
+  /* Highlight a zone from an external trigger (e.g. Summary row click).
+     Toggle: clicking the same zone again clears the highlight.            */
+  highlightZone(zoneType) {
+    if (this._activeZone) {
+      this._zoneMeshes.filter(m => m.userData.zoneType === this._activeZone)
+        .forEach(m => { if (m.material._baseOp != null) m.material.opacity = m.material._baseOp; });
+    }
+    this._activeZone = (zoneType === this._activeZone) ? null : (zoneType || null);
+    if (this._activeZone) {
+      this._zoneMeshes.filter(m => m.userData.zoneType === this._activeZone)
+        .forEach(m => {
+          if (m.material._baseOp == null) m.material._baseOp = m.material.opacity;
+          m.material.opacity = Math.min(0.95, m.material._baseOp * 2.2);
+        });
+    }
+  }
 
   /* ── interaction ────────────────────────────────────────────────────────── */
 

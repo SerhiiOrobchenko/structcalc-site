@@ -1372,3 +1372,22 @@
   body > *:not(iframe) { display: none !important; }
 }
 
+
+/* ── Zone color bar + interactive highlight ──────────────────────────────── */
+.zone-color-bar {
+  display: inline-block;
+  width: 10px;
+  min-width: 10px;
+  height: 1.3em;
+  border-radius: 3px;
+  margin-right: 8px;
+  flex-shrink: 0;
+  align-self: center;
+  vertical-align: middle;
+}
+.result-row.zone-row-clickable { cursor: pointer; }
+.result-row.zone-row-clickable:hover { filter: brightness(0.96); }
+.result-row.zone-row-active {
+  box-shadow: inset 0 0 0 1.5px rgba(0,0,0,0.15);
+  border-radius: 4px;
+}
