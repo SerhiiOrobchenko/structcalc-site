@@ -394,7 +394,7 @@ class Wind3DRenderer {
         const fn = obj.userData.faceNormal;
         if (fn) {
           const facingCam = fn.dot(new THREE.Vector3().subVectors(camPos, _tmp)) > 0;
-          if (!facingCam) { obj.element.style.display = 'none'; return; }
+          if (!facingCam) { obj.visible = false; return; }
         }
         // b) raycast occlusion — hide if building mesh is between camera and label
         const distToLabel = camPos.distanceTo(_tmp);
@@ -402,7 +402,7 @@ class Wind3DRenderer {
         this._raycaster.set(camPos, dir);
         const hits = this._raycaster.intersectObjects(this._buildingMeshes, false);
         const occluded = hits.some(h => h.distance < distToLabel - 1.0);
-        obj.element.style.display = occluded ? 'none' : '';
+        obj.visible = !occluded;
       });
     }
 
@@ -417,7 +417,7 @@ class Wind3DRenderer {
         obj.getWorldPosition(_tmpL);
         // a) back-face culling
         const facingCamera = fn.dot(new THREE.Vector3().subVectors(camPos2, _tmpL)) > 0;
-        if (!facingCamera) { obj.element.style.display = 'none'; return; }
+        if (!facingCamera) { obj.visible = false; return; }
         // b) raycast occlusion (for floating labels pushed away from surface)
         if (this._buildingMeshes && this._buildingMeshes.length) {
           const distL = camPos2.distanceTo(_tmpL);
@@ -425,10 +425,10 @@ class Wind3DRenderer {
           this._raycaster.set(camPos2, dirL);
           const hitsL = this._raycaster.intersectObjects(this._buildingMeshes, false);
           if (hitsL.some(h => h.distance < distL - 1.0)) {
-            obj.element.style.display = 'none'; return;
+            obj.visible = false; return;
           }
         }
-        obj.element.style.display = '';
+        obj.visible = true;
       });
     }
 
