@@ -1529,6 +1529,24 @@ class Wind3DRenderer {
       addZone(u1,1,      v1,1,      THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,false);
     };
 
+    /* Gable-specific zone layout (ASCE 7-22 Fig. 30.3-2B/2C):
+       Zone 3 ONLY at eave × rake corners.
+       Ridge × rake corners are Zone 2, not Zone 3.           */
+    const drawZonesGable = (ptFn, norm, doLabel) => {
+      /* Zone 1: interior field (eave, rake, and ridge strips excluded) */
+      addZone(u_zone,u1, v_zone,v1, THEME.zone1,0.20,'zone-1',0.02,ptFn,norm,doLabel);
+      /* Zone 2: eave middle strip (between the two rake corner zones) */
+      addZone(0,u_zone,  v_zone,v1, THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
+      /* Zone 2: full ridge strip — no Zone 3 at ridge-rake corners */
+      addZone(u1,1,      0,1,       THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
+      /* Zone 2: rake middle strips (eave-corner to ridge) */
+      addZone(u_zone,u1, 0,v_zone,  THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
+      addZone(u_zone,u1, v1,1,      THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
+      /* Zone 3: ONLY eave × rake corners (two per slope) */
+      addZone(0,u_zone,  0,v_zone,  THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,doLabel);
+      addZone(0,u_zone,  v1,1,      THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,false);
+    };
+
     if (_shape === 'monoslope') {
       /* Single sloped surface: u=0 → windward/high (X=-hB, Y=hRidge)
                                  u=1 → leeward/low  (X=+hB, Y=hEave)  */
@@ -1811,11 +1829,19 @@ class Wind3DRenderer {
       }
 
     } else {
-      /* Gable (or flat, theta=0): two rectangular slopes */
+      /* Gable (theta > 7°) or flat (theta ≤ 7°): two rectangular slopes.
+         Gable uses drawZonesGable: Zone 3 only at eave×rake corners per
+         ASCE 7-22 Fig. 30.3-2B/2C.  Flat uses generic drawZones (Zone 3
+         at all 4 corners per Fig. 30.3-2A).                              */
       const _leftNorm  = this._leftNormal(hB, hEave, hRidge, hL);
       const _rightNorm = new THREE.Vector3(-_leftNorm.x, _leftNorm.y, _leftNorm.z);
-      drawZones(this._ptL.bind(this), _leftNorm,  true);
-      drawZones(this._ptR.bind(this), _rightNorm, false);
+      if (theta > 7) {
+        drawZonesGable(this._ptL.bind(this), _leftNorm,  true);
+        drawZonesGable(this._ptR.bind(this), _rightNorm, false);
+      } else {
+        drawZones(this._ptL.bind(this), _leftNorm,  true);
+        drawZones(this._ptR.bind(this), _rightNorm, false);
+      }
     }
 
     /* ── Wall C&C zones 4 and 5 (ASCE 7-22 §30.3-2A) ──────────────────────────

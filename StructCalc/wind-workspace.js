@@ -1469,6 +1469,156 @@ var ZONE_BG_COLORS = {
   'zone-5': 'rgba(167,139,250,0.18)',
 };
 
+/* ── C&C Gable / Flat-Roof Zone Plan (plan view, ASCE 7-22) ─────────────
+   s   : wind state object (minDim, buildingL, theta, roofType)
+   a   : zone 'a' dimension in feet
+   Returns an inline <svg> string.                                         */
+function buildCCGableZonePlanSVG(s, a) {
+  var B      = Math.max(+(s.minDim    || 40), 1);
+  var L      = Math.max(+(s.buildingL || 60), 1);
+  var theta  = +(s.theta || 0);
+  var isFlat = (s.roofType === 'flat' || theta <= 7);
+
+  /* ── SVG canvas layout ─────────────────────────────────────────────── */
+  var W = 340, H = 190;
+  var mL = 44, mR = 50, mT = 26, mB = 26;
+  var dW = W - mL - mR, dH = H - mT - mB;
+  var sc = Math.min(dW / L, dH / B) * 0.90;
+  var pL = L * sc, pB = B * sc;
+  var sx0 = mL + (dW - pL) / 2;
+  var sy0 = mT + (dH - pB) / 2;
+  var sx1 = sx0 + pL, sy1 = sy0 + pB;
+  var syR = (sy0 + sy1) / 2;   /* ridge = horizontal centre line */
+
+  /* Zone 'a' capped so strips never overlap */
+  var aB = Math.min(a * sc, (isFlat ? pB : pB / 2) * 0.42);
+  var aL = Math.min(a * sc, pL * 0.42);
+
+  /* Zone fill colours */
+  var Z1 = 'rgba(74,222,128,0.30)';
+  var Z2 = 'rgba(251,191,36,0.48)';
+  var Z3 = 'rgba(248,113,113,0.62)';
+  var cBd = '#475569', cRg = '#0891b2', cDm = '#94a3b8', cWn = '#22d3ee';
+
+  /* ── Helpers ───────────────────────────────────────────────────────── */
+  function rc(x, y, w, h, f) {
+    if (w <= 0 || h <= 0) return '';
+    return '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) +
+           '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) +
+           '" fill="' + f + '"/>';
+  }
+  function seg(ax1, ay1, ax2, ay2, c, sw, da) {
+    return '<line x1="' + ax1.toFixed(1) + '" y1="' + ay1.toFixed(1) +
+           '" x2="'  + ax2.toFixed(1) + '" y2="' + ay2.toFixed(1) +
+           '" stroke="' + (c || cBd) + '" stroke-width="' + (sw || 1) + '"' +
+           (da ? ' stroke-dasharray="' + da + '"' : '') + '/>';
+  }
+  function tx(x, y, t, an, c, fs) {
+    return '<text x="' + x.toFixed(1) + '" y="' + y.toFixed(1) +
+           '" fill="' + (c || '#334155') + '" font-size="' + (fs || 9) +
+           '" font-family="monospace,sans-serif" text-anchor="' + (an || 'middle') +
+           '">' + t + '</text>';
+  }
+
+  var d = '';
+
+  /* ── Zone fills (back to front) ────────────────────────────────────── */
+  /* Base: Zone 1 fills entire footprint */
+  d += rc(sx0, sy0, pL, pB, Z1);
+
+  /* Zone 2 strips */
+  d += rc(sx0,        sy0,        pL,  aB,  Z2);   /* windward eave  */
+  d += rc(sx0,        sy1 - aB,   pL,  aB,  Z2);   /* leeward eave   */
+  d += rc(sx0,        sy0,        aL,  pB,  Z2);   /* left rake      */
+  d += rc(sx1 - aL,   sy0,        aL,  pB,  Z2);   /* right rake     */
+  if (!isFlat) {
+    d += rc(sx0,      syR - aB,   pL,  aB,  Z2);   /* windward ridge */
+    d += rc(sx0,      syR,        pL,  aB,  Z2);   /* leeward ridge  */
+  }
+
+  /* Zone 3: eave×rake corners only.
+     NOTE: ridge×rake corners already covered by Zone 2 strips above —
+     they correctly remain Zone 2 per ASCE 7-22 Fig. 30.3-2B/2C.      */
+  d += rc(sx0,        sy0,        aL, aB, Z3);   /* windward-left   */
+  d += rc(sx1 - aL,   sy0,        aL, aB, Z3);   /* windward-right  */
+  d += rc(sx0,        sy1 - aB,   aL, aB, Z3);   /* leeward-left    */
+  d += rc(sx1 - aL,   sy1 - aB,   aL, aB, Z3);   /* leeward-right   */
+
+  /* ── Building outline ──────────────────────────────────────────────── */
+  d += '<rect x="' + sx0.toFixed(1) + '" y="' + sy0.toFixed(1) +
+       '" width="' + pL.toFixed(1) + '" height="' + pB.toFixed(1) +
+       '" fill="none" stroke="' + cBd + '" stroke-width="1.5" rx="1"/>';
+
+  /* ── Ridge dashed line (gable only) ───────────────────────────────── */
+  if (!isFlat) {
+    d += seg(sx0, syR, sx1, syR, cRg, 1.4, '5,3');
+    d += tx(sx0 - 3, syR + 3.5, 'Ridge', 'end', cRg, 7.5);
+  }
+
+  /* ── Wind arrow ────────────────────────────────────────────────────── */
+  var wY = isFlat ? (sy0 + pB * 0.5) : (sy0 + pB * 0.25);
+  d += '<defs><marker id="wag_cc" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">' +
+       '<path d="M0,0 L0,7 L7,3.5 Z" fill="' + cWn + '"/></marker></defs>';
+  d += '<line x1="' + (sx0 - 32).toFixed(1) + '" y1="' + wY.toFixed(1) +
+       '" x2="' + (sx0 - 3).toFixed(1) + '" y2="' + wY.toFixed(1) +
+       '" stroke="' + cWn + '" stroke-width="1.8" marker-end="url(#wag_cc)"/>';
+  d += tx(sx0 - 34, wY - 5, 'Wind', 'end', cWn, 8);
+
+  /* ── Zone number labels ────────────────────────────────────────────── */
+  var cxM = (sx0 + sx1) / 2;
+  /* Zone 1 interior label */
+  var z1Y = isFlat
+    ? (sy0 + sy1) / 2
+    : sy0 + aB + (syR - aB - sy0 - aB) / 2;
+  var z1spaceOK = isFlat ? (pB - 2 * aB > 8) : (syR - aB - sy0 - aB > 8);
+  if (z1spaceOK) {
+    d += tx(cxM, z1Y + 3.5, '1', 'middle', '#15803d', 10);
+    if (!isFlat && (sy1 - aB - syR - aB > 8))
+      d += tx(cxM, syR + aB + (sy1 - aB - syR - aB) / 2 + 3.5, '1', 'middle', '#15803d', 10);
+  }
+  /* Zone 2 eave mid-labels */
+  if (aB > 9) {
+    d += tx(cxM, sy0 + aB / 2 + 3.5, '2', 'middle', '#92400e', 8.5);
+    d += tx(cxM, sy1 - aB / 2 + 3.5, '2', 'middle', '#92400e', 8.5);
+  }
+  /* Zone 3 corner labels */
+  if (aL > 11 && aB > 9) {
+    d += tx(sx0 + aL / 2, sy0 + aB / 2 + 3.5, '3', 'middle', '#991b1b', 8);
+    d += tx(sx1 - aL / 2, sy0 + aB / 2 + 3.5, '3', 'middle', '#991b1b', 8);
+    d += tx(sx0 + aL / 2, sy1 - aB / 2 + 3.5, '3', 'middle', '#991b1b', 8);
+    d += tx(sx1 - aL / 2, sy1 - aB / 2 + 3.5, '3', 'middle', '#991b1b', 8);
+  }
+
+  /* ── 'a' dimension bracket (right side) ────────────────────────────── */
+  var bx = sx1 + 7;
+  d += seg(bx - 2, sy0,      bx + 2, sy0,      cDm, 0.8);
+  d += seg(bx,     sy0,      bx,     sy0 + aB,  cDm, 0.8);
+  d += seg(bx - 2, sy0 + aB, bx + 2, sy0 + aB, cDm, 0.8);
+  d += tx(bx + 4, sy0 + aB / 2 + 3.5, 'a = ' + a.toFixed(1) + '\'', 'start', cDm, 7.5);
+
+  /* ── Building dimension labels ─────────────────────────────────────── */
+  d += seg(sx0, sy0 - 7, sx1, sy0 - 7, cDm, 0.8);
+  d += tx(cxM, sy0 - 11, 'L = ' + L.toFixed(0) + '\'', 'middle', cDm, 8);
+  d += seg(sx0 - 16, sy0, sx0 - 16, sy1, cDm, 0.8);
+  d += tx(sx0 - 18, (sy0 + sy1) / 2 + 3.5, 'B', 'end', cDm, 8);
+
+  /* ── Windward / Leeward labels (gable only) ─────────────────────────── */
+  if (!isFlat) {
+    d += tx(sx0 - 3, sy0 + pB / 4 + 3.5, 'WW', 'end', cDm, 7.5);
+    d += tx(sx0 - 3, sy0 + 3 * pB / 4 + 3.5, 'LW', 'end', cDm, 7.5);
+  }
+
+  /* ── Title ─────────────────────────────────────────────────────────── */
+  var title = isFlat
+    ? 'Flat Roof — C&amp;C Zones (Fig. 30.3-2A)'
+    : 'Gable Roof — C&amp;C Zones (Fig. 30.3-2B/2C)';
+  d += tx(cxM, sy0 - 20, title, 'middle', '#475569', 8.5);
+
+  return '<svg viewBox="0 0 ' + W + ' ' + H +
+         '" width="100%" style="display:block;margin-bottom:6px;" xmlns="http://www.w3.org/2000/svg">' +
+         d + '</svg>';
+}
+
 function renderWindResults(r, s) {
   var host = document.getElementById('windResultsContent');
   if (!host) return;
@@ -1600,6 +1750,10 @@ function renderWindResults(r, s) {
     if (r.ccRoof && r.ccRoof.length) {
       var ccRoofZoneMap = {'1p':'zone-1','1':'zone-1','2':'zone-2','3':'zone-3'};
       html += '<div class="result-card"><div class="result-card-head">C&amp;C — Roof (Ch. 30)</div>';
+      /* Plan-view zone diagram for gable and flat roofs */
+      if (s.roofShape === 'gable' || s.roofType === 'flat') {
+        html += '<div style="padding:8px 6px 2px;">' + buildCCGableZonePlanSVG(s, r.a || 0) + '</div>';
+      }
       r.ccRoof.forEach(function(z) {
         var zt  = ccRoofZoneMap[z.zone] || '';
         var bSt = zt ? ' style="border-left:8px solid ' + ZONE_COLORS[zt] + ';padding-left:10px"' : '';
