@@ -1374,17 +1374,6 @@
 
 
 /* ── Zone color bar + interactive highlight ──────────────────────────────── */
-.zone-color-bar {
-  display: inline-block;
-  width: 10px;
-  min-width: 10px;
-  height: 1.3em;
-  border-radius: 3px;
-  margin-right: 8px;
-  flex-shrink: 0;
-  align-self: center;
-  vertical-align: middle;
-}
 .result-row.zone-row-clickable { cursor: pointer; }
 .result-row.zone-row-clickable:hover { filter: brightness(0.96); }
 .result-row.zone-row-active {
