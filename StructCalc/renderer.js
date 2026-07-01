@@ -564,8 +564,9 @@ class Wind3DRenderer {
   /* ── hip roof builder ───────────────────────────────────────────────────── */
 
   _buildStructureHip(B, L, hEave, hRidge) {
-    /* Always orient ridge along the longer plan dimension (classic hip, not pyramid) */
-    if (B > L) { [B, L] = [L, B]; }
+    /* Hip roof geometry:
+       B <= L: ridge along Z, trapezoidal slopes at x=+/-hB, triangular ends at z=+/-hL
+       B >  L: ridge along X, trapezoidal slopes at z=+/-hL, triangular ends at x=+/-hB */
     const hB = B / 2, hL = L / 2;
     const grp = new THREE.Group();
     const EDGE_R = 0.11;
@@ -576,58 +577,109 @@ class Wind3DRenderer {
       color: THEME.roofFill, transparent: false, side: THREE.DoubleSide,
     });
 
-    /* Walls — same box as gable (no gable triangles for hip) */
+    /* Walls — box spans B (X) x hEave (Y) x L (Z) regardless of B vs L */
     const boxGeo = new THREE.BoxGeometry(B, hEave, L);
     boxGeo.translate(0, hEave / 2, 0);
     grp.add(new THREE.Mesh(boxGeo, solidMat(THEME.wallFill)));
     this._tubeEdges(new THREE.EdgesGeometry(boxGeo), THEME.wallEdge, EDGE_R, grp);
 
-    /* Ridge: shorter than building length by B on each side (equal-pitch hip) */
-    const ridgeL = Math.max(0, L - B);
-    const r2 = ridgeL / 2;
+    if (B <= L) {
+      /* Ridge along Z (classic: short span = B along X) */
+      const ridgeL = Math.max(0, L - B);
+      const r2 = ridgeL / 2;
 
-    /* Left main slope — trapezoid (or triangle if L === B) */
-    const leftGeo = this._quad(
-      new THREE.Vector3(-hB, hEave, -hL),
-      new THREE.Vector3(-hB, hEave,  hL),
-      new THREE.Vector3(  0, hRidge,  r2),
-      new THREE.Vector3(  0, hRidge, -r2),
-    );
-    /* Right main slope */
-    const rightGeo = this._quad(
-      new THREE.Vector3(hB, hEave, -hL),
-      new THREE.Vector3( 0, hRidge, -r2),
-      new THREE.Vector3( 0, hRidge,  r2),
-      new THREE.Vector3(hB, hEave,  hL),
-    );
-    for (const g of [leftGeo, rightGeo]) {
-      grp.add(new THREE.Mesh(g, roofMat()));
-      this._tubeEdges(new THREE.EdgesGeometry(g), THEME.roofEdge, EDGE_R, grp);
-    }
-
-    /* Hip triangles at each end */
-    for (const zs of [-1, 1]) {
-      const z  = zs * hL;
-      const rz = zs * r2;
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
-        -hB, hEave, z,
-         hB, hEave, z,
-          0, hRidge, rz,
-      ]), 3));
-      geo.computeVertexNormals();
-      grp.add(new THREE.Mesh(geo, roofMat()));
-      this._tubeEdges(new THREE.EdgesGeometry(geo), THEME.roofEdge, EDGE_R, grp);
-    }
-
-    /* Ridge line (only if ridge has length) */
-    if (ridgeL > 0) {
-      const t = this._tube(
-        new THREE.Vector3(0, hRidge, -r2),
-        new THREE.Vector3(0, hRidge,  r2),
-        THEME.ridge, EDGE_R
+      /* Left main slope — trapezoid at x=-hB */
+      const leftGeo = this._quad(
+        new THREE.Vector3(-hB, hEave, -hL),
+        new THREE.Vector3(-hB, hEave,  hL),
+        new THREE.Vector3(  0, hRidge,  r2),
+        new THREE.Vector3(  0, hRidge, -r2),
       );
-      if (t) grp.add(t);
+      /* Right main slope — trapezoid at x=+hB */
+      const rightGeo = this._quad(
+        new THREE.Vector3(hB, hEave, -hL),
+        new THREE.Vector3( 0, hRidge, -r2),
+        new THREE.Vector3( 0, hRidge,  r2),
+        new THREE.Vector3(hB, hEave,  hL),
+      );
+      for (const g of [leftGeo, rightGeo]) {
+        grp.add(new THREE.Mesh(g, roofMat()));
+        this._tubeEdges(new THREE.EdgesGeometry(g), THEME.roofEdge, EDGE_R, grp);
+      }
+
+      /* Hip triangles at each end (z=+/-hL) */
+      for (const zs of [-1, 1]) {
+        const z  = zs * hL;
+        const rz = zs * r2;
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+          -hB, hEave, z,
+           hB, hEave, z,
+            0, hRidge, rz,
+        ]), 3));
+        geo.computeVertexNormals();
+        grp.add(new THREE.Mesh(geo, roofMat()));
+        this._tubeEdges(new THREE.EdgesGeometry(geo), THEME.roofEdge, EDGE_R, grp);
+      }
+
+      /* Ridge along Z */
+      if (ridgeL > 0) {
+        const t = this._tube(
+          new THREE.Vector3(0, hRidge, -r2),
+          new THREE.Vector3(0, hRidge,  r2),
+          THEME.ridge, EDGE_R
+        );
+        if (t) grp.add(t);
+      }
+
+    } else {
+      /* Ridge along X (B > L: long span = B along X) */
+      const ridgeL = Math.max(0, B - L);
+      const r2 = ridgeL / 2;
+
+      /* Front main slope — trapezoid at z=+hL */
+      const frontGeo = this._quad(
+        new THREE.Vector3(-hB, hEave,  hL),
+        new THREE.Vector3( hB, hEave,  hL),
+        new THREE.Vector3( r2, hRidge, 0),
+        new THREE.Vector3(-r2, hRidge, 0),
+      );
+      /* Back main slope — trapezoid at z=-hL */
+      const backGeo = this._quad(
+        new THREE.Vector3( hB, hEave, -hL),
+        new THREE.Vector3(-hB, hEave, -hL),
+        new THREE.Vector3(-r2, hRidge, 0),
+        new THREE.Vector3( r2, hRidge, 0),
+      );
+      for (const g of [frontGeo, backGeo]) {
+        grp.add(new THREE.Mesh(g, roofMat()));
+        this._tubeEdges(new THREE.EdgesGeometry(g), THEME.roofEdge, EDGE_R, grp);
+      }
+
+      /* Hip triangles at each end (x=+/-hB) */
+      for (const xs of [-1, 1]) {
+        const x  = xs * hB;
+        const rx = xs * r2;
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+          x, hEave,  hL,
+          x, hEave, -hL,
+          rx, hRidge, 0,
+        ]), 3));
+        geo.computeVertexNormals();
+        grp.add(new THREE.Mesh(geo, roofMat()));
+        this._tubeEdges(new THREE.EdgesGeometry(geo), THEME.roofEdge, EDGE_R, grp);
+      }
+
+      /* Ridge along X */
+      if (ridgeL > 0) {
+        const t = this._tube(
+          new THREE.Vector3(-r2, hRidge, 0),
+          new THREE.Vector3( r2, hRidge, 0),
+          THEME.ridge, EDGE_R
+        );
+        if (t) grp.add(t);
+      }
     }
 
     return grp;
@@ -974,7 +1026,7 @@ class Wind3DRenderer {
     return grp;
   }
 
-  _buildAllDims(B, L, hEave, hRidge, zone_a, hLabel = null, hEaveLabel = null, theta = 0, roofShape = 'hip', B_orig = null, L_orig = null) {
+  _buildAllDims(B, L, hEave, hRidge, zone_a, hLabel = null, hEaveLabel = null, theta = 0, roofShape = 'hip') {
     const hB = B/2, hL = L/2;
     const grp = new THREE.Group();
     const D   = Math.max(8, Math.max(B, L) * 0.10);
@@ -983,19 +1035,6 @@ class Wind3DRenderer {
     // Helper: remove trailing .0 from toFixed(1)
     const fmt = v => { const s = v.toFixed(1); return s.endsWith('.0') ? s.slice(0,-2) : s; };
 
-    // When B_orig > L_orig the geometry was swapped before this call: B = min(B_orig,L_orig),
-    // L = max(B_orig,L_orig). The front face width equals L_orig, not B_orig.
-    // So we label the front-face dim as "L" and the side-face dim as "B" (swapping the
-    // label text and the linked input), so the user always sees the value they entered.
-    const _swapped = (B_orig !== null && B_orig !== B);
-    const _Bval  = _swapped ? L_orig : B;       // value to show on the front-face dim line
-    const _Lval  = _swapped ? B_orig : L;       // value to show on the side-face dim line
-    const _Blbl  = _swapped ? 'L' : 'B';        // label letter for front face dim
-    const _Llbl  = _swapped ? 'B' : 'L';        // label letter for side face dim
-    const _BdimId  = _swapped ? 'dim-L' : 'dim-B';
-    const _LdimId  = _swapped ? 'dim-B' : 'dim-L';
-    const _BinpId  = _swapped ? 'wind-L' : 'wind-B';
-    const _LinpId  = _swapped ? 'wind-B' : 'wind-L';
 
     // ── B (Width) — Front face (z = +hL) ──────────────────────────────────
     const bZ = hL + D;
@@ -1007,9 +1046,9 @@ class Wind3DRenderer {
         [new THREE.Vector3(-hB, EPS_Y,  hL), new THREE.Vector3(-hB, EPS_Y, bZ)],
         [new THREE.Vector3( hB, EPS_Y,  hL), new THREE.Vector3( hB, EPS_Y, bZ)],
       ],
-      `${_Blbl}=${fmt(_Bval)}ft`, _BdimId, _BinpId
+      `B=${fmt(B)}ft`, 'dim-B', 'wind-B'
     ));
-    this._dimHighlight[_BdimId] = grp.children[grp.children.length - 1];
+    this._dimHighlight['dim-B'] = grp.children[grp.children.length - 1];
 
     // ── L (Length) — Right face, parallel to Z ─────────────────────────────
     const lX = hB + D;
@@ -1021,9 +1060,9 @@ class Wind3DRenderer {
         [new THREE.Vector3(hB, EPS_Y, -hL), new THREE.Vector3(lX, EPS_Y, -hL)],
         [new THREE.Vector3(hB, EPS_Y,  hL), new THREE.Vector3(lX, EPS_Y,  hL)],
       ],
-      `${_Llbl}=${fmt(_Lval)}ft`, _LdimId, _LinpId
+      `L=${fmt(L)}ft`, 'dim-L', 'wind-L'
     ));
-    this._dimHighlight[_LdimId] = grp.children[grp.children.length - 1];
+    this._dimHighlight['dim-L'] = grp.children[grp.children.length - 1];
 
     // ── h_eave — Left face centre (z=0), y=0→hEave ───────────────────────
     const hXhe = -hB - D;
@@ -1403,15 +1442,12 @@ class Wind3DRenderer {
        sets eave height; L = long ridge axis). Apply swap before all geometry
        so hB/hL, wall zones, dim lines, and UV mapping stay consistent. */
     const _shape = roofShape || 'gable';
-    // Save original values before any swap so dim labels always show what the user entered
-    const B_orig = B, L_orig = L;
-    if (_shape === 'hip' && B > L) { [B, L] = [L, B]; }
 
     const H_SCALE  = 1.8;  // vertical exaggeration — keeps proportions readable
     const th       = THREE.MathUtils.degToRad(theta);
     const hB       = B/2, hL = L/2;
-    // eave height uses the SHORT half-span (hB after swap = min(B_orig,L_orig)/2)
-    const hEave_ft = Math.max(1, h - hB * Math.tan(th));  // actual eave height, ft
+    // eave height uses the SHORT half-span so hip roofs with B > L stay valid
+    const hEave_ft = Math.max(1, h - Math.min(hB, hL) * Math.tan(th));  // actual eave height, ft
     const hRidge_ft = h;                                   // actual ridge height, ft
     const hEave    = hEave_ft  * H_SCALE;  // scaled for rendering
     const hRidge   = hRidge_ft * H_SCALE;
@@ -1439,7 +1475,7 @@ class Wind3DRenderer {
     }
 
     // dim lines (pass hRidge_ft so label shows real engineering value, not scaled)
-    this._dimGroup = this._buildAllDims(B, L, hEave, hRidge, zone_a, hRidge_ft, hEave_ft, theta, _shape, B_orig, L_orig);
+    this._dimGroup = this._buildAllDims(B, L, hEave, hRidge, zone_a, hRidge_ft, hEave_ft, theta, _shape);
 
     // zones — shape-specific surface mapping
     const matZ = (col, op) => new THREE.MeshBasicMaterial({
@@ -1502,6 +1538,14 @@ class Wind3DRenderer {
       const _r2    = _hipHL - _triH;                        // half ridge length
       const L_hip  = Math.sqrt(_hipHB*_hipHB + _triH*_triH); // hip ridge plan length
 
+      /* For B > L the long axis is X (ridge along X), short axis is Z.
+         _hipB = min(B,L) = L, _hipL = max(B,L) = B.
+         ptHipL/ptHipR use the convention: short span along X, long span along Z.
+         When B > L we XZ-swap all output points to map those slopes onto the correct
+         world faces: ptHipL -> back-Z slope, ptHipR -> front-Z slope.             */
+      const xzSwap = B > L;
+      const xzW = p => xzSwap ? new THREE.Vector3(p.z, p.y, p.x) : p;
+
       /* Surface functions for trapezoidal main slopes */
       const ptHipL = (u, v) => {
         const zH = (1-u)*_hipHL + u*_r2;
@@ -1511,11 +1555,14 @@ class Wind3DRenderer {
         const zH = (1-u)*_hipHL + u*_r2;
         return new THREE.Vector3( _hipHB*(1-u), (1-u)*hEave + u*hRidge, (2*v-1)*zH);
       };
-      const wrapL = (u,v,_a,_b,_c,_d) => ptHipL(u,v);
-      const wrapR = (u,v,_a,_b,_c,_d) => ptHipR(u,v);
+      const wrapL = (u,v,_a,_b,_c,_d) => xzW(ptHipL(u,v));
+      const wrapR = (u,v,_a,_b,_c,_d) => xzW(ptHipR(u,v));
 
-      const _leftNorm  = this._leftNormal(_hipHB, hEave, hRidge, _hipHL);
-      const _rightNorm = new THREE.Vector3(-_leftNorm.x, _leftNorm.y, _leftNorm.z);
+      const _leftNorm0  = this._leftNormal(_hipHB, hEave, hRidge, _hipHL);
+      const _rightNorm0 = new THREE.Vector3(-_leftNorm0.x, _leftNorm0.y, _leftNorm0.z);
+      // XZ-swap the normals too: (nx,ny,nz) -> (nz,ny,nx) maps X-face normal to Z-face normal
+      const _leftNorm  = xzSwap ? new THREE.Vector3(_leftNorm0.z,  _leftNorm0.y, _leftNorm0.x) : _leftNorm0;
+      const _rightNorm = xzSwap ? new THREE.Vector3(_rightNorm0.z, _rightNorm0.y, _rightNorm0.x) : _rightNorm0;
 
       /* Zone width fractions for main slopes
          Hip-ridge Zone 2 inner boundary uses PERPENDICULAR plan distance a from the hip ridge:
@@ -1591,9 +1638,9 @@ class Wind3DRenderer {
         /* Flat on-surface labels — glued to slope, rotate with building.
            textDir along Z (ridge direction). Flip for right slope so text reads
            in the same apparent direction when that face is viewed head-on.        */
-        const _tD = norm.x < 0
-          ? new THREE.Vector3(0, 0,  1)   // left slope  (norm.x < 0): front→back
-          : new THREE.Vector3(0, 0, -1);  // right slope (norm.x > 0): back→front
+        const _tD = xzSwap
+          ? (norm.z < 0 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(-1, 0, 0))  // B>L: back/front slopes
+          : (norm.x < 0 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 0, -1)); // B<=L: left/right slopes
         const _uM = (_ua + 1 - _ua2) / 2;   // mid-u of Zone 1/hip-strip range
         this._makeZoneLabelFlat(
           'zone-1', ptFn(_uM, 0.5, 0,0,0,0), norm, _tD
@@ -1611,12 +1658,15 @@ class Wind3DRenderer {
 
       /* ── Triangular end slopes: Zone 2 = constant-width a strips along both hips ── */
       for (const zs of [-1, 1]) {
-        const zA = zs * _hipHL;    // base z (eave)
-        const zC = zs * _r2;      // apex z (ridge end)
+        const zA = zs * _hipHL;    // base coordinate along long axis (eave edge)
+        const zC = zs * _r2;      // apex coordinate along long axis (ridge end)
 
-        const A  = new THREE.Vector3(-_hipHB, hEave, zA);   // left base corner
-        const Bv = new THREE.Vector3( _hipHB, hEave, zA);   // right base corner
-        const C  = new THREE.Vector3(      0, hRidge, zC);  // apex
+        /* For B<=L: triangular ends at z=+/-_hipHL, width = 2*_hipHB along X.
+           For B>L (xzSwap): triangular ends at x=+/-_hipHL, depth = 2*_hipHB along Z.
+           XZ-swap so A,Bv,C always land on the correct world face.               */
+        const A  = xzSwap ? new THREE.Vector3(zA, hEave, -_hipHB) : new THREE.Vector3(-_hipHB, hEave, zA);
+        const Bv = xzSwap ? new THREE.Vector3(zA, hEave,  _hipHB) : new THREE.Vector3( _hipHB, hEave, zA);
+        const C  = xzSwap ? new THREE.Vector3(zC, hRidge, 0)      : new THREE.Vector3(0, hRidge, zC);
 
         const _e1t = new THREE.Vector3().subVectors(Bv, A);
         const _e2t = new THREE.Vector3().subVectors(C, A);
@@ -1704,7 +1754,9 @@ class Wind3DRenderer {
         /* Flat on-surface labels for this triangular slope.
            textDir along +X for front slope (zs=1), -X for back (zs=-1) so the
            text reads correctly when each slope is viewed head-on.                 */
-        const _triTD = new THREE.Vector3(zs > 0 ? 1 : -1, 0, 0);
+        const _triTD = xzSwap
+          ? new THREE.Vector3(0, 0, zs > 0 ? 1 : -1)   // B>L: text along Z on end triangles
+          : new THREE.Vector3(zs > 0 ? 1 : -1, 0, 0);  // B<=L: text along X
 
         // Zone 1 centroid: average of triangle (M_L, M_R, Mx)
         const _ctr1 = new THREE.Vector3(
