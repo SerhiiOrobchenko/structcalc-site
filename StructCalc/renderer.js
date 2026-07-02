@@ -1659,56 +1659,42 @@ class Wind3DRenderer {
       const vz1r = 1 - vz1;
 
       /* Paint order: 1' → 1 → 2 → 3  (higher eps = further from surface = wins visually)
-         Layout is SYMMETRIC: zone bands appear from BOTH eave (u=0) AND ridge (u=1),
-         matching the ASCE 30.3-2A plan-view layout where all 4 roof edges produce bands. */
-      const u2r  = 1 - u2;    // Zone 2 inner edge from ridge side
-      const u1r  = 1 - u1e;   // Zone 1 inner edge from ridge side
-      const u3r  = 1 - u3;    // Zone 3 depth from ridge side
+         Ridge (u=1) is an INTERIOR joint — NOT a roof edge. Zones come only from:
+           • eave (u=0)        → Zone 2 strip + Zone 1 strip
+           • back rake (v=0)   → Zone 2 strip + Zone 1 strip
+           • front rake (v=1)  → Zone 2 strip + Zone 1 strip
+         Zone 3 only at 2 eave×rake corners per slope (4 total for the whole roof). */
 
-      /* ── Zone 1' — centre field (between eave-Zone1 inner and ridge-Zone1 inner) ── */
-      addZone(u1e, u1r,  vz1,  vz1r,  THEME.zone1, 0.10, 'zone-1p', 0.01, ptFn, norm, doLabel);
+      /* ── Zone 1' — centre field (beyond 1.2h from every edge) ── */
+      addZone(u1e, 1,   vz1,  vz1r,  THEME.zone1, 0.10, 'zone-1p', 0.01, ptFn, norm, doLabel);
 
-      /* ── Zone 1 — 0.6h band from eave AND from ridge, full perimeter ── */
-      // Eave strip (u2→u1e), full-v (Zone 2 covers rake ends)
-      addZone(u2,  u1e,  0,    1,     THEME.zone1, 0.22, 'zone-1',  0.03, ptFn, norm, doLabel);
-      // Ridge strip (u1r→u2r), full-v — mirrors eave strip
-      addZone(u1r, u2r,  0,    1,     THEME.zone1, 0.22, 'zone-1',  0.03, ptFn, norm, false);
-      // Mid-slope back-rake: between eave-Zone1 and ridge-Zone1, adjacent to back rake
-      addZone(u1e, u1r,  v2,   vz1,   THEME.zone1, 0.22, 'zone-1',  0.03, ptFn, norm, false);
-      // Mid-slope front-rake
-      addZone(u1e, u1r,  vz1r, vv1,   THEME.zone1, 0.22, 'zone-1',  0.03, ptFn, norm, false);
+      /* ── Zone 1 — 0.6h→1.2h perimeter band (eave + both rakes, NOT ridge) ── */
+      // Eave band: u2→u1e, full-v (Zone 2 rake strips cover the rake-end portions)
+      addZone(u2,  u1e, 0,    1,     THEME.zone1, 0.22, 'zone-1',  0.03, ptFn, norm, doLabel);
+      // Deep-slope back-rake band: beyond Zone-1 eave inner boundary, toward ridge
+      addZone(u1e, 1,   v2,   vz1,   THEME.zone1, 0.22, 'zone-1',  0.03, ptFn, norm, false);
+      // Deep-slope front-rake band
+      addZone(u1e, 1,   vz1r, vv1,   THEME.zone1, 0.22, 'zone-1',  0.03, ptFn, norm, false);
 
-      /* ── Zone 2 — outer 0.6h band from eave AND from ridge, plus both rakes ── */
-      // Eave strip (0→u2), trimmed v (rake strips cover the ends)
-      addZone(0,   u2,   v2,   vv1,   THEME.zone2, 0.35, 'zone-2',  0.07, ptFn, norm, doLabel);
-      // Ridge strip (u2r→1), trimmed v — mirrors eave strip
-      addZone(u2r, 1,    v2,   vv1,   THEME.zone2, 0.35, 'zone-2',  0.07, ptFn, norm, false);
-      // Back rake strip — full u
-      addZone(0,   1,    0,    v2,    THEME.zone2, 0.35, 'zone-2',  0.07, ptFn, norm, false);
+      /* ── Zone 2 — outer 0.6h perimeter band (eave + both rakes, NOT ridge) ── */
+      // Eave strip: trimmed v to avoid self-overlap with rake strips
+      addZone(0,   u2,  v2,   vv1,   THEME.zone2, 0.35, 'zone-2',  0.07, ptFn, norm, doLabel);
+      // Back rake strip — full u (Zone 3 painted on top at corner)
+      addZone(0,   1,   0,    v2,    THEME.zone2, 0.35, 'zone-2',  0.07, ptFn, norm, false);
       // Front rake strip — full u
-      addZone(0,   1,    vv1,  1,     THEME.zone2, 0.35, 'zone-2',  0.07, ptFn, norm, false);
+      addZone(0,   1,   vv1,  1,     THEME.zone2, 0.35, 'zone-2',  0.07, ptFn, norm, false);
 
-      /* ── Zone 3 — L-shaped corners at ALL 4 plan corners of EACH slope ───
-           Eave×rake corners (u≈0):    eave arm depth u3,  rake arm depth v_z3
-           Ridge×rake corners (u≈1):   ridge arm depth u3, rake arm depth v_z3  */
-      // ── Eave side corners ──
-      // Back (v≈0): eave arm
-      addZone(0,   u3,   0,       v2,    THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, doLabel);
-      // Back: rake arm (starts at u3, no corner overlap)
-      addZone(u3,  u2,   0,       v_z3,  THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, false);
-      // Front (v≈1): eave arm
-      addZone(0,   u3,   vv1,     1,     THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, false);
-      // Front: rake arm
-      addZone(u3,  u2,   1-v_z3,  1,     THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, false);
-      // ── Ridge side corners ──
-      // Back (v≈0): ridge arm (mirrors eave arm, from u=1)
-      addZone(u3r, 1,    0,       v2,    THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, false);
-      // Back: rake arm from ridge (starts at u2r, no corner overlap)
-      addZone(u2r, u3r,  0,       v_z3,  THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, false);
-      // Front (v≈1): ridge arm
-      addZone(u3r, 1,    vv1,     1,     THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, false);
-      // Front: rake arm from ridge
-      addZone(u2r, u3r,  1-v_z3,  1,     THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, false);
+      /* ── Zone 3 — L-shaped at 2 eave×rake corners per slope (4 for whole roof) ──
+           Eave arm: depth 0.2h from eave, length 0.6h along rake
+           Rake arm: depth 0.2h from rake, length 0.6h along eave (starts at u3, no overlap) */
+      // Back corner (v≈0): eave arm
+      addZone(0,   u3,  0,       v2,    THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, doLabel);
+      // Back corner: rake arm
+      addZone(u3,  u2,  0,       v_z3,  THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, false);
+      // Front corner (v≈1): eave arm
+      addZone(0,   u3,  vv1,     1,     THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, false);
+      // Front corner: rake arm
+      addZone(u3,  u2,  1-v_z3,  1,     THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, false);
 
       /* ── Dimension annotations (left / first slope only) ────────────── */
       if (doLabel && THREE.CSS2DObject) {
