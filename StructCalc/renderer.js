@@ -1413,6 +1413,7 @@ class Wind3DRenderer {
     if (!THREE.CSS2DObject) return;
 
     const cfgMap = {
+      'zone-1p':{ ...THEME.zoneLabel1, text: "Zone 1'" },
       'zone-1': { ...THEME.zoneLabel1, text: 'Zone 1' },
       'zone-2': { ...THEME.zoneLabel2, text: 'Zone 2' },
       'zone-3': { ...THEME.zoneLabel3, text: 'Zone 3' },
@@ -1482,6 +1483,7 @@ class Wind3DRenderer {
   _makeZoneLabelFlat(zoneType, centroid, faceNormal, textDir) {
     if (!THREE.CSS2DObject) return;
     const cfgMap = {
+      "zone-1p":{ bg:'rgba(74,222,128,0.80)',  fg:'#14532d', text:"Zone 1'" },
       'zone-1': { bg:'rgba(74,222,128,0.92)',  fg:'#14532d', text:'Zone 1' },
       'zone-2': { bg:'rgba(251,191,36,0.92)',  fg:'#78350f', text:'Zone 2' },
       'zone-3': { bg:'rgba(248,113,113,0.92)', fg:'#7f1d1d', text:'Zone 3' },
@@ -1636,6 +1638,48 @@ class Wind3DRenderer {
       /* Zone 3: ONLY ridge × rake corners */
       addZone(u1,1,      0,v_zone,  THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,doLabel);
       addZone(u1,1,      v1,1,      THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,false);
+    };
+
+    /* Flat roof / low-slope zone layout (ASCE 7-22 Fig. 30.3-2A, θ ≤ 7°):
+       Dimensions are multiples of mean roof height h_m (= hEave for flat roof).
+         Zone 3 : at each eave × rake corner — extends 0.6h along each edge, depth 0.2h
+         Zone 2 : rest of the 0.6h-wide perimeter band (all four sides)
+         Zone 1 : next 0.6h-wide band inside Zone 2
+         Zone 1': centre field beyond Zone 1
+       NOTE: NO Zone 3 at ridge × rake corners — the ridge is the building centre line,
+             NOT an exterior edge.                                                        */
+    const drawZonesFlat = (ptFn, norm, doLabel) => {
+      /* mean roof height in scaled world units (flat roof: hRidge ≈ hEave) */
+      const h_m = hEave;
+      /* parametric fractions along u (eave→ridge = hB) and v (full length = 2·hL) */
+      const u2  = Math.min(0.6 * h_m / hB,        0.45);  // outer band eave side
+      const u3  = Math.min(0.2 * h_m / hB,        u2);    // Zone 3 depth from eave
+      const u1e = Math.min(1.2 * h_m / hB,        0.48);  // Zone 1 inner limit (eave)
+      const v2  = Math.min(0.6 * h_m / (2 * hL),  0.45);  // outer band from each rake
+      const vv1 = 1 - v2;                                  // outer band far-rake side
+      const vz1 = Math.min(1.2 * h_m / (2 * hL),  0.48);  // Zone 1 inner limit (rake)
+      const vz1r = 1 - vz1;
+
+      /* Paint order: Zone 1' first (lowest eps), then Zone 1, Zone 2, Zone 3 on top.
+         Higher eps = further from slope surface = rendered in front (wins visually). */
+
+      /* Zone 1' — centre field */
+      addZone(u1e, 1,   vz1, vz1r,  THEME.zone1, 0.10, 'zone-1p', 0.01, ptFn, norm, doLabel);
+
+      /* Zone 1 — inner band ring (eave side + rake sides) */
+      addZone(u2,  u1e, v2,  vv1,   THEME.zone1, 0.22, 'zone-1', 0.03, ptFn, norm, false);
+      addZone(u1e, 1,   v2,  vz1,   THEME.zone1, 0.22, 'zone-1', 0.03, ptFn, norm, false);
+      addZone(u1e, 1,   vz1r,vv1,   THEME.zone1, 0.22, 'zone-1', 0.03, ptFn, norm, false);
+
+      /* Zone 2 — outer 0.6h perimeter band:
+           eave strip (all v) + rake strips (all u), later covered by Zone 3 at corners */
+      addZone(0,   u2,  0,   1,     THEME.zone2, 0.35, 'zone-2', 0.07, ptFn, norm, false);
+      addZone(0,   1,   0,   v2,    THEME.zone2, 0.35, 'zone-2', 0.07, ptFn, norm, false);
+      addZone(0,   1,   vv1, 1,     THEME.zone2, 0.35, 'zone-2', 0.07, ptFn, norm, false);
+
+      /* Zone 3 — eave × rake corners ONLY (depth 0.2h, extent 0.6h along rake) */
+      addZone(0,   u3,  0,   v2,    THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, doLabel);
+      addZone(0,   u3,  vv1, 1,     THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, false);
     };
 
     if (_shape === 'monoslope') {
@@ -1933,8 +1977,9 @@ class Wind3DRenderer {
         drawZonesGableRidge(this._ptL.bind(this), _leftNorm,  true);
         drawZonesGableRidge(this._ptR.bind(this), _rightNorm, false);
       } else {
-        drawZones(this._ptL.bind(this), _leftNorm,  true);
-        drawZones(this._ptR.bind(this), _rightNorm, false);
+        /* θ ≤ 7° — ASCE 7-22 Fig. 30.3-2A: Zone 3 at eave×rake corners only */
+        drawZonesFlat(this._ptL.bind(this), _leftNorm,  true);
+        drawZonesFlat(this._ptR.bind(this), _rightNorm, false);
       }
     }
 
