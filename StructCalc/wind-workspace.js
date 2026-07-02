@@ -190,8 +190,11 @@ function recalcWind() {
   var L  = s.buildingL || 60;
   var hE = s.h         || 20;
   var th = s.theta     || 0;
-  var hR = (s.roofType === 'flat') ? hE : hE + (B / 2) * Math.tan(th * Math.PI / 180);
-  var hMean = (s.roofType === 'flat') ? hE : (hE + hR) / 2;
+  /* hR = ridge height. Use actual roofShape (not roofType) so gable with θ≤7°
+     (which has roofType='flat' for C&C zone logic) still gets the correct ridge. */
+  var _trueFlat = (s.roofShape === 'flat' || th === 0);
+  var hR    = _trueFlat ? hE : hE + (B / 2) * Math.tan(th * Math.PI / 180);
+  var hMean = _trueFlat ? hE : (hE + hR) / 2;
   var za = (r && r.a) ? r.a : Math.min(0.1 * Math.min(B, L), Math.min(0.4 * hE, 0.04 * Math.min(B, L)));
 
   /* Update mean roof height display */
