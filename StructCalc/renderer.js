@@ -1647,7 +1647,7 @@ class Wind3DRenderer {
        Zone 1 : next 0.6h band inward
        Zone 1': centre field                                                          */
     const drawZonesFlat = (ptFn, norm, doLabel) => {
-      const h_m  = hEave;              // eave height in scaled world units
+      const h_m  = hEave_ft;           // eave height in FEET (same units as hB, hL)
       // ── parametric zone boundaries ──────────────────────────────────────────
       const u2   = Math.min(0.6 * h_m / hB,        0.45);  // 0.6h from eave  (u-dir)
       const u3   = Math.min(0.2 * h_m / hB,        u2);    // 0.2h from eave  (Zone 3 depth)
