@@ -1664,12 +1664,12 @@ class Wind3DRenderer {
       addZone(u1e, 1,   vz1,  vz1r,  THEME.zone1, 0.10, 'zone-1p', 0.01, ptFn, norm, doLabel);
 
       /* ── Zone 1 — inner 0.6h ring ──────────────────────────────────── */
-      addZone(u2,  u1e, v2,   vv1,   THEME.zone1, 0.22, 'zone-1',  0.03, ptFn, norm, doLabel);
+      addZone(u2,  u1e, 0,    1,     THEME.zone1, 0.22, 'zone-1',  0.03, ptFn, norm, doLabel);  // eave strip full-v (Zone 2 covers rake ends)
       addZone(u1e, 1,   v2,   vz1,   THEME.zone1, 0.22, 'zone-1',  0.03, ptFn, norm, false);
       addZone(u1e, 1,   vz1r, vv1,   THEME.zone1, 0.22, 'zone-1',  0.03, ptFn, norm, false);
 
       /* ── Zone 2 — outer 0.6h perimeter band (Zone 3 painted on top) ── */
-      addZone(0, u2, 0,   1,         THEME.zone2, 0.35, 'zone-2',  0.07, ptFn, norm, doLabel);
+      addZone(0, u2, v2,  vv1,       THEME.zone2, 0.35, 'zone-2',  0.07, ptFn, norm, doLabel);  // eave strip (trimmed — rake strips below cover the ends)
       addZone(0, 1,  0,   v2,        THEME.zone2, 0.35, 'zone-2',  0.07, ptFn, norm, false);
       addZone(0, 1,  vv1, 1,         THEME.zone2, 0.35, 'zone-2',  0.07, ptFn, norm, false);
 
@@ -1679,12 +1679,12 @@ class Wind3DRenderer {
              Rake arm : v 0→v_z3 (0.2h deep from rake), u 0→u2  (0.6h along eave) */
       // Back corner (v≈0): eave arm
       addZone(0, u3,  0,       v2,   THEME.zone3, 0.65, 'zone-3',  0.12, ptFn, norm, doLabel);
-      // Back corner: rake arm
-      addZone(0, u2,  0,       v_z3, THEME.zone3, 0.65, 'zone-3',  0.12, ptFn, norm, false);
+      // Back corner: rake arm — starts at u3 (avoid overlap with eave arm at corner square)
+      addZone(u3, u2,  0,       v_z3, THEME.zone3, 0.65, 'zone-3',  0.12, ptFn, norm, false);
       // Front corner (v≈1): eave arm
-      addZone(0, u3,  vv1,     1,    THEME.zone3, 0.65, 'zone-3',  0.12, ptFn, norm, false);
-      // Front corner: rake arm
-      addZone(0, u2,  1-v_z3,  1,    THEME.zone3, 0.65, 'zone-3',  0.12, ptFn, norm, false);
+      addZone(0,  u3,  vv1,     1,    THEME.zone3, 0.65, 'zone-3',  0.12, ptFn, norm, false);
+      // Front corner: rake arm — starts at u3
+      addZone(u3, u2,  1-v_z3,  1,    THEME.zone3, 0.65, 'zone-3',  0.12, ptFn, norm, false);
 
       /* ── Dimension annotations (left / first slope only) ────────────── */
       if (doLabel && THREE.CSS2DObject) {
