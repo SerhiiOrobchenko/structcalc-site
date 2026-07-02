@@ -1641,45 +1641,101 @@ class Wind3DRenderer {
     };
 
     /* Flat roof / low-slope zone layout (ASCE 7-22 Fig. 30.3-2A, θ ≤ 7°):
-       Dimensions are multiples of mean roof height h_m (= hEave for flat roof).
-         Zone 3 : at each eave × rake corner — extends 0.6h along each edge, depth 0.2h
-         Zone 2 : rest of the 0.6h-wide perimeter band (all four sides)
-         Zone 1 : next 0.6h-wide band inside Zone 2
-         Zone 1': centre field beyond Zone 1
-       NOTE: NO Zone 3 at ridge × rake corners — the ridge is the building centre line,
-             NOT an exterior edge.                                                        */
+       h = eave height (per ASCE notation for θ ≤ 10°, right-side elevation).
+       Zone 3 : L-shaped corner — 0.6h along each edge, 0.2h deep from each edge
+       Zone 2 : outer 0.6h perimeter band (minus Zone 3 L-shapes)
+       Zone 1 : next 0.6h band inward
+       Zone 1': centre field                                                          */
     const drawZonesFlat = (ptFn, norm, doLabel) => {
-      /* mean roof height in scaled world units (flat roof: hRidge ≈ hEave) */
-      const h_m = hEave;
-      /* parametric fractions along u (eave→ridge = hB) and v (full length = 2·hL) */
-      const u2  = Math.min(0.6 * h_m / hB,        0.45);  // outer band eave side
-      const u3  = Math.min(0.2 * h_m / hB,        u2);    // Zone 3 depth from eave
-      const u1e = Math.min(1.2 * h_m / hB,        0.48);  // Zone 1 inner limit (eave)
-      const v2  = Math.min(0.6 * h_m / (2 * hL),  0.45);  // outer band from each rake
-      const vv1 = 1 - v2;                                  // outer band far-rake side
-      const vz1 = Math.min(1.2 * h_m / (2 * hL),  0.48);  // Zone 1 inner limit (rake)
+      const h_m  = hEave;              // eave height in scaled world units
+      // ── parametric zone boundaries ──────────────────────────────────────────
+      const u2   = Math.min(0.6 * h_m / hB,        0.45);  // 0.6h from eave  (u-dir)
+      const u3   = Math.min(0.2 * h_m / hB,        u2);    // 0.2h from eave  (Zone 3 depth)
+      const u1e  = Math.min(1.2 * h_m / hB,        0.48);  // 1.2h from eave  (Zone 1 inner)
+      const v2   = Math.min(0.6 * h_m / (2 * hL),  0.45);  // 0.6h from rake  (v-dir)
+      const v_z3 = Math.min(0.2 * h_m / (2 * hL),  v2);    // 0.2h from rake  (Zone 3 depth)
+      const vv1  = 1 - v2;                                  // 0.6h from far rake
+      const vz1  = Math.min(1.2 * h_m / (2 * hL),  0.48);  // 1.2h from left rake
       const vz1r = 1 - vz1;
 
-      /* Paint order: Zone 1' first (lowest eps), then Zone 1, Zone 2, Zone 3 on top.
-         Higher eps = further from slope surface = rendered in front (wins visually). */
+      /* Paint order: 1' → 1 → 2 → 3  (higher eps = further from surface = wins visually) */
 
-      /* Zone 1' — centre field */
-      addZone(u1e, 1,   vz1, vz1r,  THEME.zone1, 0.10, 'zone-1p', 0.01, ptFn, norm, doLabel);
+      /* ── Zone 1' — centre field ─────────────────────────────────────── */
+      addZone(u1e, 1,   vz1,  vz1r,  THEME.zone1, 0.10, 'zone-1p', 0.01, ptFn, norm, doLabel);
 
-      /* Zone 1 — inner band ring (eave side + rake sides) */
-      addZone(u2,  u1e, v2,  vv1,   THEME.zone1, 0.22, 'zone-1', 0.03, ptFn, norm, false);
-      addZone(u1e, 1,   v2,  vz1,   THEME.zone1, 0.22, 'zone-1', 0.03, ptFn, norm, false);
-      addZone(u1e, 1,   vz1r,vv1,   THEME.zone1, 0.22, 'zone-1', 0.03, ptFn, norm, false);
+      /* ── Zone 1 — inner 0.6h ring ──────────────────────────────────── */
+      addZone(u2,  u1e, v2,   vv1,   THEME.zone1, 0.22, 'zone-1',  0.03, ptFn, norm, doLabel);
+      addZone(u1e, 1,   v2,   vz1,   THEME.zone1, 0.22, 'zone-1',  0.03, ptFn, norm, false);
+      addZone(u1e, 1,   vz1r, vv1,   THEME.zone1, 0.22, 'zone-1',  0.03, ptFn, norm, false);
 
-      /* Zone 2 — outer 0.6h perimeter band:
-           eave strip (all v) + rake strips (all u), later covered by Zone 3 at corners */
-      addZone(0,   u2,  0,   1,     THEME.zone2, 0.35, 'zone-2', 0.07, ptFn, norm, false);
-      addZone(0,   1,   0,   v2,    THEME.zone2, 0.35, 'zone-2', 0.07, ptFn, norm, false);
-      addZone(0,   1,   vv1, 1,     THEME.zone2, 0.35, 'zone-2', 0.07, ptFn, norm, false);
+      /* ── Zone 2 — outer 0.6h perimeter band (Zone 3 painted on top) ── */
+      addZone(0, u2, 0,   1,         THEME.zone2, 0.35, 'zone-2',  0.07, ptFn, norm, doLabel);
+      addZone(0, 1,  0,   v2,        THEME.zone2, 0.35, 'zone-2',  0.07, ptFn, norm, false);
+      addZone(0, 1,  vv1, 1,         THEME.zone2, 0.35, 'zone-2',  0.07, ptFn, norm, false);
 
-      /* Zone 3 — eave × rake corners ONLY (depth 0.2h, extent 0.6h along rake) */
-      addZone(0,   u3,  0,   v2,    THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, doLabel);
-      addZone(0,   u3,  vv1, 1,     THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, false);
+      /* ── Zone 3 — L-shaped corners at all 4 eave×rake plan corners ────
+           Each L has two arms:
+             Eave arm : u 0→u3 (0.2h deep from eave),  v 0→v2  (0.6h along rake)
+             Rake arm : v 0→v_z3 (0.2h deep from rake), u 0→u2  (0.6h along eave) */
+      // Back corner (v≈0): eave arm
+      addZone(0, u3,  0,       v2,   THEME.zone3, 0.65, 'zone-3',  0.12, ptFn, norm, doLabel);
+      // Back corner: rake arm
+      addZone(0, u2,  0,       v_z3, THEME.zone3, 0.65, 'zone-3',  0.12, ptFn, norm, false);
+      // Front corner (v≈1): eave arm
+      addZone(0, u3,  vv1,     1,    THEME.zone3, 0.65, 'zone-3',  0.12, ptFn, norm, false);
+      // Front corner: rake arm
+      addZone(0, u2,  1-v_z3,  1,    THEME.zone3, 0.65, 'zone-3',  0.12, ptFn, norm, false);
+
+      /* ── Dimension annotations (left / first slope only) ────────────── */
+      if (doLabel && THREE.CSS2DObject) {
+        const hft  = hEave_ft;
+        const d06  = (0.6 * hft).toFixed(1);
+        const d02  = (0.2 * hft).toFixed(1);
+        const nDir = norm.clone().normalize();
+
+        /* helper: floating chip with optional dashed leader line */
+        const mkDimChip = (text, labelPt, leaderAnchor) => {
+          const div = document.createElement('div');
+          div.textContent = text;
+          div.style.cssText = [
+            'font-family:"JetBrains Mono",monospace',
+            'font-size:9px','font-weight:700',
+            'color:#1e293b',
+            'background:rgba(241,245,249,0.93)',
+            'padding:1px 5px','border-radius:3px',
+            'border:1px solid #64748b',
+            'pointer-events:none','white-space:nowrap',
+          ].join(';');
+          const obj = new THREE.CSS2DObject(div);
+          obj.position.copy(labelPt);
+          obj.userData.faceNormal = nDir.clone();
+          this._labelGroup.add(obj);
+          if (leaderAnchor) {
+            const geo = new THREE.BufferGeometry().setFromPoints([labelPt, leaderAnchor]);
+            const mat = new THREE.LineDashedMaterial({
+              color:0x64748b, dashSize:1.2, gapSize:1.0, transparent:true, opacity:0.8,
+            });
+            const ln = new THREE.Line(geo, mat);
+            ln.computeLineDistances();
+            this._labelGroup.add(ln);
+          }
+        };
+
+        // "0.6h=X.Xft" — at outer band mid-point, upper portion of slope
+        const pt06 = ptFn(u2 * 0.5, 0.70, hB, hEave, hRidge, hL)
+                       .addScaledVector(nDir, 0.5);
+        mkDimChip(`0.6h = ${d06}ft`, pt06, null);
+
+        // "0.2h=X.Xft" — Zone 3 corner is small → use leader line
+        const cornerAnchor = ptFn(u3 * 0.5, v2 * 0.4, hB, hEave, hRidge, hL)
+                               .addScaledVector(nDir, 0.2);
+        const outDir = new THREE.Vector3(norm.x, 0, norm.z).normalize();
+        const lbl02  = cornerAnchor.clone()
+          .addScaledVector(outDir, hB * 0.30)
+          .addScaledVector(nDir,   0.45);
+        lbl02.y = Math.max(lbl02.y, hEave * 0.35);
+        mkDimChip(`0.2h = ${d02}ft`, lbl02, cornerAnchor);
+      }
     };
 
     if (_shape === 'monoslope') {
