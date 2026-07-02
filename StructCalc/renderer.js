@@ -2071,7 +2071,12 @@ class Wind3DRenderer {
     if (zone === this._hoverZone) return;
     if (this._hoverZone) {
       this._zoneMeshes.filter(m => m.userData.zoneType === this._hoverZone)
-        al.opacity /= 0.65; });
+        .forEach(m => { m.material.opacity *= 0.65; });
+    }
+    this._hoverZone = zone;
+    if (zone) {
+      this._zoneMeshes.filter(m => m.userData.zoneType === zone)
+        .forEach(m => { m.material.opacity /= 0.65; });
     }
   }
 
