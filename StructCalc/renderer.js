@@ -1666,7 +1666,7 @@ class Wind3DRenderer {
          Zone 3 only at 2 eave×rake corners per slope (4 total for the whole roof). */
 
       /* ── Zone 1' — centre field (beyond 1.2h from every edge) ── */
-      addZone(u1e, 1,   vz1,  vz1r,  THEME.zone1, 0.10, 'zone-1p', 0.01, ptFn, norm, doLabel);
+      addZone(u1e, 1,   vz1,  vz1r,  THEME.zone1, 0.20, 'zone-1p', 0.04, ptFn, norm, doLabel);
 
       /* ── Zone 1 — 0.6h→1.2h perimeter band (eave + both rakes, NOT ridge) ── */
       // Eave band: u2→u1e, full-v (Zone 2 rake strips cover the rake-end portions)
