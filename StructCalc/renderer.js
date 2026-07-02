@@ -2071,9 +2071,21 @@ class Wind3DRenderer {
     if (zone === this._hoverZone) return;
     if (this._hoverZone) {
       this._zoneMeshes.filter(m => m.userData.zoneType === this._hoverZone)
-        .forEach(m => { m.material.opacity *= 0.65; });
+        al.opacity /= 0.65; });
     }
-    this._hoverZone = zone;
-    if (zone) {
-      this._zoneMeshes.filter(m => m.userData.zoneType === zone)
-        .forEach(m => { m.materi
+  }
+
+  /* ── cleanup ─────────────────────────────────── */
+
+  dispose() {
+    cancelAnimationFrame(this._animId);
+    window.removeEventListener('resize', this._onResize);
+    if (this._ro) { this._ro.disconnect(); this._ro = null; }
+    this._renderer.dispose();
+    [this._renderer.domElement, this._labelRenderer?.domElement]
+      .filter(Boolean).forEach(el => el.parentNode?.removeChild(el));
+    [this._building, this._zones, this._dimGroup, this._labelGroup]
+      .filter(Boolean).forEach(g => { this._scene.remove(g); disposeGroup(g); });
+    this._container.innerHTML = '';
+  }
+}
