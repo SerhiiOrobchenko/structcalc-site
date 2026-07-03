@@ -1,4 +1,4 @@
-/* zones-cc-gable-flat.js  v=4
+/* zones-cc-gable-flat.js  v=5
  * ASCE/SEI 7-22, Ch. 30, Part 1 (C&C), Figure 30.3-2A
  * Flat Roofs, Gable and Hip Roofs θ ≤ 7°
  *
@@ -38,10 +38,16 @@
       addZone(u1e, 1,   v2,   vz1,  THEME.zone1,  0.22, 'zone-1',  0.03, ptFn, norm, false);
       addZone(u1e, 1,   vz1r, vv1,  THEME.zone1,  0.22, 'zone-1',  0.03, ptFn, norm, false);
 
-      /* Zone 2 — orange perimeter band 0→0.6h (non-overlapping: eave middle + full rake) */
-      addZone(0,   u2,  v2,   vv1,  THEME.zone2,  0.35, 'zone-2',  0.07, ptFn, norm, doLabel);
-      addZone(0,   1,   0,    v2,   THEME.zone2,  0.35, 'zone-2',  0.07, ptFn, norm, false);
-      addZone(0,   1,   vv1,  1,    THEME.zone2,  0.35, 'zone-2',  0.07, ptFn, norm, false);
+      /* Zone 2 — orange perimeter band (Zone 3 L-shapes SUBTRACTED from rake strips)
+       * Near rake:  (u2,1)×(0,v2)  +  (u3,u2)×(v_z3,v2)   [corner box & arm removed]
+       * Far rake:   (u2,1)×(vv1,1) +  (u3,u2)×(vv1,1-v_z3) [symmetric]             */
+      addZone(0,   u2,  v2,      vv1,     THEME.zone2, 0.35, 'zone-2', 0.07, ptFn, norm, doLabel);
+      // Near-rake: Zone3 corner box (0,u3)×(0,v2) and arm (u3,u2)×(0,v_z3) removed
+      addZone(u2,  1,   0,       v2,      THEME.zone2, 0.35, 'zone-2', 0.07, ptFn, norm, false);
+      addZone(u3,  u2,  v_z3,    v2,      THEME.zone2, 0.35, 'zone-2', 0.07, ptFn, norm, false);
+      // Far-rake: Zone3 corner box (0,u3)×(vv1,1) and arm (u3,u2)×(1-v_z3,1) removed
+      addZone(u2,  1,   vv1,     1,       THEME.zone2, 0.35, 'zone-2', 0.07, ptFn, norm, false);
+      addZone(u3,  u2,  vv1,     1-v_z3,  THEME.zone2, 0.35, 'zone-2', 0.07, ptFn, norm, false);
 
       /* Zone 3 — L-shaped corners at eave × rake (auto-label suppressed; explicit below) */
       addZone(0,   u3,  0,       v2,   THEME.zone3,  0.65, 'zone-3',  0.12, ptFn, norm, false);
