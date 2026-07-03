@@ -1501,36 +1501,38 @@ class Wind3DRenderer {
     this._labelGroup.add(
       new THREE.Line(new THREE.BufferGeometry().setFromPoints([A, B]), lineMat));
 
-    // Perpendicular ticks at each end
+    // 45° tick marks (lean to the right of lineDir = lineDir+perpDir direction)
     const lineDir = B.clone().sub(A).normalize();
     const perpDir = new THREE.Vector3().crossVectors(N, lineDir).normalize();
     const span    = ptA.distanceTo(ptB);
-    const tickLen = Math.min(span * 0.07, 2.0);
+    const tickLen = Math.min(span * 0.10, 2.5);
+    const tickDir = lineDir.clone().add(perpDir).normalize();  // 45° right-of-line
     for (const pt of [A, B]) {
-      const t1 = pt.clone().addScaledVector(perpDir, -tickLen);
-      const t2 = pt.clone().addScaledVector(perpDir,  tickLen);
+      const t1 = pt.clone().addScaledVector(tickDir, -tickLen);
+      const t2 = pt.clone().addScaledVector(tickDir,  tickLen);
       this._labelGroup.add(
         new THREE.Line(new THREE.BufferGeometry().setFromPoints([t1, t2]), lineMat));
     }
 
-    // Chip label offset perpendicular from midpoint
+    // Chip label — same style as building dim chips (θ, B, L etc.): 9px
     if (label && THREE.CSS2DObject) {
       const div = document.createElement('div');
       div.textContent = label;
       div.style.cssText = [
-        'font-family:"JetBrains Mono",monospace', 'font-size:8px', 'font-weight:700',
-        'color:#1e293b', 'background:rgba(241,245,249,0.93)',
-        'padding:1px 4px', 'border-radius:2px', 'border:1px solid #94a3b8',
+        'font-family:"JetBrains Mono",monospace', 'font-size:9px', 'font-weight:700',
+        'color:#1e3a5f', 'background:rgba(255,255,255,0.92)',
+        'padding:1px 5px', 'border-radius:3px', 'border:1px solid #64748b',
         'pointer-events:none', 'white-space:nowrap',
       ].join(';');
       const obj = new THREE.CSS2DObject(div);
-      obj.position.copy(mid.clone().addScaledVector(perpDir, tickLen * 2.5 + 0.4));
+      obj.position.copy(mid.clone().addScaledVector(perpDir, tickLen * 2.8 + 0.5));
       obj.userData.faceNormal = N.clone();
       this._labelGroup.add(obj);
     }
   }
 
-  /** Zone 3 label with solid line + arrowhead (always shown, not camera-facing chip). */
+  /** Zone 3 chip with black horizontal-then-diagonal leader + filled 15° arrowhead.
+   *  Exits chip's near side horizontally (length = card width), then diagonal to zone. */
   _makeZone3ArrowLabel(centroid, norm, zone_a) {
     if (!THREE.CSS2DObject) return;
     const outDir  = new THREE.Vector3(norm.x, 0, norm.z).normalize();
@@ -1538,35 +1540,58 @@ class Wind3DRenderer {
     const labelPt = centroid.clone().addScaledVector(outDir, push);
     labelPt.y = centroid.y * 0.5 + 3;
 
-    // Chip
+    // Chip — 9px matching dim/angle chips
     const div = document.createElement('div');
     div.textContent = 'Zone 3';
     div.style.cssText = [
-      'font-family:"JetBrains Mono",monospace', 'font-size:10px', 'font-weight:700',
+      'font-family:"JetBrains Mono",monospace', 'font-size:9px', 'font-weight:700',
       'color:#7f1d1d', 'background:rgba(248,113,113,0.92)',
-      'padding:2px 6px', 'border-radius:3px', 'pointer-events:none', 'white-space:nowrap',
+      'padding:1px 5px', 'border-radius:3px', 'pointer-events:none', 'white-space:nowrap',
     ].join(';');
     const obj = new THREE.CSS2DObject(div);
     obj.position.copy(labelPt);
     obj.userData.faceNormal = norm.clone().normalize();
     this._labelGroup.add(obj);
 
-    // Solid leader
-    const lineMat = new THREE.LineBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.9 });
-    this._labelGroup.add(
-      new THREE.Line(new THREE.BufferGeometry().setFromPoints([labelPt, centroid]), lineMat));
+    // ── Leader: horizontal stub from chip near-edge, then diagonal to zone ──
+    const cardHW = (zone_a || 6) * 1.5;  // estimated card half-width in world units
 
-    // Arrowhead at centroid (two short lines forming a V)
-    const ld  = centroid.clone().sub(labelPt).normalize();
-    const pd  = new THREE.Vector3().crossVectors(ld, norm).normalize();
-    const aL  = 1.8, aH = 0.9;
-    const tip = centroid.clone().addScaledVector(ld, -aL);
-    this._labelGroup.add(
-      new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([centroid, tip.clone().addScaledVector(pd,  aH)]), lineMat));
-    this._labelGroup.add(
-      new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([centroid, tip.clone().addScaledVector(pd, -aH)]), lineMat));
+    // Near edge: face of chip pointing toward the zone (-outDir side)
+    const nearEdge = labelPt.clone().addScaledVector(outDir, -cardHW);
+
+    // Horizontal direction: XZ-perpendicular to outDir, oriented toward zone's XZ offset
+    const horizDir = new THREE.Vector3()
+      .crossVectors(new THREE.Vector3(0, 1, 0), outDir).normalize();
+    const toCXZ = new THREE.Vector3(centroid.x - labelPt.x, 0, centroid.z - labelPt.z);
+    if (horizDir.dot(toCXZ) < 0) horizDir.negate();
+
+    // Corner: go horizontally from near edge by card full width (2 × cardHW)
+    const cornerPt = nearEdge.clone().addScaledVector(horizDir, cardHW * 2);
+    cornerPt.y = nearEdge.y;  // keep horizontal
+
+    // Arrow tip on zone surface
+    const arrowTip = centroid.clone().addScaledVector(norm, 0.18);
+
+    // Line: nearEdge → cornerPt (horiz) → arrowTip (diagonal)
+    const lineMat = new THREE.LineBasicMaterial(
+      { color: 0x1e293b, transparent: true, opacity: 0.90 });
+    this._labelGroup.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([nearEdge, cornerPt, arrowTip]), lineMat));
+
+    // Filled 15° arrowhead at arrowTip
+    const arrowDir  = arrowTip.clone().sub(cornerPt).normalize();
+    const arrowPerp = new THREE.Vector3().crossVectors(arrowDir, norm).normalize();
+    const aLen = 2.5;
+    const aHW  = aLen * Math.tan(THREE.MathUtils.degToRad(15));  // ~0.67
+    const aBase = arrowTip.clone().addScaledVector(arrowDir, -aLen);
+    const aGeo  = new THREE.BufferGeometry();
+    aGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+      arrowTip.x, arrowTip.y, arrowTip.z,
+      aBase.x + arrowPerp.x * aHW, aBase.y + arrowPerp.y * aHW, aBase.z + arrowPerp.z * aHW,
+      aBase.x - arrowPerp.x * aHW, aBase.y - arrowPerp.y * aHW, aBase.z - arrowPerp.z * aHW,
+    ]), 3));
+    this._labelGroup.add(new THREE.Mesh(
+      aGeo, new THREE.MeshBasicMaterial({ color: 0x1e293b, side: THREE.DoubleSide, depthWrite: false })));
   }
 
   _makeZoneLabel(zoneType, centroid, norm, hB, zone_a, L) {
@@ -1583,7 +1608,7 @@ class Wind3DRenderer {
 
     // Estimate zone width on slope (in world units)
     // For zone-2/3, the zone may be narrow — push label outward + draw leader
-    const isSmall = (zoneType === 'zone-3') || (zoneType === 'zone-2' && zone_a < L * 0.15);
+    const isSmall = (zoneType === 'zone-3');  // Zone 2: label on zone, no leader
 
     let labelPos = centroid.clone();
     let leaderEnd = null;
