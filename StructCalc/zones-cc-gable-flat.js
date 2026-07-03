@@ -1,4 +1,4 @@
-/* zones-cc-gable-flat.js  v=3
+/* zones-cc-gable-flat.js  v=4
  * ASCE/SEI 7-22, Ch. 30, Part 1 (C&C), Figure 30.3-2A
  * Flat Roofs, Gable and Hip Roofs θ ≤ 7°
  *
@@ -60,7 +60,6 @@
       /* ── On-slope dimension lines (OPPOSITE slope only — !doLabel) ──────── */
       if (!doLabel && mkSlopeDim && THREE.CSS2DObject) {
         const d06 = (0.6 * hEave_ft).toFixed(1);
-        const d02 = (0.2 * hEave_ft).toFixed(1);
 
         /* Zone 2 width: 0→0.6h from eave, at v = 0.55 (inside zone 2 field) */
         mkSlopeDim(
@@ -76,14 +75,7 @@
           ptFn(u1e, 0.55, hB, hEave, hRidge, hL),
           norm
         );
-        /* Zone 3 depth from eave: 0→0.2h, at v = v_z3 * 0.40 (inside Zone 3 L-arm) */
-        mkSlopeDim(
-          `0.2h = ${d02} ft`,
-          ptFn(0,   v_z3 * 0.40, hB, hEave, hRidge, hL),
-          ptFn(u3,  v_z3 * 0.40, hB, hEave, hRidge, hL),
-          norm
-        );
-      }
+}
     },
   };
 })();

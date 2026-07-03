@@ -1291,34 +1291,7 @@ class Wind3DRenderer {
     ));
     this._dimHighlight['dim-a'] = grp.children[grp.children.length - 1];
 
-    // ── Zone 5 base dims (y = EPS_Y) ─────────────────────────────────────────
-    // Front face RIGHT corner base
-    const az5FZ = hL + D * 0.7;
-    grp.add(this._buildDim(
-      new THREE.Vector3(hB - zone_a, EPS_Y, az5FZ),
-      new THREE.Vector3(hB,          EPS_Y, az5FZ),
-      new THREE.Vector3(1, 0, -1).normalize(),
-      [
-        [new THREE.Vector3(hB - zone_a, EPS_Y, hL), new THREE.Vector3(hB - zone_a, EPS_Y, az5FZ)],
-        [new THREE.Vector3(hB,          EPS_Y, hL), new THREE.Vector3(hB,          EPS_Y, az5FZ)],
-      ],
-      `a=${fmt(zone_a)}ft`, 'dim-a3', null, new THREE.Vector3(0,0,1)
-    ));
-    this._dimHighlight['dim-a3'] = grp.children[grp.children.length - 1];
-
-    // Right face FRONT corner base (zone-5 strip z=hL-zone_a to hL)
-    const az5RX = hB + aOFF;
-    grp.add(this._buildDim(
-      new THREE.Vector3(az5RX, EPS_Y, hL - zone_a),
-      new THREE.Vector3(az5RX, EPS_Y, hL),
-      new THREE.Vector3(1, 0, -1).normalize(),
-      [
-        [new THREE.Vector3(hB, EPS_Y, hL - zone_a), new THREE.Vector3(az5RX, EPS_Y, hL - zone_a)],
-        [new THREE.Vector3(hB, EPS_Y, hL),          new THREE.Vector3(az5RX, EPS_Y, hL)],
-      ],
-      `a=${fmt(zone_a)}ft`, 'dim-a4', null, new THREE.Vector3(1,0,0)
-    ));
-    this._dimHighlight['dim-a4'] = grp.children[grp.children.length - 1];
+    // dim-a3/dim-a4 (base floor a= dims) removed — redundant with eave-level dims
 
     // ── θ angle dim — at front-left eave corner, in XY plane at z=hL ─────────
     if (theta > 0) {
