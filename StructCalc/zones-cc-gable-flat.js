@@ -1,4 +1,4 @@
-/* zones-cc-gable-flat.js  v=5
+/* zones-cc-gable-flat.js  v=6
  * ASCE/SEI 7-22, Ch. 30, Part 1 (C&C), Figure 30.3-2A
  * Flat Roofs, Gable and Hip Roofs θ ≤ 7°
  *
@@ -21,11 +21,13 @@
       const h_m  = hEave_ft;                                         // eave ht, ft
       const u2   = Math.min(0.6  * h_m / hB,       0.45);          // 0.6h from eave (u)
       const u3   = Math.min(0.2  * h_m / hB,       u2);            // 0.2h from eave (Zone 3 arm depth)
-      const u1e  = Math.min(1.2  * h_m / hB,       0.48);          // 1.2h from eave
+      // u1e: Zone-1 band is always 0.6h beyond u2 in world coords (not independently capped)
+      const u1e  = Math.min(u2 + 0.6 * h_m / hB,     1.0);         // 0.6h band beyond Zone 2
       const v2   = Math.min(0.6  * h_m / (2*hL),   0.45);          // 0.6h from rake (v)
       const v_z3 = Math.min(0.2  * h_m / (2*hL),   v2);            // 0.2h from rake (Zone 3 arm)
       const vv1  = 1 - v2;
-      const vz1  = Math.min(1.2  * h_m / (2*hL),   0.48);          // 1.2h from rake
+      // vz1: Zone-1 band is always 0.6h beyond v2 in world coords
+      const vz1  = Math.min(v2 + 0.6 * h_m / (2*hL), 1.0);         // 0.6h band beyond Zone 2 (v)
       const vz1r = 1 - vz1;
 
       /* ── Zone meshes — paint order: 1' → 1 → 2 → 3 (higher eps wins) ── */
