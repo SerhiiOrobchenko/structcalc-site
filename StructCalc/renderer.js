@@ -1529,18 +1529,15 @@ class Wind3DRenderer {
     // ── Leader: horizontal stub from chip near-edge, then diagonal to zone ──
     const cardHW = (zone_a || 6) * 1.5;  // estimated card half-width in world units
 
-    // Near edge: face of chip pointing toward the zone (-outDir side)
-    const nearEdge = labelPt.clone().addScaledVector(outDir, -cardHW);
+    // Horizontal direction: toward the zone in XZ (= -outDir)
+    const horizDir = outDir.clone().negate();
 
-    // Horizontal direction: XZ-perpendicular to outDir, oriented toward zone's XZ offset
-    const horizDir = new THREE.Vector3()
-      .crossVectors(new THREE.Vector3(0, 1, 0), outDir).normalize();
-    const toCXZ = new THREE.Vector3(centroid.x - labelPt.x, 0, centroid.z - labelPt.z);
-    if (horizDir.dot(toCXZ) < 0) horizDir.negate();
+    // Near edge: face of chip pointing toward the zone (horizDir side)
+    const nearEdge = labelPt.clone().addScaledVector(horizDir, cardHW);
 
-    // Corner: go horizontally from near edge by card full width (2 × cardHW)
+    // Corner: go horizontally from near edge by card full width (2 × cardHW) toward zone
     const cornerPt = nearEdge.clone().addScaledVector(horizDir, cardHW * 2);
-    cornerPt.y = nearEdge.y;  // keep horizontal
+    cornerPt.y = nearEdge.y;  // keep horizontal (ground-parallel)
 
     // Arrow tip on zone surface
     const arrowTip = centroid.clone().addScaledVector(norm, 0.18);
