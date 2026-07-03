@@ -32,12 +32,12 @@ async function loadWindScripts() {
   await loadScriptTag('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js');
   await loadScriptTag('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js');
   await loadScriptTag('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js');
-  await loadScriptTag('zones-cc-gable-flat.js?v=1');
+  await loadScriptTag('zones-cc-gable-flat.js?v=2');
   await loadScriptTag('zones-cc-gable-mid.js?v=1');
   await loadScriptTag('zones-cc-gable-steep.js?v=1');
   await loadScriptTag('zones-cc-hip.js?v=1');
   await loadScriptTag('zones-cc-monoslope.js?v=1');
-  await loadScriptTag('renderer.js?v=17');
+  await loadScriptTag('renderer.js?v=18');
   await loadScriptTag('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
   await loadScriptTag('map-module.js?v=3');
   windScriptsLoaded = true;
@@ -1463,15 +1463,17 @@ function buildWindStepReport(r, s) {
 
 /* ── Results render ────────────────────────────────────────────────────── */
 var ZONE_COLORS = {
-  'zone-1': '#4ade80',
-  'zone-2': '#fbbf24',
+  'zone-1p': '#4ade80',
+  'zone-1':  '#fde047',
+  'zone-2':  '#f97316',
   'zone-3': '#f87171',
   'zone-4': '#7dd3fc',
   'zone-5': '#a78bfa',
 };
 var ZONE_BG_COLORS = {
-  'zone-1': 'rgba(74,222,128,0.18)',
-  'zone-2': 'rgba(251,191,36,0.18)',
+  'zone-1p': 'rgba(74,222,128,0.18)',
+  'zone-1':  'rgba(253,224,71,0.18)',
+  'zone-2':  'rgba(249,115,22,0.18)',
   'zone-3': 'rgba(248,113,113,0.18)',
   'zone-4': 'rgba(125,211,252,0.18)',
   'zone-5': 'rgba(167,139,250,0.18)',
@@ -1756,7 +1758,7 @@ function renderWindResults(r, s) {
     var roofLabel = {'1p':'Zone 1′ — field (low)','1':'Zone 1 — field','2':'Zone 2 — edge','3':'Zone 3 — corner'};
     var roofCls   = {'1p':'zone-low','1':'zone-low','2':'zone-mid','3':'zone-high'};
     if (r.ccRoof && r.ccRoof.length) {
-      var ccRoofZoneMap = {'1p':'zone-1','1':'zone-1','2':'zone-2','3':'zone-3'};
+      var ccRoofZoneMap = {'1p':'zone-1p','1':'zone-1','2':'zone-2','3':'zone-3'};
       html += '<div class="result-card"><div class="result-card-head">C&amp;C — Roof (Ch. 30)</div>';
       r.ccRoof.forEach(function(z) {
         var zt  = ccRoofZoneMap[z.zone] || '';

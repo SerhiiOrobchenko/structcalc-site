@@ -36,13 +36,15 @@ const THEME = {
   dimText    : '#1e3a5f',  // dark navy text — readable on light bg
   dimBg      : 'rgba(255,255,255,0.92)',
 
-  zone1      : 0x4ade80,   // green-400  — interior field
-  zone2      : 0xfbbf24,   // amber-400  — edges
+  zone1p     : 0x4ade80,   // green-400  — Zone 1' central field
+  zone1      : 0xfde047,   // yellow-300 — interior field
+  zone2      : 0xf97316,   // orange-500 — edges
   zone3      : 0xf87171,   // red-400    — corners
   zone4      : 0x7dd3fc,   // sky-300    — wall field
   zone5      : 0xa78bfa,   // violet-400 — wall corner strip
-  zoneLabel1 : { bg:'rgba(74,222,128,0.92)',  fg:'#14532d' },  // green-400
-  zoneLabel2 : { bg:'rgba(251,191,36,0.92)',  fg:'#78350f' },  // amber-400
+  zoneLabel1p : { bg:'rgba(74,222,128,0.92)',  fg:'#14532d' },  // green-400  — Zone 1'
+  zoneLabel1  : { bg:'rgba(253,224,71,0.92)',  fg:'#713f12' },  // yellow-300 — Zone 1
+  zoneLabel2  : { bg:'rgba(249,115,22,0.92)',  fg:'#7c2d12' },  // orange-500 — Zone 2
   zoneLabel3 : { bg:'rgba(248,113,113,0.92)', fg:'#7f1d1d' },  // red-400
   zoneLabel4 : { bg:'rgba(125,211,252,0.92)', fg:'#0c4a6e' },  // sky-300
   zoneLabel5 : { bg:'rgba(167,139,250,0.92)', fg:'#2e1065' },  // violet-400
@@ -1482,13 +1484,98 @@ class Wind3DRenderer {
 
   /* ── zone CSS2D labels with optional leader lines ───────────────────────── */
 
+  /** On-slope dimension line with end ticks + chip label.
+   *  ptA, ptB  : points already on the slope surface
+   *  norm      : outward surface normal
+   *  eps       : offset above surface so line clears geometry              */
+  _mkSlopeDim(label, ptA, ptB, norm, eps) {
+    const N   = norm.clone().normalize();
+    const off = N.clone().multiplyScalar((eps || 0.10) + 0.06);
+    const A   = ptA.clone().add(off);
+    const B   = ptB.clone().add(off);
+    const mid = A.clone().lerp(B, 0.5);
+    const lineMat = new THREE.LineBasicMaterial(
+      { color: 0x1e293b, transparent: true, opacity: 0.80 });
+
+    // Main dim line
+    this._labelGroup.add(
+      new THREE.Line(new THREE.BufferGeometry().setFromPoints([A, B]), lineMat));
+
+    // Perpendicular ticks at each end
+    const lineDir = B.clone().sub(A).normalize();
+    const perpDir = new THREE.Vector3().crossVectors(N, lineDir).normalize();
+    const span    = ptA.distanceTo(ptB);
+    const tickLen = Math.min(span * 0.07, 2.0);
+    for (const pt of [A, B]) {
+      const t1 = pt.clone().addScaledVector(perpDir, -tickLen);
+      const t2 = pt.clone().addScaledVector(perpDir,  tickLen);
+      this._labelGroup.add(
+        new THREE.Line(new THREE.BufferGeometry().setFromPoints([t1, t2]), lineMat));
+    }
+
+    // Chip label offset perpendicular from midpoint
+    if (label && THREE.CSS2DObject) {
+      const div = document.createElement('div');
+      div.textContent = label;
+      div.style.cssText = [
+        'font-family:"JetBrains Mono",monospace', 'font-size:8px', 'font-weight:700',
+        'color:#1e293b', 'background:rgba(241,245,249,0.93)',
+        'padding:1px 4px', 'border-radius:2px', 'border:1px solid #94a3b8',
+        'pointer-events:none', 'white-space:nowrap',
+      ].join(';');
+      const obj = new THREE.CSS2DObject(div);
+      obj.position.copy(mid.clone().addScaledVector(perpDir, tickLen * 2.5 + 0.4));
+      obj.userData.faceNormal = N.clone();
+      this._labelGroup.add(obj);
+    }
+  }
+
+  /** Zone 3 label with solid line + arrowhead (always shown, not camera-facing chip). */
+  _makeZone3ArrowLabel(centroid, norm, zone_a) {
+    if (!THREE.CSS2DObject) return;
+    const outDir  = new THREE.Vector3(norm.x, 0, norm.z).normalize();
+    const push    = (zone_a || 6) * 2.5 + 10;
+    const labelPt = centroid.clone().addScaledVector(outDir, push);
+    labelPt.y = centroid.y * 0.5 + 3;
+
+    // Chip
+    const div = document.createElement('div');
+    div.textContent = 'Zone 3';
+    div.style.cssText = [
+      'font-family:"JetBrains Mono",monospace', 'font-size:10px', 'font-weight:700',
+      'color:#7f1d1d', 'background:rgba(248,113,113,0.92)',
+      'padding:2px 6px', 'border-radius:3px', 'pointer-events:none', 'white-space:nowrap',
+    ].join(';');
+    const obj = new THREE.CSS2DObject(div);
+    obj.position.copy(labelPt);
+    obj.userData.faceNormal = norm.clone().normalize();
+    this._labelGroup.add(obj);
+
+    // Solid leader
+    const lineMat = new THREE.LineBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.9 });
+    this._labelGroup.add(
+      new THREE.Line(new THREE.BufferGeometry().setFromPoints([labelPt, centroid]), lineMat));
+
+    // Arrowhead at centroid (two short lines forming a V)
+    const ld  = centroid.clone().sub(labelPt).normalize();
+    const pd  = new THREE.Vector3().crossVectors(ld, norm).normalize();
+    const aL  = 1.8, aH = 0.9;
+    const tip = centroid.clone().addScaledVector(ld, -aL);
+    this._labelGroup.add(
+      new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([centroid, tip.clone().addScaledVector(pd,  aH)]), lineMat));
+    this._labelGroup.add(
+      new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([centroid, tip.clone().addScaledVector(pd, -aH)]), lineMat));
+  }
+
   _makeZoneLabel(zoneType, centroid, norm, hB, zone_a, L) {
     if (!THREE.CSS2DObject) return;
 
     const cfgMap = {
-      'zone-1p':{ ...THEME.zoneLabel1, text: "Zone 1'" },
-      'zone-1': { ...THEME.zoneLabel1, text: 'Zone 1' },
-      'zone-2': { ...THEME.zoneLabel2, text: 'Zone 2' },
+      'zone-1p':{ ...THEME.zoneLabel1p, text: "Zone 1'" },
+      'zone-1': { ...THEME.zoneLabel1,  text: 'Zone 1' },
+      'zone-2': { ...THEME.zoneLabel2,  text: 'Zone 2' },
       'zone-3': { ...THEME.zoneLabel3, text: 'Zone 3' },
     };
     const cfg = cfgMap[zoneType];
@@ -1557,8 +1644,8 @@ class Wind3DRenderer {
     if (!THREE.CSS2DObject) return;
     const cfgMap = {
       "zone-1p":{ bg:'rgba(74,222,128,0.80)',  fg:'#14532d', text:"Zone 1'" },
-      'zone-1': { bg:'rgba(74,222,128,0.92)',  fg:'#14532d', text:'Zone 1' },
-      'zone-2': { bg:'rgba(251,191,36,0.92)',  fg:'#78350f', text:'Zone 2' },
+      'zone-1': { bg:'rgba(253,224,71,0.92)',  fg:'#713f12', text:'Zone 1' },
+      'zone-2': { bg:'rgba(249,115,22,0.92)',  fg:'#7c2d12', text:'Zone 2' },
       'zone-3': { bg:'rgba(248,113,113,0.92)', fg:'#7f1d1d', text:'Zone 3' },
       'zone-4': { bg:'rgba(125,211,252,0.92)', fg:'#0c4a6e', text:'Zone 4' },
       'zone-5': { bg:'rgba(167,139,250,0.92)', fg:'#2e1065', text:'Zone 5' },
@@ -1676,7 +1763,9 @@ class Wind3DRenderer {
         this._mkDimChip(t,pt,anchor,nDir),
       makeZoneLabelFlat: (zt,pt,n,td) =>
         this._makeZoneLabelFlat(zt,pt,n,td),
-      leftNormal: (b,e,r,l) => this._leftNormal(b,e,r,l),
+      leftNormal:     (b,e,r,l)       => this._leftNormal(b,e,r,l),
+      mkSlopeDim:     (lbl,ptA,ptB,n) => this._mkSlopeDim(lbl,ptA,ptB,n,0.10),
+      makeZone3Label: (pt,n)          => this._makeZone3ArrowLabel(pt,n,zone_a),
     };
 
     if (_shape === 'monoslope') {
