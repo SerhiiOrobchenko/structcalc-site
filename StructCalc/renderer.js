@@ -825,6 +825,79 @@ class Wind3DRenderer {
      Draws Zone 5 (corner strip, width=zone_a) and Zone 4 (field) on all 4
      vertical wall faces. matZ(color, opacity) is the same factory used for
      roof zones.                                                               */
+  /* ── Helper methods used by zone descriptor files (zones-cc-*.js) ──────────
+     * Changing style here affects all diagram types at once.                   */
+
+  /** Offset quad mesh for zone patches (hip main slopes). */
+  _addQuadMesh(matZ, p0, p1, p2, p3, norm, zt, op, eps) {
+    const off  = norm.clone().multiplyScalar(eps);
+    const col  = zt === 'zone-1' ? THEME.zone1
+               : zt === 'zone-2' ? THEME.zone2
+               : zt === 'zone-3' ? THEME.zone3
+               : zt === 'zone-4' ? THEME.zone4 : THEME.zone5;
+    const mesh = new THREE.Mesh(
+      this._quad(p0.clone().add(off), p1.clone().add(off),
+                 p2.clone().add(off), p3.clone().add(off)),
+      matZ(col, op)
+    );
+    mesh.renderOrder = 1; mesh.userData = { zoneType: zt };
+    this._zones.add(mesh); this._zoneMeshes.push(mesh);
+  }
+
+  /** Triangle or quad mesh for hip triangular end slopes. */
+  _addTriPart(matZ, pts, zt, op, eps, norm) {
+    const off = norm.clone().multiplyScalar(eps);
+    const col = zt === 'zone-1' ? THEME.zone1
+              : zt === 'zone-2' ? THEME.zone2 : THEME.zone3;
+    let geo;
+    if (pts.length === 3) {
+      geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+        pts[0].x+off.x, pts[0].y+off.y, pts[0].z+off.z,
+        pts[1].x+off.x, pts[1].y+off.y, pts[1].z+off.z,
+        pts[2].x+off.x, pts[2].y+off.y, pts[2].z+off.z,
+      ]), 3));
+      geo.computeVertexNormals();
+    } else {
+      geo = this._quad(
+        pts[0].clone().add(off), pts[1].clone().add(off),
+        pts[2].clone().add(off), pts[3].clone().add(off)
+      );
+    }
+    const mesh = new THREE.Mesh(geo, matZ(col, op));
+    mesh.renderOrder = 1; mesh.userData = { zoneType: zt };
+    this._zones.add(mesh); this._zoneMeshes.push(mesh);
+  }
+
+  /** Dimension chip label with optional dashed leader line.
+   *  Edit style here to update all diagrams. */
+  _mkDimChip(text, labelPt, leaderAnchor, nDir) {
+    if (!THREE.CSS2DObject) return;
+    const div = document.createElement('div');
+    div.textContent = text;
+    div.style.cssText = [
+      'font-family:"JetBrains Mono",monospace',
+      'font-size:9px', 'font-weight:700', 'color:#1e293b',
+      'background:rgba(241,245,249,0.93)',
+      'padding:1px 5px', 'border-radius:3px',
+      'border:1px solid #64748b',
+      'pointer-events:none', 'white-space:nowrap',
+    ].join(';');
+    const obj = new THREE.CSS2DObject(div);
+    obj.position.copy(labelPt);
+    if (nDir) obj.userData.faceNormal = nDir.clone();
+    this._labelGroup.add(obj);
+    if (leaderAnchor) {
+      const geo = new THREE.BufferGeometry().setFromPoints([labelPt, leaderAnchor]);
+      const mat = new THREE.LineDashedMaterial({
+        color: 0x64748b, dashSize: 1.2, gapSize: 1.0, transparent: true, opacity: 0.8,
+      });
+      const ln = new THREE.Line(geo, mat);
+      ln.computeLineDistances();
+      this._labelGroup.add(ln);
+    }
+  }
+
   _drawWallZones(B, L, hEave, hRidge, zone_a, matZ) {
     const hB = B / 2, hL = L / 2;
     const EPS = 0.06;   // tiny outward offset to avoid z-fighting with wall mesh
@@ -1588,467 +1661,48 @@ class Wind3DRenderer {
       }
     };
 
-    /* Shared zone layout applied to one surface (doLabel = draw text labels) */
-    const drawZones = (ptFn, norm, doLabel) => {
-      addZone(u_zone,u1, v_zone,v1, THEME.zone1,0.20,'zone-1',0.02,ptFn,norm,doLabel);
-      addZone(0,u_zone,  v_zone,v1, THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,doLabel);
-      addZone(u1,1,      v_zone,v1, THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
-      addZone(u_zone,u1, 0,v_zone,  THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
-      addZone(u_zone,u1, v1,1,      THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
-      addZone(0,u_zone,  0,v_zone,  THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,doLabel);
-      addZone(0,u_zone,  v1,1,      THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,false);
-      addZone(u1,1,      0,v_zone,  THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,false);
-      addZone(u1,1,      v1,1,      THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,false);
-    };
-
-    /* Gable-specific zone layout (ASCE 7-22 Fig. 30.3-2B/2C):
-       Zone 3 ONLY at eave × rake corners.
-       Ridge × rake corners are Zone 2, not Zone 3.           */
-    const drawZonesGable = (ptFn, norm, doLabel) => {
-      /* Zone 1: interior field (eave, rake, and ridge strips excluded) */
-      addZone(u_zone,u1, v_zone,v1, THEME.zone1,0.20,'zone-1',0.02,ptFn,norm,doLabel);
-      /* Zone 2: eave middle strip (between the two rake corner zones) */
-      addZone(0,u_zone,  v_zone,v1, THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
-      /* Zone 2: full ridge strip — no Zone 3 at ridge-rake corners */
-      addZone(u1,1,      0,1,       THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
-      /* Zone 2: rake middle strips (eave-corner to ridge) */
-      addZone(u_zone,u1, 0,v_zone,  THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
-      addZone(u_zone,u1, v1,1,      THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
-      /* Zone 3: ONLY eave × rake corners (two per slope) */
-      addZone(0,u_zone,  0,v_zone,  THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,doLabel);
-      addZone(0,u_zone,  v1,1,      THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,false);
-    };
-
-    /* Gable zone layout for 7° < θ ≤ 27° (ASCE 7-22 Fig. 30.3-2B/2C):
-       Zone 3 at RIDGE × RAKE corners only.
-       Eave × rake corners are Zone 2, not Zone 3.                       */
-    const drawZonesGableRidge = (ptFn, norm, doLabel) => {
-      /* Zone 1: interior field */
-      addZone(u_zone,u1, v_zone,v1, THEME.zone1,0.20,'zone-1',0.02,ptFn,norm,doLabel);
-      /* Zone 2: eave middle strip */
-      addZone(0,u_zone,  v_zone,v1, THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
-      /* Zone 2: ridge middle strip (between zone-3 ridge corners) */
-      addZone(u1,1,      v_zone,v1, THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
-      /* Zone 2: rake middle strips */
-      addZone(u_zone,u1, 0,v_zone,  THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
-      addZone(u_zone,u1, v1,1,      THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
-      /* Zone 2: eave × rake corners (NOT zone 3 for this θ range!) */
-      addZone(0,u_zone,  0,v_zone,  THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
-      addZone(0,u_zone,  v1,1,      THEME.zone2,0.35,'zone-2',0.07,ptFn,norm,false);
-      /* Zone 3: ONLY ridge × rake corners */
-      addZone(u1,1,      0,v_zone,  THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,doLabel);
-      addZone(u1,1,      v1,1,      THEME.zone3,0.65,'zone-3',0.12,ptFn,norm,false);
-    };
-
-    /* Flat roof / low-slope zone layout (ASCE 7-22 Fig. 30.3-2A, θ ≤ 7°):
-       h = eave height (per ASCE notation for θ ≤ 10°, right-side elevation).
-       Zone 3 : L-shaped corner — 0.6h along each edge, 0.2h deep from each edge
-       Zone 2 : outer 0.6h perimeter band (minus Zone 3 L-shapes)
-       Zone 1 : next 0.6h band inward
-       Zone 1': centre field                                                          */
-    const drawZonesFlat = (ptFn, norm, doLabel) => {
-      const h_m  = hEave_ft;           // eave height in FEET (same units as hB, hL)
-      // ── parametric zone boundaries ──────────────────────────────────────────
-      const u2   = Math.min(0.6 * h_m / hB,        0.45);  // 0.6h from eave  (u-dir)
-      const u3   = Math.min(0.2 * h_m / hB,        u2);    // 0.2h from eave  (Zone 3 depth)
-      const u1e  = Math.min(1.2 * h_m / hB,        0.48);  // 1.2h from eave  (Zone 1 inner)
-      const v2   = Math.min(0.6 * h_m / (2 * hL),  0.45);  // 0.6h from rake  (v-dir)
-      const v_z3 = Math.min(0.2 * h_m / (2 * hL),  v2);    // 0.2h from rake  (Zone 3 depth)
-      const vv1  = 1 - v2;                                  // 0.6h from far rake
-      const vz1  = Math.min(1.2 * h_m / (2 * hL),  0.48);  // 1.2h from left rake
-      const vz1r = 1 - vz1;
-
-      /* Paint order: 1' → 1 → 2 → 3  (higher eps = further from surface = wins visually)
-         Ridge (u=1) is an INTERIOR joint — NOT a roof edge. Zones come only from:
-           • eave (u=0)        → Zone 2 strip + Zone 1 strip
-           • back rake (v=0)   → Zone 2 strip + Zone 1 strip
-           • front rake (v=1)  → Zone 2 strip + Zone 1 strip
-         Zone 3 only at 2 eave×rake corners per slope (4 total for the whole roof). */
-
-      /* ── Zone 1' — centre field (beyond 1.2h from every edge) ── */
-      addZone(u1e, 1,   vz1,  vz1r,  THEME.zone1, 0.20, 'zone-1p', 0.04, ptFn, norm, doLabel);
-
-      /* ── Zone 1 — 0.6h→1.2h perimeter band (eave + both rakes, NOT ridge) ── */
-      // Eave band: u2→u1e, full-v (Zone 2 rake strips cover the rake-end portions)
-      addZone(u2,  u1e, 0,    1,     THEME.zone1, 0.22, 'zone-1',  0.03, ptFn, norm, doLabel);
-      // Deep-slope back-rake band: beyond Zone-1 eave inner boundary, toward ridge
-      addZone(u1e, 1,   v2,   vz1,   THEME.zone1, 0.22, 'zone-1',  0.03, ptFn, norm, false);
-      // Deep-slope front-rake band
-      addZone(u1e, 1,   vz1r, vv1,   THEME.zone1, 0.22, 'zone-1',  0.03, ptFn, norm, false);
-
-      /* ── Zone 2 — outer 0.6h perimeter band (eave + both rakes, NOT ridge) ── */
-      // Eave strip: trimmed v to avoid self-overlap with rake strips
-      addZone(0,   u2,  v2,   vv1,   THEME.zone2, 0.35, 'zone-2',  0.07, ptFn, norm, doLabel);
-      // Back rake strip — full u (Zone 3 painted on top at corner)
-      addZone(0,   1,   0,    v2,    THEME.zone2, 0.35, 'zone-2',  0.07, ptFn, norm, false);
-      // Front rake strip — full u
-      addZone(0,   1,   vv1,  1,     THEME.zone2, 0.35, 'zone-2',  0.07, ptFn, norm, false);
-
-      /* ── Zone 3 — L-shaped at 2 eave×rake corners per slope (4 for whole roof) ──
-           Eave arm: depth 0.2h from eave, length 0.6h along rake
-           Rake arm: depth 0.2h from rake, length 0.6h along eave (starts at u3, no overlap) */
-      // Back corner (v≈0): eave arm
-      addZone(0,   u3,  0,       v2,    THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, doLabel);
-      // Back corner: rake arm
-      addZone(u3,  u2,  0,       v_z3,  THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, false);
-      // Front corner (v≈1): eave arm
-      addZone(0,   u3,  vv1,     1,     THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, false);
-      // Front corner: rake arm
-      addZone(u3,  u2,  1-v_z3,  1,     THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, false);
-
-      /* ── Dimension annotations (left / first slope only) ────────────── */
-      if (doLabel && THREE.CSS2DObject) {
-        const hft  = hEave_ft;
-        const d06  = (0.6 * hft).toFixed(1);
-        const d02  = (0.2 * hft).toFixed(1);
-        const nDir = norm.clone().normalize();
-
-        /* helper: floating chip with optional dashed leader line */
-        const mkDimChip = (text, labelPt, leaderAnchor) => {
-          const div = document.createElement('div');
-          div.textContent = text;
-          div.style.cssText = [
-            'font-family:"JetBrains Mono",monospace',
-            'font-size:9px','font-weight:700',
-            'color:#1e293b',
-            'background:rgba(241,245,249,0.93)',
-            'padding:1px 5px','border-radius:3px',
-            'border:1px solid #64748b',
-            'pointer-events:none','white-space:nowrap',
-          ].join(';');
-          const obj = new THREE.CSS2DObject(div);
-          obj.position.copy(labelPt);
-          obj.userData.faceNormal = nDir.clone();
-          this._labelGroup.add(obj);
-          if (leaderAnchor) {
-            const geo = new THREE.BufferGeometry().setFromPoints([labelPt, leaderAnchor]);
-            const mat = new THREE.LineDashedMaterial({
-              color:0x64748b, dashSize:1.2, gapSize:1.0, transparent:true, opacity:0.8,
-            });
-            const ln = new THREE.Line(geo, mat);
-            ln.computeLineDistances();
-            this._labelGroup.add(ln);
-          }
-        };
-
-        // "0.6h=X.Xft" — at outer band mid-point, upper portion of slope
-        const pt06 = ptFn(u2 * 0.5, 0.70, hB, hEave, hRidge, hL)
-                       .addScaledVector(nDir, 0.5);
-        mkDimChip(`0.6h = ${d06}ft`, pt06, null);
-
-        // "0.2h=X.Xft" — Zone 3 corner is small → use leader line
-        const cornerAnchor = ptFn(u3 * 0.5, v2 * 0.4, hB, hEave, hRidge, hL)
-                               .addScaledVector(nDir, 0.2);
-        const outDir = new THREE.Vector3(norm.x, 0, norm.z).normalize();
-        const lbl02  = cornerAnchor.clone()
-          .addScaledVector(outDir, hB * 0.30)
-          .addScaledVector(nDir,   0.45);
-        lbl02.y = Math.max(lbl02.y, hEave * 0.35);
-        mkDimChip(`0.2h = ${d02}ft`, lbl02, cornerAnchor);
-      }
+    /* ── Zone descriptor dispatch — geometry lives in zones-cc-*.js ─────── */
+    const ctx = {
+      B, L, hB, hL,
+      hEave_ft, hRidge_ft, hEave, hRidge,
+      zone_a, u_zone, u1, v_zone, v1,
+      THEME, THREE,
+      addZone,
+      addQuadMesh: (p0,p1,p2,p3,n,zt,op,eps) =>
+        this._addQuadMesh(matZ,p0,p1,p2,p3,n,zt,op,eps),
+      addTriPart: (pts,zt,op,eps,n) =>
+        this._addTriPart(matZ,pts,zt,op,eps,n),
+      mkDimChip: (t,pt,anchor,nDir) =>
+        this._mkDimChip(t,pt,anchor,nDir),
+      makeZoneLabelFlat: (zt,pt,n,td) =>
+        this._makeZoneLabelFlat(zt,pt,n,td),
+      leftNormal: (b,e,r,l) => this._leftNormal(b,e,r,l),
     };
 
     if (_shape === 'monoslope') {
-      /* Single sloped surface: u=0 → windward/high (X=-hB, Y=hRidge)
-                                 u=1 → leeward/low  (X=+hB, Y=hEave)  */
-      const ptMono = (u, v, hB, hEave, hRidge, hL) => new THREE.Vector3(
-        -hB + u * 2 * hB,
-        hRidge - u * (hRidge - hEave),
-        v * 2 * hL - hL
-      );
-      const _e1 = new THREE.Vector3(2*hB, hEave - hRidge, 0);  // along u direction
-      const _e2 = new THREE.Vector3(0, 0, 2*hL);               // along v direction
+      const ptMono = (u,v,_b,_e,_r,_l) =>
+        new THREE.Vector3(-hB + u*2*hB, hRidge - u*(hRidge-hEave), v*2*hL - hL);
+      const _e1 = new THREE.Vector3(2*hB, hEave-hRidge, 0);
+      const _e2 = new THREE.Vector3(0, 0, 2*hL);
       const monoNorm = new THREE.Vector3().crossVectors(_e2, _e1).normalize();
       if (monoNorm.y < 0) monoNorm.negate();
-      drawZones(ptMono, monoNorm, true);
+      window.ZONE_DESCRIPTORS['cc-monoslope']
+        .drawZones({ ...ctx, ptFn: ptMono, norm: monoNorm, doLabel: true });
 
     } else if (_shape === 'hip') {
-      /* Hip roof zones — ASCE 7-22 Figs. 30.3-2D–2G
-         Zone 3: outer eave perimeter strip (all 4 eave edges, continuous), width a
-         Zone 2: continuous strip width a along hip ridges + main ridge
-                 — U-shaped on trapezoidal slopes (side→top→side)
-                 — constant-width strips along both hips on triangular end slopes
-         Zone 1: interior                                                            */
-      const _hipB  = Math.min(B, L), _hipL = Math.max(B, L);
-      const _hipHB = _hipB / 2, _hipHL = _hipL / 2;
-      const _triH  = _hipHB;                                // hip triangle plan height = _hipHB (equal-pitch)
-      const _r2    = _hipHL - _triH;                        // half ridge length
-      const L_hip  = Math.sqrt(_hipHB*_hipHB + _triH*_triH); // hip ridge plan length
-
-      /* For B > L the long axis is X (ridge along X), short axis is Z.
-         _hipB = min(B,L) = L, _hipL = max(B,L) = B.
-         ptHipL/ptHipR use the convention: short span along X, long span along Z.
-         When B > L we XZ-swap all output points to map those slopes onto the correct
-         world faces: ptHipL -> back-Z slope, ptHipR -> front-Z slope.             */
-      const xzSwap = B > L;
-      const xzW = p => xzSwap ? new THREE.Vector3(p.z, p.y, p.x) : p;
-
-      /* Surface functions for trapezoidal main slopes */
-      const ptHipL = (u, v) => {
-        const zH = (1-u)*_hipHL + u*_r2;
-        return new THREE.Vector3(-_hipHB*(1-u), (1-u)*hEave + u*hRidge, (2*v-1)*zH);
-      };
-      const ptHipR = (u, v) => {
-        const zH = (1-u)*_hipHL + u*_r2;
-        return new THREE.Vector3( _hipHB*(1-u), (1-u)*hEave + u*hRidge, (2*v-1)*zH);
-      };
-      const wrapL = (u,v,_a,_b,_c,_d) => xzW(ptHipL(u,v));
-      const wrapR = (u,v,_a,_b,_c,_d) => xzW(ptHipR(u,v));
-
-      const _leftNorm0  = this._leftNormal(_hipHB, hEave, hRidge, _hipHL);
-      const _rightNorm0 = new THREE.Vector3(-_leftNorm0.x, _leftNorm0.y, _leftNorm0.z);
-      // XZ-swap the normals too: (nx,ny,nz) -> (nz,ny,nx) maps X-face normal to Z-face normal
-      const _leftNorm  = xzSwap ? new THREE.Vector3(_leftNorm0.z,  _leftNorm0.y, _leftNorm0.x) : _leftNorm0;
-      const _rightNorm = xzSwap ? new THREE.Vector3(_rightNorm0.z, _rightNorm0.y, _rightNorm0.x) : _rightNorm0;
-
-      /* Zone width fractions for main slopes
-         Hip-ridge Zone 2 inner boundary uses PERPENDICULAR plan distance a from the hip ridge:
-           v_perp(u) = zone_a * L_hip / (2 * _hipHB * zHalf(u))
-         This gives constant-width a strips rather than constant-z-depth strips.          */
-      const _ua   = Math.min(zone_a / _hipHB,                        0.45);  // Zone 3 eave
-      const _ua2  = Math.min(zone_a / _hipHB,                        0.45);  // Zone 2 ridge
-      const _ve   = Math.min(zone_a*L_hip / (2*_hipHB*_hipHL),       0.45);  // hip-ridge v at u=0
-      const _vr   = _r2 > 0.5
-        ? Math.min(zone_a*L_hip / (2*_hipHB*_r2), 0.45)
-        : 0.45;                                                               // hip-ridge v at u=1
-      /* Corrected v-boundaries at the actual u-endpoints of the hip strips.
-         Hip strips run u=[_ua, 1-_ua2]; zHalf varies so _ve/_vr (computed at
-         u=0 and u=1) are wrong at the truncated endpoints.                        */
-      const _zH_ua  = (1 - _ua)  * _hipHL + _ua        * _r2;   // zHalf at u=_ua
-      const _zH_ua2 =      _ua2  * _hipHL + (1 - _ua2) * _r2;   // zHalf at u=1-_ua2
-      const _ve_h   = Math.min(zone_a*L_hip / (2*_hipHB * _zH_ua),  0.45); // v at strip start
-      const _vr_h   = Math.min(zone_a*L_hip / (2*_hipHB * _zH_ua2), 0.45); // v at strip end
-
-      /* Helper: explicit quad mesh */
-      const addQuadMesh = (p0, p1, p2, p3, norm_, zt, op, eps) => {
-        const off_ = norm_.clone().multiplyScalar(eps);
-        const geo  = this._quad(
-          p0.clone().add(off_), p1.clone().add(off_),
-          p2.clone().add(off_), p3.clone().add(off_)
-        );
-        const mesh = new THREE.Mesh(geo, matZ(
-          zt==='zone-1' ? THEME.zone1 : zt==='zone-2' ? THEME.zone2 : THEME.zone3, op
-        ));
-        mesh.renderOrder = 1;
-        mesh.userData = { zoneType: zt };
-        this._zones.add(mesh);
-        this._zoneMeshes.push(mesh);
-      };
-
-      /* ── Trapezoidal main slopes: Zone 2 is a continuous U-shaped band ── */
-      const drawHipMainSlope = (ptFn, norm, doLbl) => {
-        /* Zone 1: interior — use _ve_h/_vr_h (calibrated at the strip endpoints u=_ua
-           and u=1-_ua2) so the corners align exactly with the hip strip inner edges.    */
-        addQuadMesh(
-          ptFn(_ua,      _ve_h,  0,0,0,0),   // bottom-left
-          ptFn(_ua,    1-_ve_h,  0,0,0,0),   // bottom-right
-          ptFn(1-_ua2, 1-_vr_h, 0,0,0,0),   // top-right
-          ptFn(1-_ua2,   _vr_h, 0,0,0,0),   // top-left
-          norm, 'zone-1', 0.20, 0.02
-        );
-
-        /* Zone 2 — non-overlapping U-shaped band:
-           hip strips run only u=[_ua, 1-_ua2]; ridge block u=[1-_ua2, 1] full v.
-           Zone 3 u=[0,_ua]. All pieces share edges only — no double-alpha.
-           _ve_h/_vr_h keep the inner boundary exactly parallel to the hip ridges.       */
-
-        /* Back hip strip: u=[_ua, 1-_ua2], v=[0 → _ve_h.._vr_h] */
-        addQuadMesh(
-          ptFn(_ua,        0, 0,0,0,0), ptFn(_ua,      _ve_h, 0,0,0,0),
-          ptFn(1-_ua2, _vr_h, 0,0,0,0), ptFn(1-_ua2,       0, 0,0,0,0),
-          norm, 'zone-2', 0.35, 0.07
-        );
-
-        /* Front hip strip: u=[_ua, 1-_ua2], v=[1-_ve_h..1-_vr_h → 1] */
-        addQuadMesh(
-          ptFn(_ua,    1-_ve_h, 0,0,0,0), ptFn(_ua,          1, 0,0,0,0),
-          ptFn(1-_ua2,       1, 0,0,0,0), ptFn(1-_ua2, 1-_vr_h, 0,0,0,0),
-          norm, 'zone-2', 0.35, 0.07
-        );
-
-        /* Ridge block: u=[1-_ua2, 1], full v — meets hip strips at u=1-_ua2 exactly */
-        addZone(1-_ua2, 1, 0, 1, THEME.zone2, 0.35, 'zone-2', 0.07, ptFn, norm, false);
-
-        /* Zone 3: eave strip u=[0, _ua] — meets hip strips at u=_ua exactly */
-        addZone(0, _ua, 0, 1, THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, false);
-
-        /* Flat on-surface labels — glued to slope, rotate with building.
-           textDir along Z (ridge direction). Flip for right slope so text reads
-           in the same apparent direction when that face is viewed head-on.        */
-        const _tD = xzSwap
-          ? (norm.z < 0 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(-1, 0, 0))  // B>L: back/front slopes
-          : (norm.x < 0 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 0, -1)); // B<=L: left/right slopes
-        const _uM = (_ua + 1 - _ua2) / 2;   // mid-u of Zone 1/hip-strip range
-        this._makeZoneLabelFlat(
-          'zone-1', ptFn(_uM, 0.5, 0,0,0,0), norm, _tD
-        );
-        this._makeZoneLabelFlat(
-          'zone-2', ptFn(1 - _ua2 / 2, 0.5, 0,0,0,0), norm, _tD
-        );
-        this._makeZoneLabelFlat(
-          'zone-3', ptFn(_ua / 2, 0.5, 0,0,0,0), norm, _tD
-        );
-      };
-
-      drawHipMainSlope(wrapL, _leftNorm,  true);
-      drawHipMainSlope(wrapR, _rightNorm, false);
-
-      /* ── Triangular end slopes: Zone 2 = constant-width a strips along both hips ── */
-      for (const zs of [-1, 1]) {
-        const zA = zs * _hipHL;    // base coordinate along long axis (eave edge)
-        const zC = zs * _r2;      // apex coordinate along long axis (ridge end)
-
-        /* For B<=L: triangular ends at z=+/-_hipHL, width = 2*_hipHB along X.
-           For B>L (xzSwap): triangular ends at x=+/-_hipHL, depth = 2*_hipHB along Z.
-           XZ-swap so A,Bv,C always land on the correct world face.               */
-        const A  = xzSwap ? new THREE.Vector3(zA, hEave, -_hipHB) : new THREE.Vector3(-_hipHB, hEave, zA);
-        const Bv = xzSwap ? new THREE.Vector3(zA, hEave,  _hipHB) : new THREE.Vector3( _hipHB, hEave, zA);
-        const C  = xzSwap ? new THREE.Vector3(zC, hRidge, 0)      : new THREE.Vector3(0, hRidge, zC);
-
-        const _e1t = new THREE.Vector3().subVectors(Bv, A);
-        const _e2t = new THREE.Vector3().subVectors(C, A);
-        const tN   = new THREE.Vector3().crossVectors(_e1t, _e2t).normalize();
-        if (tN.y < 0) tN.negate();
-
-        const lerp3 = (p, q, t) => new THREE.Vector3(
-          p.x+t*(q.x-p.x), p.y+t*(q.y-p.y), p.z+t*(q.z-p.z)
-        );
-
-        /* Zone 3 base strip boundary at plan distance zone_a from eave */
-        const t_b = Math.min(zone_a / _triH, 0.70);   // fraction from base toward apex
-        const D   = lerp3(A,  C, t_b);                // on left hip ridge at Zone 3 boundary
-        const E   = lerp3(Bv, C, t_b);                // on right hip ridge at Zone 3 boundary
-
-        /* Zone 2 left strip inner boundary on base AB:
-           Perp distance a from hip ridge AC in plan →
-           B<=L: base spans X → boundary offset along X
-           B>L (xzSwap): base spans Z → boundary offset along Z             */
-        const dOff   = zone_a * L_hip / _triH;            // = zone_a*sqrt(2) for equal pitch
-        const _bndN  = Math.min(-_hipHB + dOff, 0);       // inner boundary, negative-side
-        const _bndP  = Math.max( _hipHB - dOff, 0);       // inner boundary, positive-side
-        const P_L_base = xzSwap
-          ? new THREE.Vector3(zA, hEave, _bndN)
-          : new THREE.Vector3(_bndN, hEave, zA);
-        const P_R_base = xzSwap
-          ? new THREE.Vector3(zA, hEave, _bndP)
-          : new THREE.Vector3(_bndP, hEave, zA);
-
-        /* Zone 2 inner boundary endpoints — parallelogram approach:
-           P_L_top: where Zone 2-left inner boundary exits the triangle (on BC)
-           P_R_top: where Zone 2-right inner boundary exits the triangle (on AC)
-           s_top = 1 - zone_a/L_hip gives constant-width strip parallel to each hip ridge */
-        const s_top   = Math.max(0.01, 1 - zone_a / L_hip);
-        const P_L_top = lerp3(Bv, C, s_top);   // on right hip ridge BC
-        const P_R_top = lerp3(A,  C, s_top);   // on left hip ridge AC
-
-        const addTriPart = (pts, zt, op, eps) => {
-          const off_ = tN.clone().multiplyScalar(eps);
-          let geo;
-          if (pts.length === 3) {
-            geo = new THREE.BufferGeometry();
-            geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
-              pts[0].x+off_.x, pts[0].y+off_.y, pts[0].z+off_.z,
-              pts[1].x+off_.x, pts[1].y+off_.y, pts[1].z+off_.z,
-              pts[2].x+off_.x, pts[2].y+off_.y, pts[2].z+off_.z,
-            ]), 3));
-            geo.computeVertexNormals();
-          } else {
-            geo = this._quad(
-              pts[0].clone().add(off_), pts[1].clone().add(off_),
-              pts[2].clone().add(off_), pts[3].clone().add(off_)
-            );
-          }
-          const mesh = new THREE.Mesh(geo, matZ(
-            zt==='zone-1' ? THEME.zone1 : zt==='zone-2' ? THEME.zone2 : THEME.zone3, op
-          ));
-          mesh.renderOrder = 1;
-          mesh.userData = { zoneType: zt };
-          this._zones.add(mesh);
-          this._zoneMeshes.push(mesh);
-        };
-
-        /* M_L / M_R: Zone 2 inner boundary at Zone 3 level                            */
-        const t_inn = Math.min(t_b / Math.max(s_top, 0.01), 0.99);
-        const M_L   = lerp3(P_L_base, P_L_top, t_inn);
-        const M_R   = lerp3(P_R_base, P_R_top, t_inn);
-
-        /* Mx: where Zone 2-left inner boundary crosses the apex symmetry axis.
-           For B<=L that axis is x=0; for B>L (xzSwap) it is z=0.
-           Splitting here eliminates the apex triangle and all interior overlaps.
-           The two Zone 2 strips share only the edge Mx→C.                          */
-        const _plBC = xzSwap ? P_L_base.z : P_L_base.x;   // base coord on negative side
-        const _plTC = xzSwap ? P_L_top.z  : P_L_top.x;    // top  coord (positive side for B<=L)
-        const t_x0 = Math.min(Math.max((-_plBC) / (_plTC - _plBC + 1e-6), 0), 1);
-        const Mx   = lerp3(P_L_base, P_L_top, t_x0);   // Mx.x≈0 (B<=L) or Mx.z≈0 (B>L)
-
-        /* Zone 1: triangle (M_L, M_R, Mx) — interior, above Zone 3 */
-        if (xzSwap ? M_L.z < M_R.z - 0.1 : M_L.x < M_R.x - 0.1) {
-          addTriPart([M_L, M_R, Mx], 'zone-1', 0.20, 0.02);
-        }
-
-        /* Zone 2 left: quad (D, M_L, Mx, C) — x≤0 side, joins Zone 2 right at Mx→C */
-        addTriPart([D, M_L, Mx, C], 'zone-2', 0.35, 0.07);
-
-        /* Zone 2 right: quad (M_R, E, C, Mx) — x≥0 side, no interior overlap */
-        addTriPart([M_R, E, C, Mx], 'zone-2', 0.35, 0.07);
-
-        /* Zone 3: (A, Bv, E, D) — meets Zone 2 exactly at D–E edge */
-        addTriPart([A, Bv, E, D], 'zone-3', 0.65, 0.12);
-
-        /* Flat on-surface labels for this triangular slope.
-           textDir along +X for front slope (zs=1), -X for back (zs=-1) so the
-           text reads correctly when each slope is viewed head-on.                 */
-        const _triTD = xzSwap
-          ? new THREE.Vector3(0, 0, zs > 0 ? 1 : -1)   // B>L: text along Z on end triangles
-          : new THREE.Vector3(zs > 0 ? 1 : -1, 0, 0);  // B<=L: text along X
-
-        // Zone 1 centroid: average of triangle (M_L, M_R, Mx)
-        const _ctr1 = new THREE.Vector3(
-          (M_L.x + M_R.x + Mx.x) / 3,
-          (M_L.y + M_R.y + Mx.y) / 3,
-          (M_L.z + M_R.z + Mx.z) / 3
-        );
-        if (xzSwap ? M_L.z < M_R.z - 0.1 : M_L.x < M_R.x - 0.1) {
-          this._makeZoneLabelFlat('zone-1', _ctr1, tN, _triTD);
-        }
-
-        // Zone 2 centroid: halfway between Mx (inner-boundary axis crossing) and C
-        //   (apex), placing the label in the upper Zone 2 band between Zone 1 and ridge.
-        //   B<=L: symmetry axis is x=0 → x=0, vary z.  B>L: z=0 → z=0, vary x.
-        const _ctr2 = xzSwap
-          ? new THREE.Vector3(Mx.x + 0.4*(C.x - Mx.x), Mx.y + 0.4*(C.y - Mx.y), 0)
-          : new THREE.Vector3(0, Mx.y + 0.4*(C.y - Mx.y), Mx.z + 0.4*(C.z - Mx.z));
-        this._makeZoneLabelFlat('zone-2', _ctr2, tN, _triTD);
-
-        // Zone 3 centroid: average of trapezoid (A, Bv, E, D)
-        const _ctr3 = new THREE.Vector3(
-          (A.x + Bv.x + E.x + D.x) / 4,
-          (A.y + Bv.y + E.y + D.y) / 4,
-          (A.z + Bv.z + E.z + D.z) / 4
-        );
-        this._makeZoneLabelFlat('zone-3', _ctr3, tN, _triTD);
-      }
+      window.ZONE_DESCRIPTORS['cc-hip'].drawZones(ctx);
 
     } else {
-      /* Gable or flat — zone layout depends on roof pitch (ASCE 7-22 Ch. 30):
-         θ > 27°          → Fig. 30.3-2D: Zone 3 at eave × rake corners
-         7° < θ ≤ 27°     → Fig. 30.3-2B/C: Zone 3 at RIDGE × rake corners
-         θ ≤ 7° (flat)    → Fig. 30.3-2A: Zone 3 at all 4 corners          */
+      /* gable or flat — pitch selects the descriptor */
       const _leftNorm  = this._leftNormal(hB, hEave, hRidge, hL);
       const _rightNorm = new THREE.Vector3(-_leftNorm.x, _leftNorm.y, _leftNorm.z);
-      if (theta > 27) {
-        drawZonesGable(this._ptL.bind(this), _leftNorm,  true);
-        drawZonesGable(this._ptR.bind(this), _rightNorm, false);
-      } else if (theta > 7) {
-        drawZonesGableRidge(this._ptL.bind(this), _leftNorm,  true);
-        drawZonesGableRidge(this._ptR.bind(this), _rightNorm, false);
-      } else {
-        /* θ ≤ 7° — ASCE 7-22 Fig. 30.3-2A: Zone 3 at eave×rake corners only */
-        drawZonesFlat(this._ptL.bind(this), _leftNorm,  true);
-        drawZonesFlat(this._ptR.bind(this), _rightNorm, false);
-      }
+      const key = theta > 27 ? 'cc-gable-steep'
+                : theta > 7  ? 'cc-gable-mid'
+                :               'cc-gable-flat';
+      const desc = window.ZONE_DESCRIPTORS[key];
+      desc.drawZones({ ...ctx, ptFn: this._ptL.bind(this), norm: _leftNorm,  doLabel: true  });
+      desc.drawZones({ ...ctx, ptFn: this._ptR.bind(this), norm: _rightNorm, doLabel: false });
     }
-
     /* ── Wall C&C zones 4 and 5 (ASCE 7-22 §30.3-2A) ──────────────────────────
        Zone 5: vertical end strip width 'a' at each corner of every facade
        Zone 4: rest of wall field
