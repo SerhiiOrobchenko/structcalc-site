@@ -488,7 +488,7 @@
 
                 <div class="field-row">
                   <div class="field">
-                    <label>Eave height, h <span class="unit">(ft)</span></label>
+                    <label>Eave height, h<sub>e</sub> <span class="unit">(ft)</span></label>
                     <input class="num" id="wind-h" value="20" min="1" max="500" data-dim="h">
                   </div>
                   <div class="field">
@@ -505,10 +505,11 @@
                 </div>
 
                 <div class="field">
-                  <label>Mean roof height, h&#772; <span class="unit">(ft)</span>
-                    <span class="field-badge">auto</span>
+                  <label>Mean roof height, h <span class="unit">(ft)</span>
+                    <span class="field-badge">auto · §26.2</span>
                   </label>
                   <input class="num" id="hMeanDisplay" value="—" readonly tabindex="-1">
+                  <div id="hMeanNote" class="field-hint" style="display:none"></div>
                 </div>
               </div>
 

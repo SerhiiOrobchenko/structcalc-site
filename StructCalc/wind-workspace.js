@@ -187,24 +187,46 @@ function setWindProc(proc) {
 function recalcWind() {
   if (!windActiveProj || !windActiveCalc) return;
   var s = gatherWindState(windSavedState || {});
+
+  var B  = s.minDim    || 40;
+  var L  = s.buildingL || 60;
+  var hE = s.h         || 20;  // user-entered eave height
+  var th = s.theta     || 0;
+  /* Mean roof height per ASCE 7-22 Sec. 26.2: h = (hEave + hRidge) / 2.
+     For θ ≤ 10° the standard permits h = hEave (simplification). */
+  var _trueFlat = (s.roofShape === 'flat' || th === 0);
+  var hR;
+  if (_trueFlat) {
+    hR = hE;
+  } else if (s.roofShape === 'monoslope') {
+    hR = hE + B * Math.tan(th * Math.PI / 180);   // monoslope: full-width rise
+  } else {
+    hR = hE + (B / 2) * Math.tan(th * Math.PI / 180);  // gable/hip: half-width rise
+  }
+  var hMean = _trueFlat ? hE : (hE + hR) / 2;
+  /* Override s.h with computed mean roof height before passing to engine */
+  s.hEave = hE;
+  s.h     = hMean;
+
   var r = null;
   try { r = window.compute(s); } catch(e) { console.warn('Wind compute error', e); }
   window._windLastR = r; window._windLastS = s;
 
-  var B  = s.minDim    || 40;
-  var L  = s.buildingL || 60;
-  var hE = s.h         || 20;
-  var th = s.theta     || 0;
-  /* hR = ridge height. Use actual roofShape (not roofType) so gable with θ≤7°
-     (which has roofType='flat' for C&C zone logic) still gets the correct ridge. */
-  var _trueFlat = (s.roofShape === 'flat' || th === 0);
-  var hR    = _trueFlat ? hE : hE + (B / 2) * Math.tan(th * Math.PI / 180);
-  var hMean = _trueFlat ? hE : (hE + hR) / 2;
   var za = (r && r.a) ? r.a : Math.min(0.1 * Math.min(B, L), Math.min(0.4 * hE, 0.04 * Math.min(B, L)));
 
   /* Update mean roof height display */
   var hMeanEl = document.getElementById('hMeanDisplay');
   if (hMeanEl) hMeanEl.value = hMean.toFixed(1);
+  /* Note per Sec. 26.2 for θ ≤ 10° */
+  var hNoteEl = document.getElementById('hMeanNote');
+  if (hNoteEl) {
+    if (th <= 10 && !_trueFlat) {
+      hNoteEl.innerHTML = '&#167;26.2: For &theta; &le; 10&deg;, h is permitted to be taken as the roof eave height (h<sub>e</sub>). Calculator uses exact mean h&nbsp;=&nbsp;' + hMean.toFixed(1) + ' ft.';
+      hNoteEl.style.display = '';
+    } else {
+      hNoteEl.style.display = 'none';
+    }
+  }
 
   /* Procedure auto-lock: h > 60ft OR h > min(B,L) → Directional only */
   var lockDir = (hMean > 60) || (hMean > Math.min(B, L));
@@ -366,7 +388,9 @@ function renderProjectSummary(r, s) {
   var B = s.minDim||40, L = s.buildingL||60, h = s.h||20, th = s.theta||0;
   var roofNames = {gable:'Gable',hip:'Hip',flat:'Flat',monoslope:'Monoslope',stepped:'Stepped',multispan:'Multispan',sawtooth:'Sawtooth',dome:'Dome'};
   html += '<div class="proj-sum-card"><div class="proj-sum-card-title">Building Geometry</div>' +
-    row('Width B', B+' ft') + row('Length L', L+' ft') + row('Eave Height h', h+' ft') +
+    row('Width B', B+' ft') + row('Length L', L+' ft') +
+    row('Eave Height h<sub>e</sub>', (s.hEave || h).toFixed(1)+' ft') +
+    row('Mean Roof Height h', h.toFixed(1)+' ft') +
     row('Roof Shape', escHtml(roofNames[s.roofShape]||s.roofShape||'—')) +
     (s.roofShape !== 'flat' ? row('Roof Pitch &theta;', th.toFixed(1)+'°') : '') +
     '</div>';
@@ -1200,7 +1224,7 @@ function buildWindStepReport(r, s) {
   }
   if (!s || !s.V || s.V <= 0) return warn('Enter the basic wind speed V on the <strong>Site</strong> tab.');
   if (s.structureCategory === 'otherStructure') return buildCh29StepReport(r, s);
-  if (!s.h || s.h <= 0)       return warn('Enter the building eave height h on the <strong>Geometry</strong> tab.');
+  if (!s.h || s.h <= 0)       return warn('Enter the building eave height h<sub>e</sub> on the <strong>Geometry</strong> tab.');
 
 
   var proc = s.mode === 'cc' ? 'cc' : (s.mwfrsProcedure || 'envelope');
