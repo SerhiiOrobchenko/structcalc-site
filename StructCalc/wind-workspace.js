@@ -368,7 +368,7 @@ function renderProjectSummary(r, s) {
   if (!host) return;
   if (!s) { host.innerHTML = '<div style="padding:14px;font-size:.78rem;color:var(--text-muted);">Enter building parameters.</div>'; return; }
   function row(k, v) { return '<div class="proj-sum-row"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>'; }
-  var encMap = {enclosed:'Enclosed',partiallyEnclosed:'Part. Enclosed',open:'Open'};
+  var encMap = {enclosed:'Enclosed',partiallyEnclosed:'Part. Enclosed',partiallyOpen:'Part. Open',open:'Open'};
   var procMap = {envelope:'MWFRS Env (Ch.28)',directional:'MWFRS Dir (Ch.27)',cc:'C&C (Ch.30)'};
   var proc = s.mode === 'cc' ? 'cc' : (s.mwfrsProcedure || 'envelope');
   var addrEl = document.getElementById('wind-address');
@@ -415,7 +415,7 @@ function buildCh28StepReport(r, s) {
 
   var h   = s.h || 20, B = s.minDim || 40, L = s.buildingL || 60;
   var kztV = s.kzt || 1.0;
-  var encMap = {enclosed:'Enclosed', partiallyEnclosed:'Partially Enclosed', open:'Open'};
+  var encMap = {enclosed:'Enclosed', partiallyEnclosed:'Partially Enclosed', partiallyOpen:'Partially Open', open:'Open'};
   var encLabel = encMap[s.enclosure] || s.enclosure;
   var gcpiObj = r.gcpi || { pos: 0.18, neg: -0.18 };
   var addrEl = document.getElementById('wind-address');
@@ -444,7 +444,7 @@ function buildCh28StepReport(r, s) {
   /* STEP 3 */
   var expDesc = {B:'Suburban/wooded areas (Sec. 26.7)', C:'Open terrain with scattered obstructions (Sec. 26.7)', D:'Flat, unobstructed areas near water (Sec. 26.7)'}[s.exposure] || '';
   var kztNote = s.kztMode === 'auto' ? 'K<sub>zt</sub> = (1+K₁K₂K₃)\xb2 from hill geometry (Fig. 26.8-1).' : 'Flat terrain, K<sub>zt</sub> = 1.0 (Sec. 26.8.1).';
-  var gcpiStr = {enclosed:'\xb10.18', partiallyEnclosed:'\xb10.55', open:'0.00'}[s.enclosure] || ('\xb1'+fv(gcpiObj.pos,2));
+  var gcpiStr = {enclosed:'\xb10.18', partiallyEnclosed:'\xb10.55', partiallyOpen:'0.00', open:'0.00'}[s.enclosure] || ('\xb1'+fv(gcpiObj.pos,2));
   html += stepBlock(3, 'Determine wind load parameters', '&#167;26.6 – 26.13',
     '<table class="step-tbl"><thead><tr><th>Parameter</th><th>Value</th><th>Reference</th></tr></thead><tbody>' +
     '<tr><td>Directionality factor K<sub>d</sub></td><td><strong>0.85</strong></td><td>Table 26.6-1, Buildings (MWFRS)</td></tr>' +
@@ -569,10 +569,10 @@ function buildCCStepReport(r, s) {
   var h      = s.h || 20;
   var kztV   = s.kzt || 1.0;
   var enc    = s.enclosure || 'enclosed';
-  var encMap = {enclosed:'Enclosed', partiallyEnclosed:'Partially Enclosed', open:'Open'};
+  var encMap = {enclosed:'Enclosed', partiallyEnclosed:'Partially Enclosed', partiallyOpen:'Partially Open', open:'Open'};
   var encLabel = encMap[enc] || enc;
   var gcpiObj  = r.gcpi || { pos: 0.18, neg: -0.18 };
-  var gcpiStr  = {enclosed:'\xb10.18', partiallyEnclosed:'\xb10.55', open:'0.00'}[enc] || ('\xb1' + fv(gcpiObj.pos, 2));
+  var gcpiStr  = {enclosed:'\xb10.18', partiallyEnclosed:'\xb10.55', partiallyOpen:'0.00', open:'0.00'}[enc] || ('\xb1' + fv(gcpiObj.pos, 2));
   var addrEl   = document.getElementById('wind-address');
   var addr     = addrEl ? addrEl.value.trim() : '';
   var roofNames = {gable:'Gable', hip:'Hip', flat:'Flat', monoslope:'Monoslope', stepped:'Stepped', multispan:'Multispan Gable', sawtooth:'Sawtooth', dome:'Domed'};
@@ -1235,7 +1235,7 @@ function buildWindStepReport(r, s) {
 
   var c   = r.ch27;
   var B   = c.B, L = c.L, h = s.h, th = s.theta || 0;
-  var encMap = {enclosed:'Enclosed', partiallyEnclosed:'Partially Enclosed', open:'Open'};
+  var encMap = {enclosed:'Enclosed', partiallyEnclosed:'Partially Enclosed', partiallyOpen:'Partially Open', open:'Open'};
   var encLabel = encMap[s.enclosure] || s.enclosure;
   var roofNames = {gable:'Gable', hip:'Hip', flat:'Flat', monoslope:'Monoslope', stepped:'Stepped', multispan:'Multispan Gable', sawtooth:'Sawtooth', dome:'Domed'};
   var roofLabel = roofNames[s.roofShape] || s.roofShape || '—';
@@ -1278,7 +1278,7 @@ function buildWindStepReport(r, s) {
   var kztNote = s.kztMode === 'auto'
     ? 'K<sub>zt</sub> = (1 + K&#x2081;K&#x2082;K&#x2083;)&#xB2; computed from hill geometry (Fig. 26.8-1).'
     : 'Flat terrain, K<sub>zt</sub> = 1.0 (Condition 1, Sec. 26.8.1).';
-  var gcpiMap = {enclosed:'&#177;0.18', partiallyEnclosed:'&#177;0.55', open:'0.00'};
+  var gcpiMap = {enclosed:'&#177;0.18', partiallyEnclosed:'&#177;0.55', partiallyOpen:'0.00', open:'0.00'};
   var s3body =
     '<table class="step-tbl"><thead><tr><th>Parameter</th><th>Value</th><th>Reference</th></tr></thead><tbody>' +
     '<tr><td>Directionality factor K<sub>d</sub></td><td><strong>0.85</strong></td><td>Table 26.6-1, Buildings (MWFRS)</td></tr>' +
