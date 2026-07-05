@@ -368,7 +368,7 @@ function renderProjectSummary(r, s) {
   if (!host) return;
   if (!s) { host.innerHTML = '<div style="padding:14px;font-size:.78rem;color:var(--text-muted);">Enter building parameters.</div>'; return; }
   function row(k, v) { return '<div class="proj-sum-row"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>'; }
-  var encMap = {enclosed:'Enclosed',partiallyEnclosed:'Part. Enclosed',partiallyOpen:'Part. Open',open:'Open'};
+  var encMap = {enclosed:'Enclosed',partiallyEnclosed:'Part. Enclosed',open:'Open'};
   var procMap = {envelope:'MWFRS Env (Ch.28)',directional:'MWFRS Dir (Ch.27)',cc:'C&C (Ch.30)'};
   var proc = s.mode === 'cc' ? 'cc' : (s.mwfrsProcedure || 'envelope');
   var addrEl = document.getElementById('wind-address');
@@ -415,7 +415,7 @@ function buildCh28StepReport(r, s) {
 
   var h   = s.h || 20, B = s.minDim || 40, L = s.buildingL || 60;
   var kztV = s.kzt || 1.0;
-  var encMap = {enclosed:'Enclosed', partiallyEnclosed:'Partially Enclosed', partiallyOpen:'Partially Open', open:'Open'};
+  var encMap = {enclosed:'Enclosed', partiallyEnclosed:'Partially Enclosed', open:'Open'};
   var encLabel = encMap[s.enclosure] || s.enclosure;
   var gcpiObj = r.gcpi || { pos: 0.18, neg: -0.18 };
   var addrEl = document.getElementById('wind-address');
@@ -444,7 +444,7 @@ function buildCh28StepReport(r, s) {
   /* STEP 3 */
   var expDesc = {B:'Suburban/wooded areas (Sec. 26.7)', C:'Open terrain with scattered obstructions (Sec. 26.7)', D:'Flat, unobstructed areas near water (Sec. 26.7)'}[s.exposure] || '';
   var kztNote = s.kztMode === 'auto' ? 'K<sub>zt</sub> = (1+K₁K₂K₃)\xb2 from hill geometry (Fig. 26.8-1).' : 'Flat terrain, K<sub>zt</sub> = 1.0 (Sec. 26.8.1).';
-  var gcpiStr = {enclosed:'\xb10.18', partiallyEnclosed:'\xb10.55', partiallyOpen:'0.00', open:'0.00'}[s.enclosure] || ('\xb1'+fv(gcpiObj.pos,2));
+  var gcpiStr = {enclosed:'\xb10.18', partiallyEnclosed:'\xb10.55', open:'0.00'}[s.enclosure] || ('\xb1'+fv(gcpiObj.pos,2));
   html += stepBlock(3, 'Determine wind load parameters', '&#167;26.6 – 26.13',
     '<table class="step-tbl"><thead><tr><th>Parameter</th><th>Value</th><th>Reference</th></tr></thead><tbody>' +
     '<tr><td>Directionality factor K<sub>d</sub></td><td><strong>0.85</strong></td><td>Table 26.6-1, Buildings (MWFRS)</td></tr>' +
@@ -569,10 +569,10 @@ function buildCCStepReport(r, s) {
   var h      = s.h || 20;
   var kztV   = s.kzt || 1.0;
   var enc    = s.enclosure || 'enclosed';
-  var encMap = {enclosed:'Enclosed', partiallyEnclosed:'Partially Enclosed', partiallyOpen:'Partially Open', open:'Open', openFreeRoof:'Open (Free Roof)'};
+  var encMap = {enclosed:'Enclosed', partiallyEnclosed:'Partially Enclosed', open:'Open'};
   var encLabel = encMap[enc] || enc;
   var gcpiObj  = r.gcpi || { pos: 0.18, neg: -0.18 };
-  var gcpiStr  = {enclosed:'\xb10.18', partiallyEnclosed:'\xb10.55', partiallyOpen:'0.00', open:'0.00', openFreeRoof:'N/A'}[enc] || ('\xb1' + fv(gcpiObj.pos, 2));
+  var gcpiStr  = {enclosed:'\xb10.18', partiallyEnclosed:'\xb10.55', open:'0.00'}[enc] || ('\xb1' + fv(gcpiObj.pos, 2));
   var addrEl   = document.getElementById('wind-address');
   var addr     = addrEl ? addrEl.value.trim() : '';
   var roofNames = {gable:'Gable', hip:'Hip', flat:'Flat', monoslope:'Monoslope', stepped:'Stepped', multispan:'Multispan Gable', sawtooth:'Sawtooth', dome:'Domed'};
@@ -584,7 +584,7 @@ function buildCCStepReport(r, s) {
   var expAlpha = {B:7.0, C:9.5, D:11.5}[s.exposure] || 9.5;
   var expDesc  = {B:'Suburban/wooded areas', C:'Open terrain, scattered obstructions', D:'Flat, unobstructed near water'}[s.exposure] || '';
 
-  var isOpenBldg = enc === 'openFreeRoof';
+  var isOpenBldg = enc === 'open';
   var isPart2    = !isOpenBldg && (s.ccProcedure === 'part2' || h > 60);
   var isPart1    = !isOpenBldg && !isPart2;
 
@@ -1235,7 +1235,7 @@ function buildWindStepReport(r, s) {
 
   var c   = r.ch27;
   var B   = c.B, L = c.L, h = s.h, th = s.theta || 0;
-  var encMap = {enclosed:'Enclosed', partiallyEnclosed:'Partially Enclosed', partiallyOpen:'Partially Open', open:'Open', openFreeRoof:'Open (Free Roof)'};
+  var encMap = {enclosed:'Enclosed', partiallyEnclosed:'Partially Enclosed', open:'Open'};
   var encLabel = encMap[s.enclosure] || s.enclosure;
   var roofNames = {gable:'Gable', hip:'Hip', flat:'Flat', monoslope:'Monoslope', stepped:'Stepped', multispan:'Multispan Gable', sawtooth:'Sawtooth', dome:'Domed'};
   var roofLabel = roofNames[s.roofShape] || s.roofShape || '—';
@@ -1278,7 +1278,7 @@ function buildWindStepReport(r, s) {
   var kztNote = s.kztMode === 'auto'
     ? 'K<sub>zt</sub> = (1 + K&#x2081;K&#x2082;K&#x2083;)&#xB2; computed from hill geometry (Fig. 26.8-1).'
     : 'Flat terrain, K<sub>zt</sub> = 1.0 (Condition 1, Sec. 26.8.1).';
-  var gcpiMap = {enclosed:'&#177;0.18', partiallyEnclosed:'&#177;0.55', partiallyOpen:'0.00', open:'0.00', openFreeRoof:'0.00'};
+  var gcpiMap = {enclosed:'&#177;0.18', partiallyEnclosed:'&#177;0.55', open:'0.00'};
   var s3body =
     '<table class="step-tbl"><thead><tr><th>Parameter</th><th>Value</th><th>Reference</th></tr></thead><tbody>' +
     '<tr><td>Directionality factor K<sub>d</sub></td><td><strong>0.85</strong></td><td>Table 26.6-1, Buildings (MWFRS)</td></tr>' +
@@ -1311,7 +1311,7 @@ function buildWindStepReport(r, s) {
   /* ==== STEP 6: External pressure coefficients ============================ */
   var lwNote = 'L/B = ' + fv(L,1) + '/' + fv(B,1) + ' = ' + fv(c.LB,2);
   var hLNote = 'h/L = ' + fv(h,1) + '/' + fv(L,1) + ' = ' + fv(c.hL,3);
-  var figRef = s.enclosure === 'openFreeRoof'
+  var figRef = s.enclosure === 'open'
     ? 'Fig. 27.3-4/5/6 (open bldg)'
     : 'Fig. 27.3-1 (' + roofLabel + ')';
   var s6rows = '<tr><td>Windward wall</td><td>+0.80</td><td>All L/B</td></tr>' +
@@ -2017,15 +2017,40 @@ function updateCCDependentUI() {
   var ccArea = document.getElementById('ccAreaSection');
   if (ccArea) ccArea.classList.toggle('hidden', !isCC);
 
-  /* Open-building free roof optgroup — visible only for C&C + Open */
-  var openGrp = document.getElementById('openBldgRoofGroup');
-  if (openGrp) openGrp.style.display = (isCC && isOpen) ? '' : 'none';
+  /* Filter Roof Profile dropdown based on enclosure type (§26.2):
+     Open building → only free-roof options; all others → standard profiles */
+  applyRoofProfileFilter(isOpen);
+}
 
-  /* If an open-building roof type is selected but conditions not met, reset to gable */
+/* Rebuild Roof Profile select to match enclosure type:
+   Open → monoslope-free / pitched-free / troughed-free only
+   Enclosed/Partial → gable, hip, flat, monoslope + special C&C shapes  */
+function applyRoofProfileFilter(isOpen) {
   var roofSel = document.getElementById('wind-roofShape');
-  var openTypes = ['monoslope-free', 'pitched-free', 'troughed-free'];
-  if (roofSel && openTypes.indexOf(roofSel.value) !== -1 && !(isCC && isOpen)) {
-    roofSel.value = 'gable';
+  if (!roofSel) return;
+  var prev = roofSel.value;
+  var freeTypes = ['monoslope-free', 'pitched-free', 'troughed-free'];
+  var encTypes  = ['gable','hip','flat','monoslope','stepped','multispan','sawtooth','dome'];
+
+  if (isOpen) {
+    roofSel.innerHTML =
+      '<option value="monoslope-free">Monoslope Free Roof (Figs. 27.3-4 / 30.5-1)</option>' +
+      '<option value="pitched-free">Pitched Free Roof (Figs. 27.3-5 / 30.5-2)</option>' +
+      '<option value="troughed-free">Troughed Free Roof (Figs. 27.3-6 / 30.5-3)</option>';
+    roofSel.value = (freeTypes.indexOf(prev) !== -1) ? prev : 'monoslope-free';
+  } else {
+    roofSel.innerHTML =
+      '<option value="gable">Gable</option>' +
+      '<option value="hip">Hip</option>' +
+      '<option value="flat">Flat (≤ 7°)</option>' +
+      '<option value="monoslope">Monoslope</option>' +
+      '<optgroup label="Special — C&amp;C (Ch. 30)">' +
+        '<option value="stepped">Stepped multi-level flat (Fig. 30.3-3)</option>' +
+        '<option value="multispan">Multispan gable, 2+ spans (Fig. 30.3-4)</option>' +
+        '<option value="sawtooth">Sawtooth, 2+ spans (Fig. 30.3-6)</option>' +
+        '<option value="dome">Domed (Fig. 30.3-7)</option>' +
+      '</optgroup>';
+    roofSel.value = (encTypes.indexOf(prev) !== -1) ? prev : 'gable';
   }
 }
 
