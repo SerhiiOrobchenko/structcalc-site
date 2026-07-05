@@ -1226,7 +1226,7 @@ class Wind3DRenderer {
 
 
     // ── B (Width) — Front face (z = +hL) ──────────────────────────────────
-    const bZ = hL + D * 1.5;  // wider gap between 'а' dim (D×0.7) and B
+    const bZ = hL + 16;   // second dim: 16 ft from front face
     grp.add(this._buildDim(
       new THREE.Vector3(-hB, EPS_Y, bZ),
       new THREE.Vector3( hB, EPS_Y, bZ),
@@ -1240,7 +1240,7 @@ class Wind3DRenderer {
     this._dimHighlight['dim-B'] = grp.children[grp.children.length - 1];
 
     // ── L (Length) — Right face, parallel to Z ─────────────────────────────
-    const lX = hB + D * 1.5;  // wider gap between 'а' dim (D×0.4) and L
+    const lX = hB + 16;   // second dim: 16 ft from right face
     grp.add(this._buildDim(
       new THREE.Vector3(lX, EPS_Y, -hL),
       new THREE.Vector3(lX, EPS_Y,  hL),
@@ -1254,7 +1254,7 @@ class Wind3DRenderer {
     this._dimHighlight['dim-L'] = grp.children[grp.children.length - 1];
 
     // ── h_eave — Left face centre (z=0), y=0→hEave ───────────────────────
-    const hXhe = -hB - D;
+    const hXhe = -hB - 8;    // first vertical dim: 8 ft from left face
     const hZhe = 0;   // midpoint of building length
     grp.add(this._buildDim(
       new THREE.Vector3(hXhe, EPS_Y,  hZhe),
@@ -1269,7 +1269,7 @@ class Wind3DRenderer {
     this._dimHighlight['dim-h-eave'] = grp.children[grp.children.length - 1];
 
     // ── h (mean roof height) — Left face, further out, y=0→hMean ──────────
-    const hXh   = -hB - D * 1.9;  // he–h gap +50%: D×0.9 (was D×0.6)
+    const hXh   = -hB - 16;  // second vertical dim: 16 ft from left face
     const hZh   = 0;   // midpoint of building length
     const hMean = (hEave + hRidge) / 2;   // mean roof height (scaled)
     const hMeanFt = (hEaveLabel != null && hLabel != null)
@@ -1286,15 +1286,14 @@ class Wind3DRenderer {
     ));
     this._dimHighlight['dim-h'] = grp.children[grp.children.length - 1];
 
-    const aEY  = 1.0;     // lift 'а' dims: halfW=0.670 → lower wing at 0.33, above y=0
-    const aOFF = D * 0.4;
+    const aEY  = EPS_Y;   // horizontal arrows — wings in XZ plane, no below-ground issue
 
     // ── Eave "a" — Front face right side (zone 3 strip from Back toward front right) ──
-    const aFZ = hL + D * 0.7;   // move Front-face 'a' dims further out
+    const aFZ = hL + 8;    // first dim: 8 ft from front face
     grp.add(this._buildDim(
       new THREE.Vector3(hB - zone_a, aEY, aFZ),
       new THREE.Vector3(hB,          aEY, aFZ),
-      new THREE.Vector3(0, 1, 0),        // vertical perpDir — arrow visible from 3D camera
+      new THREE.Vector3(1, 0, -1).normalize(), // horizontal perpDir — matches B dim
       [
         [new THREE.Vector3(hB - zone_a, EPS_Y, hL), new THREE.Vector3(hB - zone_a, aEY, aFZ)],
         [new THREE.Vector3(hB,          EPS_Y, hL), new THREE.Vector3(hB,          aEY, aFZ)],
@@ -1304,11 +1303,11 @@ class Wind3DRenderer {
     this._dimHighlight['dim-a2'] = grp.children[grp.children.length - 1];
 
     // ── Eave "a" — Right face front corner (zone 3/5 strip z=hL-zone_a to hL) ──
-    const aRX = hB + aOFF;
+    const aRX = hB + 8;    // first dim: 8 ft from right face
     grp.add(this._buildDim(
       new THREE.Vector3(aRX, aEY, hL - zone_a),
       new THREE.Vector3(aRX, aEY, hL),
-      new THREE.Vector3(0, 1, 0),        // vertical perpDir — arrow visible from 3D camera
+      new THREE.Vector3(1, 0, 1).normalize(), // horizontal perpDir — matches L dim
       [
         [new THREE.Vector3(hB, EPS_Y, hL - zone_a), new THREE.Vector3(aRX, aEY, hL - zone_a)],
         [new THREE.Vector3(hB, EPS_Y, hL),          new THREE.Vector3(aRX, aEY, hL)],
@@ -1326,11 +1325,11 @@ class Wind3DRenderer {
       const z3_06h = 0.6 * h_m;          // horizontal world-unit distance
 
       // Right facade: 0.6h in z direction at eave height — corner-box width from front gable
-      const z3RX = hB + D * 0.7;         // between dim-a (D×0.4) and dim-L (D×1.5)
+      const z3RX = hB + 8;   // first dim: 8 ft from right face (at eave level)
       grp.add(this._buildDim(
         new THREE.Vector3(z3RX, hEave, hL - z3_06h),
         new THREE.Vector3(z3RX, hEave, hL),
-        new THREE.Vector3(0, 1, 0),
+        new THREE.Vector3(1, 0, 1).normalize(), // horizontal perpDir — matches L dim
         [
           [new THREE.Vector3(hB, hEave, hL - z3_06h), new THREE.Vector3(z3RX, hEave, hL - z3_06h)],
           [new THREE.Vector3(hB, hEave, hL),           new THREE.Vector3(z3RX, hEave, hL)],
@@ -1340,11 +1339,11 @@ class Wind3DRenderer {
       this._dimHighlight['dim-z3-06h-r'] = grp.children[grp.children.length - 1];
 
       // Front facade: 0.6h in x direction at eave height — eave-arm depth from eave
-      const z3FZ = hL + D * 0.85;        // between dim-a2 (D×0.7) and dim-B (D×1.5)
+      const z3FZ = hL + 8;   // first dim: 8 ft from front face (at eave level)
       grp.add(this._buildDim(
         new THREE.Vector3(hB - z3_06h, hEave, z3FZ),
         new THREE.Vector3(hB,           hEave, z3FZ),
-        new THREE.Vector3(0, 1, 0),
+        new THREE.Vector3(1, 0, -1).normalize(), // horizontal perpDir — matches B dim
         [
           [new THREE.Vector3(hB - z3_06h, hEave, hL), new THREE.Vector3(hB - z3_06h, hEave, z3FZ)],
           [new THREE.Vector3(hB,           hEave, hL), new THREE.Vector3(hB,           hEave, z3FZ)],
