@@ -111,13 +111,6 @@
 
         /* ── Zone 3: red dims directly on zone surface ─────────────── */
 
-        /* Zone 3 — 0.6h along gable (v direction), centred in corner box */
-        mkSlopeDimZ3(
-          `0.6h=${d06}ft`,
-          ptFn(u3 * 0.5, vv1_, hB, hEave, hRidge, hL),
-          ptFn(u3 * 0.5, 1.0,  hB, hEave, hRidge, hL),
-          norm
-        );
         /* Zone 3 — 0.2h from eave (u direction), centred in corner box */
         mkSlopeDimZ3(
           `0.2h=${d02}ft`,

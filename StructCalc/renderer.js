@@ -1294,7 +1294,7 @@ class Wind3DRenderer {
     grp.add(this._buildDim(
       new THREE.Vector3(hB - zone_a, aEY, aFZ),
       new THREE.Vector3(hB,          aEY, aFZ),
-      new THREE.Vector3(1, 0, -1).normalize(),
+      new THREE.Vector3(0, 1, 0),        // vertical perpDir — arrow visible from 3D camera
       [
         [new THREE.Vector3(hB - zone_a, aEY, hL), new THREE.Vector3(hB - zone_a, aEY, aFZ)],
         [new THREE.Vector3(hB,          aEY, hL), new THREE.Vector3(hB,          aEY, aFZ)],
@@ -1308,7 +1308,7 @@ class Wind3DRenderer {
     grp.add(this._buildDim(
       new THREE.Vector3(aRX, aEY, hL - zone_a),
       new THREE.Vector3(aRX, aEY, hL),
-      new THREE.Vector3(1, 0, -1).normalize(),
+      new THREE.Vector3(0, 1, 0),        // vertical perpDir — arrow visible from 3D camera
       [
         [new THREE.Vector3(hB, aEY, hL - zone_a), new THREE.Vector3(aRX, aEY, hL - zone_a)],
         [new THREE.Vector3(hB, aEY, hL),          new THREE.Vector3(aRX, aEY, hL)],
@@ -1318,6 +1318,41 @@ class Wind3DRenderer {
     this._dimHighlight['dim-a'] = grp.children[grp.children.length - 1];
 
     // dim-a3/dim-a4 (base floor a= dims) removed — redundant with eave-level dims
+
+    // ── Zone 3: 0.6h facade dims — gable / flat only (θ ≤ 7°) ────────────────
+    if (roofShape !== 'hip' && roofShape !== 'monoslope') {
+      const h_m    = hEaveLabel ?? (hEave / 1.8);
+      const d06str = (+h_m * 0.6).toFixed(1);
+      const z3_06h = 0.6 * h_m;          // horizontal world-unit distance
+
+      // Right facade: 0.6h in z direction — corner-box width from front gable
+      const z3RX = hB + D * 0.7;         // between dim-a (D×0.4) and dim-L (D×1.0)
+      grp.add(this._buildDim(
+        new THREE.Vector3(z3RX, aEY, hL - z3_06h),
+        new THREE.Vector3(z3RX, aEY, hL),
+        new THREE.Vector3(0, 1, 0),
+        [
+          [new THREE.Vector3(hB, aEY, hL - z3_06h), new THREE.Vector3(z3RX, aEY, hL - z3_06h)],
+          [new THREE.Vector3(hB, aEY, hL),           new THREE.Vector3(z3RX, aEY, hL)],
+        ],
+        `0.6h=${d06str}ft`, 'dim-z3-06h-r', null, new THREE.Vector3(1,0,0)
+      ));
+      this._dimHighlight['dim-z3-06h-r'] = grp.children[grp.children.length - 1];
+
+      // Front facade: 0.6h in x direction — eave-arm depth from eave
+      const z3FZ = hL + D * 0.85;        // between dim-a2 (D×0.7) and dim-B (D×1.0)
+      grp.add(this._buildDim(
+        new THREE.Vector3(hB - z3_06h, aEY, z3FZ),
+        new THREE.Vector3(hB,           aEY, z3FZ),
+        new THREE.Vector3(0, 1, 0),
+        [
+          [new THREE.Vector3(hB - z3_06h, aEY, hL), new THREE.Vector3(hB - z3_06h, aEY, z3FZ)],
+          [new THREE.Vector3(hB,           aEY, hL), new THREE.Vector3(hB,           aEY, z3FZ)],
+        ],
+        `0.6h=${d06str}ft`, 'dim-z3-06h-f', null, new THREE.Vector3(0,0,1)
+      ));
+      this._dimHighlight['dim-z3-06h-f'] = grp.children[grp.children.length - 1];
+    }
 
     // ── θ angle dim — at front-left eave corner, in XY plane at z=hL ─────────
     if (theta > 0) {
