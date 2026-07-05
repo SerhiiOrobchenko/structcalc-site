@@ -59,8 +59,15 @@
 
       /* ── Zone 3 arrow labels — ALL corners on BOTH slopes ─────────────── */
       if (makeZone3Label && THREE.CSS2DObject) {
-        const c1 = ptFn(u3 * 0.45, v2 * 0.50,     hB, hEave, hRidge, hL);
-        const c2 = ptFn(u3 * 0.45, vv1 + v2*0.50, hB, hEave, hRidge, hL);
+        // Area-weighted centroid of the L-shape: eave strip + rake arm
+        // L-shape centroid can fall outside (in the notch), so clamp uC to eave strip
+        const _A1 = u3 * v2;                         // eave strip area (dominant)
+        const _A2 = Math.max(0, u2 - u3) * v_z3;    // rake arm area
+        const _A  = (_A1 + _A2) || 1e-9;
+        const uC  = Math.min(u3 * 0.95, (_A1*(u3/2) + _A2*((u3+u2)/2)) / _A);
+        const vR  = (_A1*(v2/2) + _A2*(v_z3/2)) / _A;  // v-offset from each gable edge
+        const c1  = ptFn(uC, vR,   hB, hEave, hRidge, hL);   // back corner
+        const c2  = ptFn(uC, 1-vR, hB, hEave, hRidge, hL);   // front corner
         makeZone3Label(c1, norm);
         makeZone3Label(c2, norm);
       }
