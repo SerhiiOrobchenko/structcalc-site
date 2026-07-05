@@ -111,11 +111,16 @@
 
         /* ── Zone 3: red dims directly on zone surface ─────────────── */
 
-        /* Zone 3 — 0.2h from eave (u direction), centred in corner box */
-        mkSlopeDimZ3(
+        /* Zone 3 — 0.2h from eave (u dir.) — dim line OUTSIDE Zone 3, ext lines from boundary */
+        const vDimLine = Math.max(0.01, vv1_ - vIn);   // just outside Zone 3 (toward slope centre)
+        mkSlopeDimExt(
           `0.2h=${d02}ft`,
-          ptFn(0,  vv1_ + v2 * 0.5, hB, hEave, hRidge, hL),
-          ptFn(u3, vv1_ + v2 * 0.5, hB, hEave, hRidge, hL),
+          ptFn(0,  vDimLine, hB, hEave, hRidge, hL),
+          ptFn(u3, vDimLine, hB, hEave, hRidge, hL),
+          [
+            [ptFn(0,  vv1_, hB, hEave, hRidge, hL), ptFn(0,  vDimLine, hB, hEave, hRidge, hL)],
+            [ptFn(u3, vv1_, hB, hEave, hRidge, hL), ptFn(u3, vDimLine, hB, hEave, hRidge, hL)],
+          ],
           norm
         );
       }
