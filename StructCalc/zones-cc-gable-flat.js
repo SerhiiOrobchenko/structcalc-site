@@ -15,7 +15,7 @@
   window.ZONE_DESCRIPTORS = window.ZONE_DESCRIPTORS || {};
   window.ZONE_DESCRIPTORS['cc-gable-flat'] = {
     drawZones(ctx) {
-      const { addZone, mkSlopeDim, mkSlopeDimExt, makeZone3Label, THEME, THREE,
+      const { addZone, mkSlopeDim, mkSlopeDimExt, mkSlopeDimZ3, makeZone3Label, THEME, THREE,
               hEave_ft, hB, hL, hEave, hRidge, ptFn, norm, doLabel } = ctx;
 
       const h_m  = hEave_ft;                                         // eave ht, ft
