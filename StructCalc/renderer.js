@@ -1093,7 +1093,7 @@ class Wind3DRenderer {
    *   - extension lines (dashed) from building face to dim line
    *   - CSS2DObject label at midpoint (click to focus input)
    */
-  _buildDim(p1, p2, tickDir, extLines, text, dimId, inputId, viewNormal = null) {
+  _buildDim(p1, p2, tickDir, extLines, text, dimId, inputId, viewNormal = null, forceInside = false) {
     const grp = new THREE.Group();
     grp.userData = { dimId, defaultColor: THEME.dimLine };
 
@@ -1144,7 +1144,7 @@ class Wind3DRenderer {
     };
 
     const dimSpan = p1.distanceTo(p2);
-    if (dimSpan >= 2 * ARROW_LEN) {
+    if (dimSpan >= 2 * ARROW_LEN || (forceInside && dimSpan >= ARROW_LEN)) {
       // arrows inside — pointing inward toward centre
       grp.add(mkArrow(p1, dimDir.clone()));
       grp.add(mkArrow(p2, dimDir.clone().negate()));
@@ -1296,10 +1296,10 @@ class Wind3DRenderer {
       new THREE.Vector3(hB,          aEY, aFZ),
       new THREE.Vector3(0, 1, 0),        // vertical perpDir — arrow visible from 3D camera
       [
-        [new THREE.Vector3(hB - zone_a, aEY, hL), new THREE.Vector3(hB - zone_a, aEY, aFZ)],
-        [new THREE.Vector3(hB,          aEY, hL), new THREE.Vector3(hB,          aEY, aFZ)],
+        [new THREE.Vector3(hB - zone_a, EPS_Y, hL), new THREE.Vector3(hB - zone_a, aEY, aFZ)],
+        [new THREE.Vector3(hB,          EPS_Y, hL), new THREE.Vector3(hB,          aEY, aFZ)],
       ],
-      `a=${fmt(zone_a)}ft`, 'dim-a2', null, new THREE.Vector3(0,0,1)
+      `a=${fmt(zone_a)}ft`, 'dim-a2', null, new THREE.Vector3(0,0,1), true
     ));
     this._dimHighlight['dim-a2'] = grp.children[grp.children.length - 1];
 
@@ -1310,10 +1310,10 @@ class Wind3DRenderer {
       new THREE.Vector3(aRX, aEY, hL),
       new THREE.Vector3(0, 1, 0),        // vertical perpDir — arrow visible from 3D camera
       [
-        [new THREE.Vector3(hB, aEY, hL - zone_a), new THREE.Vector3(aRX, aEY, hL - zone_a)],
-        [new THREE.Vector3(hB, aEY, hL),          new THREE.Vector3(aRX, aEY, hL)],
+        [new THREE.Vector3(hB, EPS_Y, hL - zone_a), new THREE.Vector3(aRX, aEY, hL - zone_a)],
+        [new THREE.Vector3(hB, EPS_Y, hL),          new THREE.Vector3(aRX, aEY, hL)],
       ],
-      `a=${fmt(zone_a)}ft`, 'dim-a', null, new THREE.Vector3(1,0,0)
+      `a=${fmt(zone_a)}ft`, 'dim-a', null, new THREE.Vector3(1,0,0), true
     ));
     this._dimHighlight['dim-a'] = grp.children[grp.children.length - 1];
 
