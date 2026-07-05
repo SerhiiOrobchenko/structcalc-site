@@ -32,7 +32,7 @@ async function loadWindScripts() {
   await loadScriptTag('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js');
   await loadScriptTag('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js');
   await loadScriptTag('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js');
-  await loadScriptTag('zones-cc-gable-flat.js?v=6');
+  await loadScriptTag('zones-cc-gable-flat.js?v=9');
   await loadScriptTag('zones-cc-gable-mid.js?v=1');
   await loadScriptTag('zones-cc-gable-steep.js?v=1');
   await loadScriptTag('zones-cc-hip.js?v=1');
