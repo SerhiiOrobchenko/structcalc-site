@@ -1163,7 +1163,7 @@ class Wind3DRenderer {
     };
 
     const OUTSIDE_THRESHOLD = 8;   // ft — outside arrows when span < this
-    const TAIL_LEN = ARROW_LEN;    // tail extending into span = 2.5 ft
+    const TAIL_LEN = 5;            // tail extending outward past arrowhead (visible 2.5ft stub)
     const dimSpan = p1.distanceTo(p2);
 
     // p1 endpoint
@@ -1173,8 +1173,8 @@ class Wind3DRenderer {
       grp.add(mkArrow(p1, dimDir.clone()));           // inside → pointing toward p2
     } else {
       grp.add(mkArrow(p1, dimDir.clone().negate()));  // outside → pointing away
-      grp.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([p1.clone(), p1.clone().addScaledVector(dimDir, TAIL_LEN)]), mat()));
+      grp.add(new THREE.Line(                         // tail extends outward past arrowhead
+        new THREE.BufferGeometry().setFromPoints([p1.clone(), p1.clone().addScaledVector(dimDir.clone().negate(), TAIL_LEN)]), mat()));
     }
     // p2 endpoint
     if (p2End === 'tick') {
@@ -1183,8 +1183,8 @@ class Wind3DRenderer {
       grp.add(mkArrow(p2, dimDir.clone().negate()));  // inside → pointing toward p1
     } else {
       grp.add(mkArrow(p2, dimDir.clone()));            // outside → pointing away
-      grp.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([p2.clone(), p2.clone().addScaledVector(dimDir.clone().negate(), TAIL_LEN)]), mat()));
+      grp.add(new THREE.Line(                         // tail extends outward past arrowhead
+        new THREE.BufferGeometry().setFromPoints([p2.clone(), p2.clone().addScaledVector(dimDir.clone(), TAIL_LEN)]), mat()));
     }
 
     // extension lines (solid black) — gap at building face, overshoot past dim line
@@ -1609,8 +1609,8 @@ class Wind3DRenderer {
       this._labelGroup.add(mkSlArr(A, lineDir.clone()));
     } else {
       this._labelGroup.add(mkSlArr(A, lineDir.clone().negate()));
-      this._labelGroup.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([A.clone(), A.clone().addScaledVector(lineDir, aLen)]), lineMat));
+      this._labelGroup.add(new THREE.Line(            // tail extends outward past arrowhead
+        new THREE.BufferGeometry().setFromPoints([A.clone(), A.clone().addScaledVector(lineDir.clone().negate(), 5)]), lineMat));
     }
     // B endpoint (p2)
     if (p2End === 'tick') {
@@ -1619,8 +1619,8 @@ class Wind3DRenderer {
       this._labelGroup.add(mkSlArr(B, lineDir.clone().negate()));
     } else {
       this._labelGroup.add(mkSlArr(B, lineDir.clone()));
-      this._labelGroup.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([B.clone(), B.clone().addScaledVector(lineDir.clone().negate(), aLen)]), lineMat));
+      this._labelGroup.add(new THREE.Line(            // tail extends outward past arrowhead
+        new THREE.BufferGeometry().setFromPoints([B.clone(), B.clone().addScaledVector(lineDir.clone(), 5)]), lineMat));
     }
 
     // Extension lines — gap near measured object, overshoot past dim line
