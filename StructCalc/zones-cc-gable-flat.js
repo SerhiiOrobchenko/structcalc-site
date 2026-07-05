@@ -15,7 +15,7 @@
   window.ZONE_DESCRIPTORS = window.ZONE_DESCRIPTORS || {};
   window.ZONE_DESCRIPTORS['cc-gable-flat'] = {
     drawZones(ctx) {
-      const { addZone, mkSlopeDim, mkSlopeDimExt, mkSlopeDimZ3, makeZone3Label, THEME, THREE,
+      const { addZone, mkSlopeDim, mkSlopeDimExt, mkSlopeDimZ3, mkSlopeDimChain, makeZone3Label, THEME, THREE,
               hEave_ft, hB, hL, hEave, hRidge, ptFn, norm, doLabel } = ctx;
 
       const h_m  = hEave_ft;                                         // eave ht, ft
@@ -83,37 +83,37 @@
 
         /* ── Cross-slope (u: eave → ridge) ───────────────────── */
 
-        /* Zone 2 width: 0→0.6h from eave, at v=0.55 */
-        mkSlopeDim(
+        /* Zone 2 width: 0→0.6h from eave, at v=0.55 — chain: p1 outer, p2 tick */
+        mkSlopeDimChain(
           `0.6h=${d06}ft`,
           ptFn(0,   0.55, hB, hEave, hRidge, hL),
           ptFn(u2,  0.55, hB, hEave, hRidge, hL),
-          norm
+          norm, 'inside', 'tick'
         );
-        /* Zone 1 width: 0.6h→1.2h from eave, at v=0.55 */
-        mkSlopeDim(
+        /* Zone 1 width: 0.6h→1.2h from eave, at v=0.55 — chain: p1 tick, p2 outer */
+        mkSlopeDimChain(
           `0.6h=${d06}ft`,
           ptFn(u2,  0.55, hB, hEave, hRidge, hL),
           ptFn(u1e, 0.55, hB, hEave, hRidge, hL),
-          norm
+          norm, 'tick', 'inside'
         );
 
         /* ── Along-ridge (v direction) — both dims on same line near ridge ── */
         // u=0.82 places both dims close to the ridge for visual clarity
 
-        /* Zone 2 along-ridge: 0.6h from front gable, at u=0.82 */
-        mkSlopeDim(
+        /* Zone 2 along-ridge: 0.6h from front gable, at u=0.82 — chain: p1 tick, p2 outer */
+        mkSlopeDimChain(
           `0.6h=${d06}ft`,
           ptFn(0.82, vv1_, hB, hEave, hRidge, hL),
           ptFn(0.82, 1.0,  hB, hEave, hRidge, hL),
-          norm
+          norm, 'tick', 'inside'
         );
-        /* Zone 1 along-ridge: 0.6h band inboard of Zone-2, at u=0.82 (same line) */
-        mkSlopeDim(
+        /* Zone 1 along-ridge: 0.6h band inboard of Zone-2, at u=0.82 — chain: p1 outer, p2 tick */
+        mkSlopeDimChain(
           `0.6h=${d06}ft`,
           ptFn(0.82, 1 - vz1, hB, hEave, hRidge, hL),
           ptFn(0.82, vv1_,    hB, hEave, hRidge, hL),
-          norm
+          norm, 'inside', 'tick'
         );
 
         /* ── Zone 3: red dims directly on zone surface ─────────────── */

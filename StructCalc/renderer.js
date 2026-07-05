@@ -1093,7 +1093,7 @@ class Wind3DRenderer {
    *   - extension lines (dashed) from building face to dim line
    *   - CSS2DObject label at midpoint (click to focus input)
    */
-  _buildDim(p1, p2, tickDir, extLines, text, dimId, inputId, viewNormal = null, forceInside = false) {
+  _buildDim(p1, p2, tickDir, extLines, text, dimId, inputId, viewNormal = null, forceInside = false, p1End = 'auto', p2End = 'auto') {
     const grp = new THREE.Group();
     grp.userData = { dimId, defaultColor: THEME.dimLine };
 
@@ -1106,7 +1106,7 @@ class Wind3DRenderer {
     );
     grp.add(mainLine);
 
-    // Filled 15° arrowheads — flip outside when span < 2 × arrow length
+    // Filled 15° arrowheads — outside+tail when span < 8 ft; tick at chain intersections
     // ── DIM STYLE — fixed for ALL dims, ALL diagrams ──────────────────
     //   ARROW_LEN = 2.5  world units (uniform)
     //   color     = 0x000000 black, fully opaque
@@ -1143,20 +1143,37 @@ class Wind3DRenderer {
         { color: 0x000000, side: THREE.DoubleSide }));
     };
 
+    // Architectural tick: 45° diagonal at chain intermediate points
+    const mkTick = (pt) => {
+      const tDir = dimDir.clone().add(perpDir.clone()).normalize();
+      const t0 = pt.clone().addScaledVector(tDir, -ARROW_LEN / 2);
+      const t1 = pt.clone().addScaledVector(tDir,  ARROW_LEN / 2);
+      return new THREE.Line(new THREE.BufferGeometry().setFromPoints([t0, t1]), mat());
+    };
+
+    const OUTSIDE_THRESHOLD = 8;   // ft — outside arrows when span < this
+    const TAIL_LEN = ARROW_LEN;    // tail extending into span = 2.5 ft
     const dimSpan = p1.distanceTo(p2);
-    if (dimSpan >= 2 * ARROW_LEN || (forceInside && dimSpan >= ARROW_LEN)) {
-      // arrows inside — pointing inward toward centre
-      grp.add(mkArrow(p1, dimDir.clone()));
-      grp.add(mkArrow(p2, dimDir.clone().negate()));
+
+    // p1 endpoint
+    if (p1End === 'tick') {
+      grp.add(mkTick(p1));
+    } else if (p1End === 'inside' || (p1End === 'auto' && dimSpan >= OUTSIDE_THRESHOLD)) {
+      grp.add(mkArrow(p1, dimDir.clone()));           // inside → pointing toward p2
     } else {
-      // arrows outside — pointing outward; add short inner stubs
-      grp.add(mkArrow(p1, dimDir.clone().negate()));
-      grp.add(mkArrow(p2, dimDir.clone()));
-      const stub = ARROW_LEN * 0.5;
+      grp.add(mkArrow(p1, dimDir.clone().negate()));  // outside → pointing away
       grp.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([p1.clone(), p1.clone().addScaledVector(dimDir,  stub)]), mat()));
+        new THREE.BufferGeometry().setFromPoints([p1.clone(), p1.clone().addScaledVector(dimDir, TAIL_LEN)]), mat()));
+    }
+    // p2 endpoint
+    if (p2End === 'tick') {
+      grp.add(mkTick(p2));
+    } else if (p2End === 'inside' || (p2End === 'auto' && dimSpan >= OUTSIDE_THRESHOLD)) {
+      grp.add(mkArrow(p2, dimDir.clone().negate()));  // inside → pointing toward p1
+    } else {
+      grp.add(mkArrow(p2, dimDir.clone()));            // outside → pointing away
       grp.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([p2.clone(), p2.clone().addScaledVector(dimDir.clone().negate(), stub)]), mat()));
+        new THREE.BufferGeometry().setFromPoints([p2.clone(), p2.clone().addScaledVector(dimDir.clone().negate(), TAIL_LEN)]), mat()));
     }
 
     // extension lines (solid black) — gap at building face, overshoot past dim line
@@ -1298,7 +1315,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(hB - zone_a, EPS_Y, hL), new THREE.Vector3(hB - zone_a, aEY, aFZ)],
         [new THREE.Vector3(hB,          EPS_Y, hL), new THREE.Vector3(hB,          aEY, aFZ)],
       ],
-      `a=${fmt(zone_a)}ft`, 'dim-a2', null, new THREE.Vector3(0,0,1), true
+      `a=${fmt(zone_a)}ft`, 'dim-a2', null, new THREE.Vector3(0,0,1)
     ));
     this._dimHighlight['dim-a2'] = grp.children[grp.children.length - 1];
 
@@ -1312,7 +1329,7 @@ class Wind3DRenderer {
         [new THREE.Vector3(hB, EPS_Y, hL - zone_a), new THREE.Vector3(aRX, aEY, hL - zone_a)],
         [new THREE.Vector3(hB, EPS_Y, hL),          new THREE.Vector3(aRX, aEY, hL)],
       ],
-      `a=${fmt(zone_a)}ft`, 'dim-a', null, new THREE.Vector3(1,0,0), true
+      `a=${fmt(zone_a)}ft`, 'dim-a', null, new THREE.Vector3(1,0,0)
     ));
     this._dimHighlight['dim-a'] = grp.children[grp.children.length - 1];
 
@@ -1525,7 +1542,7 @@ class Wind3DRenderer {
    *               gap + overshoot, fromPt on measured object, toPt = dim endpoint
    */
   // DIM STYLE: black 0x000000, ARROW_LEN=2.5, opaque — do not change per call-site
-  _mkSlopeDim(label, ptA, ptB, norm, eps, extPairs = []) {
+  _mkSlopeDim(label, ptA, ptB, norm, eps, extPairs = [], p1End = 'auto', p2End = 'auto') {
     const N   = norm.clone().normalize();
     const off = N.clone().multiplyScalar((eps || 0.10) + 0.06);
     const A   = ptA.clone().add(off);
@@ -1555,17 +1572,33 @@ class Wind3DRenderer {
       return new THREE.Mesh(geo, new THREE.MeshBasicMaterial(
         { color: 0x000000, side: THREE.DoubleSide }));   // black opaque
     };
-    if (span >= 2 * aLen) {
+    // Architectural tick for chain intermediate points
+    const mkSlTick = (pt) => {
+      const tDir = lineDir.clone().add(perpDir.clone()).normalize();
+      const t0 = pt.clone().addScaledVector(tDir, -aLen / 2);
+      const t1 = pt.clone().addScaledVector(tDir,  aLen / 2);
+      return new THREE.Line(new THREE.BufferGeometry().setFromPoints([t0, t1]), lineMat);
+    };
+    const OUTSIDE_S = 8;  // ft — outside arrows when span < this
+    // A endpoint (p1)
+    if (p1End === 'tick') {
+      this._labelGroup.add(mkSlTick(A));
+    } else if (p1End === 'inside' || (p1End === 'auto' && span >= OUTSIDE_S)) {
       this._labelGroup.add(mkSlArr(A, lineDir.clone()));
-      this._labelGroup.add(mkSlArr(B, lineDir.clone().negate()));
     } else {
       this._labelGroup.add(mkSlArr(A, lineDir.clone().negate()));
+      this._labelGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([A.clone(), A.clone().addScaledVector(lineDir, aLen)]), lineMat));
+    }
+    // B endpoint (p2)
+    if (p2End === 'tick') {
+      this._labelGroup.add(mkSlTick(B));
+    } else if (p2End === 'inside' || (p2End === 'auto' && span >= OUTSIDE_S)) {
+      this._labelGroup.add(mkSlArr(B, lineDir.clone().negate()));
+    } else {
       this._labelGroup.add(mkSlArr(B, lineDir.clone()));
-      const stub = aLen * 0.5;
       this._labelGroup.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([A.clone(), A.clone().addScaledVector(lineDir, stub)]), lineMat));
-      this._labelGroup.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([B.clone(), B.clone().addScaledVector(lineDir.clone().negate(), stub)]), lineMat));
+        new THREE.BufferGeometry().setFromPoints([B.clone(), B.clone().addScaledVector(lineDir.clone().negate(), aLen)]), lineMat));
     }
 
     // Extension lines — gap near measured object, overshoot past dim line
@@ -1787,9 +1820,10 @@ class Wind3DRenderer {
       makeZoneLabelFlat: (zt,pt,n,td) =>
         this._makeZoneLabelFlat(zt,pt,n,td),
       leftNormal:     (b,e,r,l)       => this._leftNormal(b,e,r,l),
-      mkSlopeDim:     (lbl,ptA,ptB,n)             => this._mkSlopeDim(lbl,ptA,ptB,n,0.10),
-      mkSlopeDimExt:  (lbl,ptA,ptB,extPairs,n)    => this._mkSlopeDim(lbl,ptA,ptB,n,0.10,extPairs),
-      mkSlopeDimZ3:   (lbl,ptA,ptB,n)             => this._mkSlopeDim(lbl,ptA,ptB,n,0.10),  // same style as all dims
+      mkSlopeDim:      (lbl,ptA,ptB,n)                   => this._mkSlopeDim(lbl,ptA,ptB,n,0.10),
+      mkSlopeDimExt:   (lbl,ptA,ptB,extPairs,n)          => this._mkSlopeDim(lbl,ptA,ptB,n,0.10,extPairs),
+      mkSlopeDimZ3:    (lbl,ptA,ptB,n)                   => this._mkSlopeDim(lbl,ptA,ptB,n,0.10),
+      mkSlopeDimChain: (lbl,ptA,ptB,n,p1End,p2End)       => this._mkSlopeDim(lbl,ptA,ptB,n,0.10,[],p1End,p2End),
       makeZone3Label: (pt,n)          => this._makeZone3ArrowLabel(pt,n,zone_a),
     };
 
