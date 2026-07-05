@@ -1503,7 +1503,7 @@ class Wind3DRenderer {
     const lineDir = B.clone().sub(A).normalize();
     const perpDir = new THREE.Vector3().crossVectors(N, lineDir).normalize();
     const span    = ptA.distanceTo(ptB);
-    const aLen    = Math.min(span * 0.20, 5.0);   // 2× bigger arrows
+    const aLen    = 0.6;   // fixed — same size as _buildDim ARROW_LEN
     const halfWS  = aLen * Math.tan(THREE.MathUtils.degToRad(15));
     const mkSlArr = (tip, dir) => {
       const base = tip.clone().addScaledVector(dir, aLen);
