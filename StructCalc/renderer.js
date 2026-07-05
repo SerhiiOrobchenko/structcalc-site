@@ -1479,11 +1479,14 @@ class Wind3DRenderer {
 
   /* ── zone CSS2D labels with optional leader lines ───────────────────────── */
 
-  /** On-slope dimension line with end ticks + chip label.
-   *  ptA, ptB  : points already on the slope surface
-   *  norm      : outward surface normal
-   *  eps       : offset above surface so line clears geometry              */
-  _mkSlopeDim(label, ptA, ptB, norm, eps) {
+  /** On-slope dimension line with 15° filled arrows + chip label.
+   *  ptA, ptB   : dim-line endpoints on the slope surface
+   *  norm       : outward surface normal
+   *  eps        : offset above surface
+   *  extPairs   : optional [[fromPt, toPt], …] — extension lines drawn with
+   *               gap + overshoot, fromPt on measured object, toPt = dim endpoint
+   */
+  _mkSlopeDim(label, ptA, ptB, norm, eps, extPairs = []) {
     const N   = norm.clone().normalize();
     const off = N.clone().multiplyScalar((eps || 0.10) + 0.06);
     const A   = ptA.clone().add(off);
@@ -1496,11 +1499,11 @@ class Wind3DRenderer {
     this._labelGroup.add(
       new THREE.Line(new THREE.BufferGeometry().setFromPoints([A, B]), lineMat));
 
-    // Filled 15° arrowheads on slope surface
+    // Filled 15° arrowheads — 2× size relative to proportional base
     const lineDir = B.clone().sub(A).normalize();
     const perpDir = new THREE.Vector3().crossVectors(N, lineDir).normalize();
     const span    = ptA.distanceTo(ptB);
-    const aLen    = Math.min(span * 0.10, 2.5);
+    const aLen    = Math.min(span * 0.20, 5.0);   // 2× bigger arrows
     const halfWS  = aLen * Math.tan(THREE.MathUtils.degToRad(15));
     const mkSlArr = (tip, dir) => {
       const base = tip.clone().addScaledVector(dir, aLen);
@@ -1526,7 +1529,20 @@ class Wind3DRenderer {
         new THREE.BufferGeometry().setFromPoints([B.clone(), B.clone().addScaledVector(lineDir.clone().negate(), stub)]), lineMat));
     }
 
-    // Chip label — same style as building dim chips (θ, B, L etc.): 9px
+    // Extension lines — gap near measured object, overshoot past dim line
+    for (const [fromPt, toPt] of extPairs) {
+      const fA  = fromPt.clone().add(off);
+      const fB  = toPt.clone().add(off);
+      const dir = new THREE.Vector3().subVectors(fB, fA).normalize();
+      const gap = aLen * 1.5;   // gap at measured-object side
+      const ext = aLen * 0.8;   // overshoot past dim line
+      const fAg = fA.clone().addScaledVector(dir,  gap);
+      const fBe = fB.clone().addScaledVector(dir,  ext);
+      this._labelGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([fAg, fBe]), lineMat));
+    }
+
+    // Chip label
     if (label && THREE.CSS2DObject) {
       const div = document.createElement('div');
       div.textContent = label;
@@ -1537,7 +1553,7 @@ class Wind3DRenderer {
         'pointer-events:none', 'white-space:nowrap',
       ].join(';');
       const obj = new THREE.CSS2DObject(div);
-      obj.position.copy(mid);   // chip pinned to centre of slope dim line
+      obj.position.copy(mid);
       obj.userData.faceNormal = N.clone();
       this._labelGroup.add(obj);
     }
@@ -1732,7 +1748,8 @@ class Wind3DRenderer {
       makeZoneLabelFlat: (zt,pt,n,td) =>
         this._makeZoneLabelFlat(zt,pt,n,td),
       leftNormal:     (b,e,r,l)       => this._leftNormal(b,e,r,l),
-      mkSlopeDim:     (lbl,ptA,ptB,n) => this._mkSlopeDim(lbl,ptA,ptB,n,0.10),
+      mkSlopeDim:     (lbl,ptA,ptB,n)             => this._mkSlopeDim(lbl,ptA,ptB,n,0.10),
+      mkSlopeDimExt:  (lbl,ptA,ptB,extPairs,n)    => this._mkSlopeDim(lbl,ptA,ptB,n,0.10,extPairs),
       makeZone3Label: (pt,n)          => this._makeZone3ArrowLabel(pt,n,zone_a),
     };
 

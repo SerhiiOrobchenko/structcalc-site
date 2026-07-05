@@ -1,4 +1,4 @@
-/* zones-cc-gable-flat.js  v=7
+/* zones-cc-gable-flat.js  v=8
  * ASCE/SEI 7-22, Ch. 30, Part 1 (C&C), Figure 30.3-2A
  * Flat Roofs, Gable and Hip Roofs θ ≤ 7°
  *
@@ -69,7 +69,10 @@
       if (!doLabel && mkSlopeDim && THREE.CSS2DObject) {
         const d06 = (0.6 * hEave_ft).toFixed(1);
         const d02 = (0.2 * hEave_ft).toFixed(1);
-        const vv1_ = 1 - v2;   // front zone-2 boundary
+        const vv1_ = 1 - v2;              // front zone-2/1 boundary in v
+        // Offset outside the slope for ext-line dims (normalised v units)
+        const vOut  = Math.min(0.12, v2 * 0.5);  // extend outside gable edge
+        const vIn   = Math.min(0.10, vz1 * 0.4); // step outside Zone-3 into slope field
 
         /* ── Cross-slope (u: eave → ridge) ───────────────────── */
 
@@ -88,39 +91,56 @@
           norm
         );
 
-        /* ── Along-ridge (v: from front gable end) ───────────── */
+        /* ── Along-ridge (v direction) — both dims on same line near ridge ── */
+        // u=0.82 places both dims close to the ridge for visual clarity
 
-        /* Zone 2 along-ridge: 0.6h from front gable, at u=0.22 (Zone-2 eave strip) */
+        /* Zone 2 along-ridge: 0.6h from front gable, at u=0.82 */
         mkSlopeDim(
           `0.6h=${d06}ft`,
-          ptFn(0.22, vv1_, hB, hEave, hRidge, hL),
-          ptFn(0.22, 1.0,  hB, hEave, hRidge, hL),
+          ptFn(0.82, vv1_, hB, hEave, hRidge, hL),
+          ptFn(0.82, 1.0,  hB, hEave, hRidge, hL),
           norm
         );
-        /* Zone 1 along-ridge: 0.6h band inboard of Zone-2, at u=0.55 */
+        /* Zone 1 along-ridge: 0.6h band inboard of Zone-2, at u=0.82 (same line) */
         mkSlopeDim(
           `0.6h=${d06}ft`,
-          ptFn(0.55, 1 - vz1, hB, hEave, hRidge, hL),
-          ptFn(0.55, vv1_,    hB, hEave, hRidge, hL),
+          ptFn(0.82, 1 - vz1, hB, hEave, hRidge, hL),
+          ptFn(0.82, vv1_,    hB, hEave, hRidge, hL),
           norm
         );
 
-        /* ── Zone 3 corner (near-front × near-eave) ─────────── */
+        /* ── Zone 3: dims with extension lines outside zone/roof ─────── */
 
-        /* Zone 3 — 0.6h along gable (v direction), at u=u3*0.35 */
-        mkSlopeDim(
-          `0.6h=${d06}ft`,
-          ptFn(u3 * 0.35, vv1_, hB, hEave, hRidge, hL),
-          ptFn(u3 * 0.35, 1.0,  hB, hEave, hRidge, hL),
-          norm
-        );
-        /* Zone 3 — 0.2h from eave (u direction), at v=vv1_+v2*0.2 */
-        mkSlopeDim(
-          `0.2h=${d02}ft`,
-          ptFn(0,   vv1_ + v2 * 0.2, hB, hEave, hRidge, hL),
-          ptFn(u3,  vv1_ + v2 * 0.2, hB, hEave, hRidge, hL),
-          norm
-        );
+        /* Zone 3 — 0.6h along gable: dim line outside the roof (v > 1.0)
+           Extension lines run from zone boundary (vv1_ and 1.0) outward.  */
+        if (mkSlopeDimExt) {
+          mkSlopeDimExt(
+            `0.6h=${d06}ft`,
+            ptFn(u3 * 0.35, vv1_ + vOut, hB, hEave, hRidge, hL),  // dim A
+            ptFn(u3 * 0.35, 1.0  + vOut, hB, hEave, hRidge, hL),  // dim B
+            [
+              [ ptFn(u3 * 0.35, vv1_, hB, hEave, hRidge, hL),
+                ptFn(u3 * 0.35, vv1_ + vOut, hB, hEave, hRidge, hL) ],
+              [ ptFn(u3 * 0.35, 1.0,  hB, hEave, hRidge, hL),
+                ptFn(u3 * 0.35, 1.0  + vOut, hB, hEave, hRidge, hL) ],
+            ],
+            norm
+          );
+          /* Zone 3 — 0.2h from eave: dim line outside Zone 3 in v (into slope field)
+             Extension lines run from the front-corner Zone-3 edge into the field. */
+          mkSlopeDimExt(
+            `0.2h=${d02}ft`,
+            ptFn(0,   vv1_ - vIn, hB, hEave, hRidge, hL),  // dim A
+            ptFn(u3,  vv1_ - vIn, hB, hEave, hRidge, hL),  // dim B
+            [
+              [ ptFn(0,  vv1_, hB, hEave, hRidge, hL),
+                ptFn(0,  vv1_ - vIn, hB, hEave, hRidge, hL) ],
+              [ ptFn(u3, vv1_, hB, hEave, hRidge, hL),
+                ptFn(u3, vv1_ - vIn, hB, hEave, hRidge, hL) ],
+            ],
+            norm
+          );
+        }
       }
     },
   };
