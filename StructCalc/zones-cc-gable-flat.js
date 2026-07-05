@@ -15,7 +15,7 @@
   window.ZONE_DESCRIPTORS = window.ZONE_DESCRIPTORS || {};
   window.ZONE_DESCRIPTORS['cc-gable-flat'] = {
     drawZones(ctx) {
-      const { addZone, mkSlopeDim, makeZone3Label, THEME, THREE,
+      const { addZone, mkSlopeDim, mkSlopeDimExt, makeZone3Label, THEME, THREE,
               hEave_ft, hB, hL, hEave, hRidge, ptFn, norm, doLabel } = ctx;
 
       const h_m  = hEave_ft;                                         // eave ht, ft
@@ -113,8 +113,7 @@
 
         /* Zone 3 — 0.6h along gable: dim line outside the roof (v > 1.0)
            Extension lines run from zone boundary (vv1_ and 1.0) outward.  */
-        if (mkSlopeDimExt) {
-          mkSlopeDimExt(
+        mkSlopeDimExt(
             `0.6h=${d06}ft`,
             ptFn(u3 * 0.35, vv1_ + vOut, hB, hEave, hRidge, hL),  // dim A
             ptFn(u3 * 0.35, 1.0  + vOut, hB, hEave, hRidge, hL),  // dim B
@@ -140,7 +139,6 @@
             ],
             norm
           );
-        }
       }
     },
   };
