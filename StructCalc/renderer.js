@@ -38,14 +38,14 @@ const THEME = {
 
   zone1p     : 0x4ade80,   // green-400  — Zone 1' central field
   zone1      : 0xfde047,   // yellow-300 — interior field
-  zone2      : 0xf97316,   // orange-500 — edges
-  zone3      : 0xf87171,   // red-400    — corners
+  zone2      : 0xfb923c,   // orange-400 — edges (brighter orange)
+  zone3      : 0xdc2626,   // red-600    — corners (deeper red)
   zone4      : 0x7dd3fc,   // sky-300    — wall field
   zone5      : 0xa78bfa,   // violet-400 — wall corner strip
   zoneLabel1p : { bg:'rgba(74,222,128,0.92)',  fg:'#14532d' },  // green-400  — Zone 1'
   zoneLabel1  : { bg:'rgba(253,224,71,0.92)',  fg:'#713f12' },  // yellow-300 — Zone 1
-  zoneLabel2  : { bg:'rgba(249,115,22,0.92)',  fg:'#7c2d12' },  // orange-500 — Zone 2
-  zoneLabel3 : { bg:'rgba(248,113,113,0.92)', fg:'#7f1d1d' },  // red-400
+  zoneLabel2  : { bg:'rgba(251,146,60,0.92)',  fg:'#7c2d12' },  // orange-400 — Zone 2
+  zoneLabel3 : { bg:'rgba(220,38,38,0.92)',   fg:'#fff' },     // red-600
   zoneLabel4 : { bg:'rgba(125,211,252,0.92)', fg:'#0c4a6e' },  // sky-300
   zoneLabel5 : { bg:'rgba(167,139,250,0.92)', fg:'#2e1065' },  // violet-400
 };
@@ -1130,7 +1130,7 @@ class Wind3DRenderer {
     // extension lines (solid black) — start TICK/2 gap from building, extend TICK past dim line
     for (const [a, b] of extLines) {
       const extDir = new THREE.Vector3().subVectors(b, a).normalize();
-      const aGap   = a.clone().addScaledVector(extDir, TICK / 2);  // gap at building face
+      const aGap   = a.clone().addScaledVector(extDir, TICK * 2);  // gap at building face (4× offset)
       const bExt   = b.clone().addScaledVector(extDir, TICK);       // overshoot past dim line
       grp.add(new THREE.Line(
         new THREE.BufferGeometry().setFromPoints([aGap, bExt]), extMat()
@@ -1260,7 +1260,7 @@ class Wind3DRenderer {
     ));
     this._dimHighlight['dim-h'] = grp.children[grp.children.length - 1];
 
-    const aEY  = hEave;
+    const aEY  = EPS_Y;   // ground level — 'a' dims at base per user request
     const aOFF = D * 0.4;
 
     // ── Eave "a" — Front face right side (zone 3 strip from Back toward front right) ──
@@ -1513,7 +1513,7 @@ class Wind3DRenderer {
     div.textContent = 'Zone 3';
     div.style.cssText = [
       'font-family:"JetBrains Mono",monospace', 'font-size:13px', 'font-weight:700',
-      'color:#7f1d1d', 'background:rgba(248,113,113,0.92)',
+      'color:#fff',    'background:rgba(220,38,38,0.92)',
       'padding:2px 8px', 'border-radius:4px', 'pointer-events:none', 'white-space:nowrap',
     ].join(';');
     const obj = new THREE.CSS2DObject(div);
@@ -1574,8 +1574,8 @@ class Wind3DRenderer {
     const cfgMap = {
       "zone-1p":{ bg:'rgba(74,222,128,0.80)',  fg:'#14532d', text:"Zone 1'" },
       'zone-1': { bg:'rgba(253,224,71,0.92)',  fg:'#713f12', text:'Zone 1' },
-      'zone-2': { bg:'rgba(249,115,22,0.92)',  fg:'#7c2d12', text:'Zone 2' },
-      'zone-3': { bg:'rgba(248,113,113,0.92)', fg:'#7f1d1d', text:'Zone 3' },
+      'zone-2': { bg:'rgba(251,146,60,0.92)',  fg:'#7c2d12', text:'Zone 2' },
+      'zone-3': { bg:'rgba(220,38,38,0.92)',   fg:'#fff',    text:'Zone 3' },
       'zone-4': { bg:'rgba(125,211,252,0.92)', fg:'#0c4a6e', text:'Zone 4' },
       'zone-5': { bg:'rgba(167,139,250,0.92)', fg:'#2e1065', text:'Zone 5' },
     };

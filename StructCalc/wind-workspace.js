@@ -37,7 +37,7 @@ async function loadWindScripts() {
   await loadScriptTag('zones-cc-gable-steep.js?v=1');
   await loadScriptTag('zones-cc-hip.js?v=1');
   await loadScriptTag('zones-cc-monoslope.js?v=1');
-  await loadScriptTag('renderer.js?v=22');
+  await loadScriptTag('renderer.js?v=23');
   await loadScriptTag('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
   await loadScriptTag('map-module.js?v=3');
   windScriptsLoaded = true;
@@ -1489,16 +1489,16 @@ function buildWindStepReport(r, s) {
 var ZONE_COLORS = {
   'zone-1p': '#4ade80',
   'zone-1':  '#fde047',
-  'zone-2':  '#f97316',
-  'zone-3': '#f87171',
+  'zone-2':  '#fb923c',   // orange-400
+  'zone-3': '#dc2626',   // red-600
   'zone-4': '#7dd3fc',
   'zone-5': '#a78bfa',
 };
 var ZONE_BG_COLORS = {
   'zone-1p': 'rgba(74,222,128,0.18)',
   'zone-1':  'rgba(253,224,71,0.18)',
-  'zone-2':  'rgba(249,115,22,0.18)',
-  'zone-3': 'rgba(248,113,113,0.18)',
+  'zone-2':  'rgba(251,146,60,0.18)',
+  'zone-3': 'rgba(220,38,38,0.18)',
   'zone-4': 'rgba(125,211,252,0.18)',
   'zone-5': 'rgba(167,139,250,0.18)',
 };
@@ -1530,8 +1530,8 @@ function buildCCGableZonePlanSVG(s, a) {
 
   /* Zone fill colours */
   var Z1 = 'rgba(74,222,128,0.30)';
-  var Z2 = 'rgba(251,191,36,0.48)';
-  var Z3 = 'rgba(248,113,113,0.62)';
+  var Z2 = 'rgba(251,146,60,0.55)';   // orange-400
+  var Z3 = 'rgba(220,38,38,0.65)';    // red-600
   var cBd = '#475569', cRg = '#0891b2', cDm = '#94a3b8', cWn = '#22d3ee';
 
   /* ── Helpers ───────────────────────────────────────────────────────── */
