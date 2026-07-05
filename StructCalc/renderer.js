@@ -1107,6 +1107,10 @@ class Wind3DRenderer {
     grp.add(mainLine);
 
     // Filled 15° arrowheads — flip outside when span < 2 × arrow length
+    // ── DIM STYLE — fixed for ALL dims, ALL diagrams ──────────────────
+    //   ARROW_LEN = 2.5  world units (uniform)
+    //   color     = 0x000000 black, fully opaque
+    //   ext gap   = ARROW_LEN × 1.0  (half of previous 2×)
     const ARROW_LEN = 2.5;
     const halfW     = ARROW_LEN * Math.tan(THREE.MathUtils.degToRad(15));
 
@@ -1136,7 +1140,7 @@ class Wind3DRenderer {
         tip.x, tip.y, tip.z, w1.x, w1.y, w1.z, w2.x, w2.y, w2.z,
       ]), 3));
       return new THREE.Mesh(geo, new THREE.MeshBasicMaterial(
-        { color: 0x000000, side: THREE.DoubleSide, depthTest: false }));
+        { color: 0x000000, side: THREE.DoubleSide }));
     };
 
     const dimSpan = p1.distanceTo(p2);
@@ -1158,7 +1162,7 @@ class Wind3DRenderer {
     // extension lines (solid black) — gap at building face, overshoot past dim line
     for (const [a, b] of extLines) {
       const extDir = new THREE.Vector3().subVectors(b, a).normalize();
-      const aGap   = a.clone().addScaledVector(extDir, ARROW_LEN * 2);
+      const aGap   = a.clone().addScaledVector(extDir, ARROW_LEN * 1);  // gap = 1× (locked)
       const bExt   = b.clone().addScaledVector(extDir, ARROW_LEN);
       grp.add(new THREE.Line(
         new THREE.BufferGeometry().setFromPoints([aGap, bExt]), extMat()
@@ -1486,14 +1490,15 @@ class Wind3DRenderer {
    *  extPairs   : optional [[fromPt, toPt], …] — extension lines drawn with
    *               gap + overshoot, fromPt on measured object, toPt = dim endpoint
    */
-  _mkSlopeDim(label, ptA, ptB, norm, eps, extPairs = [], color = 0x1e293b) {
+  // DIM STYLE: black 0x000000, ARROW_LEN=2.5, opaque — do not change per call-site
+  _mkSlopeDim(label, ptA, ptB, norm, eps, extPairs = []) {
     const N   = norm.clone().normalize();
     const off = N.clone().multiplyScalar((eps || 0.10) + 0.06);
     const A   = ptA.clone().add(off);
     const B   = ptB.clone().add(off);
     const mid = A.clone().lerp(B, 0.5);
     const lineMat = new THREE.LineBasicMaterial(
-      { color, transparent: true, opacity: 0.90 });
+      { color: 0x000000 });   // black, opaque — locked dim style
 
     // Main dim line
     this._labelGroup.add(
@@ -1514,7 +1519,7 @@ class Wind3DRenderer {
         tip.x, tip.y, tip.z, w1.x, w1.y, w1.z, w2.x, w2.y, w2.z,
       ]), 3));
       return new THREE.Mesh(geo, new THREE.MeshBasicMaterial(
-        { color, side: THREE.DoubleSide }));
+        { color: 0x000000, side: THREE.DoubleSide }));   // black opaque
     };
     if (span >= 2 * aLen) {
       this._labelGroup.add(mkSlArr(A, lineDir.clone()));
@@ -1534,7 +1539,7 @@ class Wind3DRenderer {
       const fA  = fromPt.clone().add(off);
       const fB  = toPt.clone().add(off);
       const dir = new THREE.Vector3().subVectors(fB, fA).normalize();
-      const gap = aLen * 1.5;   // gap at measured-object side
+      const gap = aLen * 0.75;  // gap at measured-object side (locked: ÷2)
       const ext = aLen * 0.8;   // overshoot past dim line
       const fAg = fA.clone().addScaledVector(dir,  gap);
       const fBe = fB.clone().addScaledVector(dir,  ext);
@@ -1750,7 +1755,7 @@ class Wind3DRenderer {
       leftNormal:     (b,e,r,l)       => this._leftNormal(b,e,r,l),
       mkSlopeDim:     (lbl,ptA,ptB,n)             => this._mkSlopeDim(lbl,ptA,ptB,n,0.10),
       mkSlopeDimExt:  (lbl,ptA,ptB,extPairs,n)    => this._mkSlopeDim(lbl,ptA,ptB,n,0.10,extPairs),
-      mkSlopeDimZ3:   (lbl,ptA,ptB,n)             => this._mkSlopeDim(lbl,ptA,ptB,n,0.10,[],0xdc2626),
+      mkSlopeDimZ3:   (lbl,ptA,ptB,n)             => this._mkSlopeDim(lbl,ptA,ptB,n,0.10),  // same style as all dims
       makeZone3Label: (pt,n)          => this._makeZone3ArrowLabel(pt,n,zone_a),
     };
 
