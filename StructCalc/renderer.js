@@ -1171,8 +1171,6 @@ class Wind3DRenderer {
       grp.add(mkTick(p1));
     } else if (p1End === 'inside' || (p1End === 'auto' && dimSpan >= OUTSIDE_THRESHOLD)) {
       grp.add(mkArrow(p1, dimDir.clone()));           // inside → pointing toward p2
-      grp.add(new THREE.Line(                         // tail extending outward from tip
-        new THREE.BufferGeometry().setFromPoints([p1.clone(), p1.clone().addScaledVector(dimDir.clone().negate(), TAIL_LEN)]), mat()));
     } else {
       grp.add(mkArrow(p1, dimDir.clone().negate()));  // outside → pointing away
       grp.add(new THREE.Line(
@@ -1183,8 +1181,6 @@ class Wind3DRenderer {
       grp.add(mkTick(p2));
     } else if (p2End === 'inside' || (p2End === 'auto' && dimSpan >= OUTSIDE_THRESHOLD)) {
       grp.add(mkArrow(p2, dimDir.clone().negate()));  // inside → pointing toward p1
-      grp.add(new THREE.Line(                         // tail extending outward from tip
-        new THREE.BufferGeometry().setFromPoints([p2.clone(), p2.clone().addScaledVector(dimDir.clone(), TAIL_LEN)]), mat()));
     } else {
       grp.add(mkArrow(p2, dimDir.clone()));            // outside → pointing away
       grp.add(new THREE.Line(
@@ -1611,8 +1607,6 @@ class Wind3DRenderer {
       this._labelGroup.add(mkSlTick(A));
     } else if (p1End === 'inside' || (p1End === 'auto' && span >= OUTSIDE_S)) {
       this._labelGroup.add(mkSlArr(A, lineDir.clone()));
-      this._labelGroup.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([A.clone(), A.clone().addScaledVector(lineDir.clone().negate(), aLen)]), lineMat));
     } else {
       this._labelGroup.add(mkSlArr(A, lineDir.clone().negate()));
       this._labelGroup.add(new THREE.Line(
@@ -1623,8 +1617,6 @@ class Wind3DRenderer {
       this._labelGroup.add(mkSlTick(B));
     } else if (p2End === 'inside' || (p2End === 'auto' && span >= OUTSIDE_S)) {
       this._labelGroup.add(mkSlArr(B, lineDir.clone().negate()));
-      this._labelGroup.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([B.clone(), B.clone().addScaledVector(lineDir.clone(), aLen)]), lineMat));
     } else {
       this._labelGroup.add(mkSlArr(B, lineDir.clone()));
       this._labelGroup.add(new THREE.Line(
