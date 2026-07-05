@@ -37,7 +37,7 @@ async function loadWindScripts() {
   await loadScriptTag('zones-cc-gable-steep.js?v=1');
   await loadScriptTag('zones-cc-hip.js?v=1');
   await loadScriptTag('zones-cc-monoslope.js?v=1');
-  await loadScriptTag('renderer.js?v=36');
+  await loadScriptTag('renderer.js?v=37');
   await loadScriptTag('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
   await loadScriptTag('map-module.js?v=3');
   windScriptsLoaded = true;
