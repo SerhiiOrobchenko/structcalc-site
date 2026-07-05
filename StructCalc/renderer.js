@@ -1107,8 +1107,8 @@ class Wind3DRenderer {
     grp.add(mainLine);
 
     // Filled 15° arrowheads — flip outside when span < 2 × arrow length
-    const ARROW_LEN = 0.6;
-    const halfW     = ARROW_LEN * Math.tan(THREE.MathUtils.degToRad(15)); // ≈ 0.161
+    const ARROW_LEN = 2.5;
+    const halfW     = ARROW_LEN * Math.tan(THREE.MathUtils.degToRad(15));
 
     const dimDir = new THREE.Vector3().subVectors(p2, p1).normalize();
 
@@ -1486,14 +1486,14 @@ class Wind3DRenderer {
    *  extPairs   : optional [[fromPt, toPt], …] — extension lines drawn with
    *               gap + overshoot, fromPt on measured object, toPt = dim endpoint
    */
-  _mkSlopeDim(label, ptA, ptB, norm, eps, extPairs = []) {
+  _mkSlopeDim(label, ptA, ptB, norm, eps, extPairs = [], color = 0x1e293b) {
     const N   = norm.clone().normalize();
     const off = N.clone().multiplyScalar((eps || 0.10) + 0.06);
     const A   = ptA.clone().add(off);
     const B   = ptB.clone().add(off);
     const mid = A.clone().lerp(B, 0.5);
     const lineMat = new THREE.LineBasicMaterial(
-      { color: 0x1e293b, transparent: true, opacity: 0.80 });
+      { color, transparent: true, opacity: 0.90 });
 
     // Main dim line
     this._labelGroup.add(
@@ -1503,7 +1503,7 @@ class Wind3DRenderer {
     const lineDir = B.clone().sub(A).normalize();
     const perpDir = new THREE.Vector3().crossVectors(N, lineDir).normalize();
     const span    = ptA.distanceTo(ptB);
-    const aLen    = 0.6;   // fixed — same size as _buildDim ARROW_LEN
+    const aLen    = 2.5;   // fixed — uniform with _buildDim ARROW_LEN
     const halfWS  = aLen * Math.tan(THREE.MathUtils.degToRad(15));
     const mkSlArr = (tip, dir) => {
       const base = tip.clone().addScaledVector(dir, aLen);
@@ -1514,7 +1514,7 @@ class Wind3DRenderer {
         tip.x, tip.y, tip.z, w1.x, w1.y, w1.z, w2.x, w2.y, w2.z,
       ]), 3));
       return new THREE.Mesh(geo, new THREE.MeshBasicMaterial(
-        { color: 0x1e293b, side: THREE.DoubleSide }));
+        { color, side: THREE.DoubleSide }));
     };
     if (span >= 2 * aLen) {
       this._labelGroup.add(mkSlArr(A, lineDir.clone()));
@@ -1750,6 +1750,7 @@ class Wind3DRenderer {
       leftNormal:     (b,e,r,l)       => this._leftNormal(b,e,r,l),
       mkSlopeDim:     (lbl,ptA,ptB,n)             => this._mkSlopeDim(lbl,ptA,ptB,n,0.10),
       mkSlopeDimExt:  (lbl,ptA,ptB,extPairs,n)    => this._mkSlopeDim(lbl,ptA,ptB,n,0.10,extPairs),
+      mkSlopeDimZ3:   (lbl,ptA,ptB,n)             => this._mkSlopeDim(lbl,ptA,ptB,n,0.10,[],0xdc2626),
       makeZone3Label: (pt,n)          => this._makeZone3ArrowLabel(pt,n,zone_a),
     };
 
