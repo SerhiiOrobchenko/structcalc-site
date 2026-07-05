@@ -1106,32 +1106,60 @@ class Wind3DRenderer {
     );
     grp.add(mainLine);
 
-    // 45° tick marks — use explicit tickDir when provided (e.g. hip slope dims),
-    // otherwise bisect dim direction and first ext-line direction.
-    const TICK   = 0.6;   // half-length (world units)
-    const TICK_R = 0.08;  // tube radius — uniform across all dims
-    let td;
+    // Filled 15° arrowheads — flip outside when span < 2 × arrow length
+    const ARROW_LEN = 0.6;
+    const halfW     = ARROW_LEN * Math.tan(THREE.MathUtils.degToRad(15)); // ≈ 0.161
+
+    const dimDir = new THREE.Vector3().subVectors(p2, p1).normalize();
+
+    // Wing-spread direction — perpendicular to dimDir in the plane of the dim
+    let perpDir;
     if (tickDir != null) {
-      td = tickDir.clone().normalize();
+      const d0 = tickDir.clone().normalize().dot(dimDir);
+      perpDir  = tickDir.clone().normalize().addScaledVector(dimDir, -d0);
+      if (perpDir.length() < 0.001) perpDir = new THREE.Vector3(0, 1, 0); else perpDir.normalize();
     } else if (extLines && extLines.length > 0) {
-      const dimDir45 = new THREE.Vector3().subVectors(p2, p1).normalize();
-      const extDir45 = new THREE.Vector3().subVectors(extLines[0][1], extLines[0][0]).normalize();
-      td = new THREE.Vector3().addVectors(dimDir45, extDir45).normalize();
+      const extDir0 = new THREE.Vector3().subVectors(extLines[0][1], extLines[0][0]).normalize();
+      const d0      = extDir0.dot(dimDir);
+      perpDir = extDir0.clone().addScaledVector(dimDir, -d0);
+      if (perpDir.length() < 0.001) perpDir = new THREE.Vector3(0, 1, 0); else perpDir.normalize();
     } else {
-      td = new THREE.Vector3(1, 1, 0).normalize();
-    }
-    for (const p of [p1, p2]) {
-      const ta = p.clone().addScaledVector(td,  TICK);
-      const tb = p.clone().addScaledVector(td, -TICK);
-      const tk = this._tube(ta, tb, 0x000000, TICK_R);
-      if (tk) grp.add(tk);
+      perpDir = new THREE.Vector3(0, 1, 0);
     }
 
-    // extension lines (solid black) — start TICK/2 gap from building, extend TICK past dim line
+    const mkArrow = (tip, dir) => {
+      const base = tip.clone().addScaledVector(dir, ARROW_LEN);
+      const w1   = base.clone().addScaledVector(perpDir,  halfW);
+      const w2   = base.clone().addScaledVector(perpDir, -halfW);
+      const geo  = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+        tip.x, tip.y, tip.z, w1.x, w1.y, w1.z, w2.x, w2.y, w2.z,
+      ]), 3));
+      return new THREE.Mesh(geo, new THREE.MeshBasicMaterial(
+        { color: 0x000000, side: THREE.DoubleSide, depthTest: false }));
+    };
+
+    const dimSpan = p1.distanceTo(p2);
+    if (dimSpan >= 2 * ARROW_LEN) {
+      // arrows inside — pointing inward toward centre
+      grp.add(mkArrow(p1, dimDir.clone()));
+      grp.add(mkArrow(p2, dimDir.clone().negate()));
+    } else {
+      // arrows outside — pointing outward; add short inner stubs
+      grp.add(mkArrow(p1, dimDir.clone().negate()));
+      grp.add(mkArrow(p2, dimDir.clone()));
+      const stub = ARROW_LEN * 0.5;
+      grp.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([p1.clone(), p1.clone().addScaledVector(dimDir,  stub)]), mat()));
+      grp.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([p2.clone(), p2.clone().addScaledVector(dimDir.clone().negate(), stub)]), mat()));
+    }
+
+    // extension lines (solid black) — gap at building face, overshoot past dim line
     for (const [a, b] of extLines) {
       const extDir = new THREE.Vector3().subVectors(b, a).normalize();
-      const aGap   = a.clone().addScaledVector(extDir, TICK * 2);  // gap at building face (4× offset)
-      const bExt   = b.clone().addScaledVector(extDir, TICK);       // overshoot past dim line
+      const aGap   = a.clone().addScaledVector(extDir, ARROW_LEN * 2);
+      const bExt   = b.clone().addScaledVector(extDir, ARROW_LEN);
       grp.add(new THREE.Line(
         new THREE.BufferGeometry().setFromPoints([aGap, bExt]), extMat()
       ));
@@ -1164,15 +1192,9 @@ class Wind3DRenderer {
         });
       }
 
-      const lDir  = new THREE.Vector3().subVectors(p2, p1).normalize();
-      const lNorm = new THREE.Vector3().crossVectors(lDir, td).normalize();
-      const lSide = new THREE.Vector3().crossVectors(lNorm, lDir).normalize();
       const midPt = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
-      // Offset label toward the building so it sits just inside the dim line
-      const side  = lSide.clone();
-      if (side.dot(midPt) > 0) side.negate();
-      const obj = new THREE.CSS2DObject(div);
-      obj.position.copy(midPt).addScaledVector(side, 0.6);
+      const obj   = new THREE.CSS2DObject(div);
+      obj.position.copy(midPt);   // chip pinned to centre of dim line
       if (viewNormal) obj.userData.faceNormal = viewNormal.clone().normalize();
       grp.add(obj);
 
@@ -1474,17 +1496,34 @@ class Wind3DRenderer {
     this._labelGroup.add(
       new THREE.Line(new THREE.BufferGeometry().setFromPoints([A, B]), lineMat));
 
-    // 45° tick marks (lean to the right of lineDir = lineDir+perpDir direction)
+    // Filled 15° arrowheads on slope surface
     const lineDir = B.clone().sub(A).normalize();
     const perpDir = new THREE.Vector3().crossVectors(N, lineDir).normalize();
     const span    = ptA.distanceTo(ptB);
-    const tickLen = Math.min(span * 0.10, 2.5);
-    const tickDir = lineDir.clone().add(perpDir).normalize();  // 45° right-of-line
-    for (const pt of [A, B]) {
-      const t1 = pt.clone().addScaledVector(tickDir, -tickLen);
-      const t2 = pt.clone().addScaledVector(tickDir,  tickLen);
-      this._labelGroup.add(
-        new THREE.Line(new THREE.BufferGeometry().setFromPoints([t1, t2]), lineMat));
+    const aLen    = Math.min(span * 0.10, 2.5);
+    const halfWS  = aLen * Math.tan(THREE.MathUtils.degToRad(15));
+    const mkSlArr = (tip, dir) => {
+      const base = tip.clone().addScaledVector(dir, aLen);
+      const w1   = base.clone().addScaledVector(perpDir,  halfWS);
+      const w2   = base.clone().addScaledVector(perpDir, -halfWS);
+      const geo  = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+        tip.x, tip.y, tip.z, w1.x, w1.y, w1.z, w2.x, w2.y, w2.z,
+      ]), 3));
+      return new THREE.Mesh(geo, new THREE.MeshBasicMaterial(
+        { color: 0x1e293b, side: THREE.DoubleSide }));
+    };
+    if (span >= 2 * aLen) {
+      this._labelGroup.add(mkSlArr(A, lineDir.clone()));
+      this._labelGroup.add(mkSlArr(B, lineDir.clone().negate()));
+    } else {
+      this._labelGroup.add(mkSlArr(A, lineDir.clone().negate()));
+      this._labelGroup.add(mkSlArr(B, lineDir.clone()));
+      const stub = aLen * 0.5;
+      this._labelGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([A.clone(), A.clone().addScaledVector(lineDir, stub)]), lineMat));
+      this._labelGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([B.clone(), B.clone().addScaledVector(lineDir.clone().negate(), stub)]), lineMat));
     }
 
     // Chip label — same style as building dim chips (θ, B, L etc.): 9px
@@ -1498,7 +1537,7 @@ class Wind3DRenderer {
         'pointer-events:none', 'white-space:nowrap',
       ].join(';');
       const obj = new THREE.CSS2DObject(div);
-      obj.position.copy(mid.clone().addScaledVector(perpDir, tickLen * 2.8 + 0.5));
+      obj.position.copy(mid);   // chip pinned to centre of slope dim line
       obj.userData.faceNormal = N.clone();
       this._labelGroup.add(obj);
     }

@@ -1,4 +1,4 @@
-/* zones-cc-gable-flat.js  v=6
+/* zones-cc-gable-flat.js  v=7
  * ASCE/SEI 7-22, Ch. 30, Part 1 (C&C), Figure 30.3-2A
  * Flat Roofs, Gable and Hip Roofs θ ≤ 7°
  *
@@ -68,22 +68,60 @@
       /* ── On-slope dimension lines (OPPOSITE slope only — !doLabel) ──────── */
       if (!doLabel && mkSlopeDim && THREE.CSS2DObject) {
         const d06 = (0.6 * hEave_ft).toFixed(1);
+        const d02 = (0.2 * hEave_ft).toFixed(1);
+        const vv1_ = 1 - v2;   // front zone-2 boundary
 
-        /* Zone 2 width: 0→0.6h from eave, at v = 0.55 (inside zone 2 field) */
+        /* ── Cross-slope (u: eave → ridge) ───────────────────── */
+
+        /* Zone 2 width: 0→0.6h from eave, at v=0.55 */
         mkSlopeDim(
-          `0.6h = ${d06} ft`,
+          `0.6h=${d06}ft`,
           ptFn(0,   0.55, hB, hEave, hRidge, hL),
           ptFn(u2,  0.55, hB, hEave, hRidge, hL),
           norm
         );
-        /* Zone 1 width: 0.6h→1.2h from eave, at v = 0.55 (immediately inside zone 2) */
+        /* Zone 1 width: 0.6h→1.2h from eave, at v=0.55 */
         mkSlopeDim(
-          `0.6h = ${d06} ft`,
+          `0.6h=${d06}ft`,
           ptFn(u2,  0.55, hB, hEave, hRidge, hL),
           ptFn(u1e, 0.55, hB, hEave, hRidge, hL),
           norm
         );
-}
+
+        /* ── Along-ridge (v: from front gable end) ───────────── */
+
+        /* Zone 2 along-ridge: 0.6h from front gable, at u=0.22 (Zone-2 eave strip) */
+        mkSlopeDim(
+          `0.6h=${d06}ft`,
+          ptFn(0.22, vv1_, hB, hEave, hRidge, hL),
+          ptFn(0.22, 1.0,  hB, hEave, hRidge, hL),
+          norm
+        );
+        /* Zone 1 along-ridge: 0.6h band inboard of Zone-2, at u=0.55 */
+        mkSlopeDim(
+          `0.6h=${d06}ft`,
+          ptFn(0.55, 1 - vz1, hB, hEave, hRidge, hL),
+          ptFn(0.55, vv1_,    hB, hEave, hRidge, hL),
+          norm
+        );
+
+        /* ── Zone 3 corner (near-front × near-eave) ─────────── */
+
+        /* Zone 3 — 0.6h along gable (v direction), at u=u3*0.35 */
+        mkSlopeDim(
+          `0.6h=${d06}ft`,
+          ptFn(u3 * 0.35, vv1_, hB, hEave, hRidge, hL),
+          ptFn(u3 * 0.35, 1.0,  hB, hEave, hRidge, hL),
+          norm
+        );
+        /* Zone 3 — 0.2h from eave (u direction), at v=vv1_+v2*0.2 */
+        mkSlopeDim(
+          `0.2h=${d02}ft`,
+          ptFn(0,   vv1_ + v2 * 0.2, hB, hEave, hRidge, hL),
+          ptFn(u3,  vv1_ + v2 * 0.2, hB, hEave, hRidge, hL),
+          norm
+        );
+      }
     },
   };
 })();
