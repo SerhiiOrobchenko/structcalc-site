@@ -1,4 +1,4 @@
-/* zones-cc-gable-flat.js  v=9
+/* zones-cc-gable-flat.js  v=14
  * ASCE/SEI 7-22, Ch. 30, Part 1 (C&C), Figure 30.3-2A
  * Flat Roofs, Gable and Hip Roofs θ ≤ 7°
  *
@@ -88,14 +88,14 @@
           `0.6h=${d06}ft`,
           ptFn(0,   0.55, hB, hEave, hRidge, hL),
           ptFn(u2,  0.55, hB, hEave, hRidge, hL),
-          norm, 'inside', 'tick'
+          norm, 'auto', 'tick'
         );
         /* Zone 1 width: 0.6h→1.2h from eave, at v=0.55 — chain: p1 tick, p2 outer */
         mkSlopeDimChain(
           `0.6h=${d06}ft`,
           ptFn(u2,  0.55, hB, hEave, hRidge, hL),
           ptFn(u1e, 0.55, hB, hEave, hRidge, hL),
-          norm, 'tick', 'inside'
+          norm, 'tick', 'auto'
         );
 
         /* ── Along-ridge (v direction) — both dims on same line near ridge ── */
@@ -106,14 +106,14 @@
           `0.6h=${d06}ft`,
           ptFn(0.82, vv1_, hB, hEave, hRidge, hL),
           ptFn(0.82, 1.0,  hB, hEave, hRidge, hL),
-          norm, 'tick', 'inside'
+          norm, 'tick', 'auto'
         );
         /* Zone 1 along-ridge: 0.6h band inboard of Zone-2, at u=0.82 — chain: p1 outer, p2 tick */
         mkSlopeDimChain(
           `0.6h=${d06}ft`,
           ptFn(0.82, 1 - vz1, hB, hEave, hRidge, hL),
           ptFn(0.82, vv1_,    hB, hEave, hRidge, hL),
-          norm, 'inside', 'tick'
+          norm, 'auto', 'tick'
         );
 
         /* ── Zone 3: red dims directly on zone surface ─────────────── */

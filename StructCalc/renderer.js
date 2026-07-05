@@ -1143,12 +1143,23 @@ class Wind3DRenderer {
         { color: 0x000000, side: THREE.DoubleSide }));
     };
 
-    // Architectural tick: 45° diagonal at chain intermediate points
+    // Architectural tick: 45° diagonal at chain intermediate points — filled quad for visual weight
     const mkTick = (pt) => {
-      const tDir = dimDir.clone().add(perpDir.clone()).normalize();
+      const TICK_HW = 0.18;   // half-width → 2× visual vs single Line
+      const tDir  = dimDir.clone().add(perpDir.clone()).normalize();   // 45° diagonal
+      const wDir2 = dimDir.clone().sub(perpDir.clone()).normalize();   // perpendicular, in dim plane
       const t0 = pt.clone().addScaledVector(tDir, -ARROW_LEN / 2);
       const t1 = pt.clone().addScaledVector(tDir,  ARROW_LEN / 2);
-      return new THREE.Line(new THREE.BufferGeometry().setFromPoints([t0, t1]), mat());
+      const w0a = t0.clone().addScaledVector(wDir2,  TICK_HW);
+      const w0b = t0.clone().addScaledVector(wDir2, -TICK_HW);
+      const w1a = t1.clone().addScaledVector(wDir2,  TICK_HW);
+      const w1b = t1.clone().addScaledVector(wDir2, -TICK_HW);
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+        w0a.x,w0a.y,w0a.z, w0b.x,w0b.y,w0b.z, w1a.x,w1a.y,w1a.z,
+        w0b.x,w0b.y,w0b.z, w1b.x,w1b.y,w1b.z, w1a.x,w1a.y,w1a.z,
+      ]), 3));
+      return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide }));
     };
 
     const OUTSIDE_THRESHOLD = 8;   // ft — outside arrows when span < this
@@ -1160,6 +1171,8 @@ class Wind3DRenderer {
       grp.add(mkTick(p1));
     } else if (p1End === 'inside' || (p1End === 'auto' && dimSpan >= OUTSIDE_THRESHOLD)) {
       grp.add(mkArrow(p1, dimDir.clone()));           // inside → pointing toward p2
+      grp.add(new THREE.Line(                         // tail extending outward from tip
+        new THREE.BufferGeometry().setFromPoints([p1.clone(), p1.clone().addScaledVector(dimDir.clone().negate(), TAIL_LEN)]), mat()));
     } else {
       grp.add(mkArrow(p1, dimDir.clone().negate()));  // outside → pointing away
       grp.add(new THREE.Line(
@@ -1170,6 +1183,8 @@ class Wind3DRenderer {
       grp.add(mkTick(p2));
     } else if (p2End === 'inside' || (p2End === 'auto' && dimSpan >= OUTSIDE_THRESHOLD)) {
       grp.add(mkArrow(p2, dimDir.clone().negate()));  // inside → pointing toward p1
+      grp.add(new THREE.Line(                         // tail extending outward from tip
+        new THREE.BufferGeometry().setFromPoints([p2.clone(), p2.clone().addScaledVector(dimDir.clone(), TAIL_LEN)]), mat()));
     } else {
       grp.add(mkArrow(p2, dimDir.clone()));            // outside → pointing away
       grp.add(new THREE.Line(
@@ -1572,12 +1587,23 @@ class Wind3DRenderer {
       return new THREE.Mesh(geo, new THREE.MeshBasicMaterial(
         { color: 0x000000, side: THREE.DoubleSide }));   // black opaque
     };
-    // Architectural tick for chain intermediate points
+    // Architectural tick — filled quad for 2× visual weight
     const mkSlTick = (pt) => {
-      const tDir = lineDir.clone().add(perpDir.clone()).normalize();
+      const TICK_HW = 0.18;
+      const tDir  = lineDir.clone().add(perpDir.clone()).normalize();
+      const wDir2 = lineDir.clone().sub(perpDir.clone()).normalize();
       const t0 = pt.clone().addScaledVector(tDir, -aLen / 2);
       const t1 = pt.clone().addScaledVector(tDir,  aLen / 2);
-      return new THREE.Line(new THREE.BufferGeometry().setFromPoints([t0, t1]), lineMat);
+      const w0a = t0.clone().addScaledVector(wDir2,  TICK_HW);
+      const w0b = t0.clone().addScaledVector(wDir2, -TICK_HW);
+      const w1a = t1.clone().addScaledVector(wDir2,  TICK_HW);
+      const w1b = t1.clone().addScaledVector(wDir2, -TICK_HW);
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+        w0a.x,w0a.y,w0a.z, w0b.x,w0b.y,w0b.z, w1a.x,w1a.y,w1a.z,
+        w0b.x,w0b.y,w0b.z, w1b.x,w1b.y,w1b.z, w1a.x,w1a.y,w1a.z,
+      ]), 3));
+      return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide }));
     };
     const OUTSIDE_S = 8;  // ft — outside arrows when span < this
     // A endpoint (p1)
@@ -1585,6 +1611,8 @@ class Wind3DRenderer {
       this._labelGroup.add(mkSlTick(A));
     } else if (p1End === 'inside' || (p1End === 'auto' && span >= OUTSIDE_S)) {
       this._labelGroup.add(mkSlArr(A, lineDir.clone()));
+      this._labelGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([A.clone(), A.clone().addScaledVector(lineDir.clone().negate(), aLen)]), lineMat));
     } else {
       this._labelGroup.add(mkSlArr(A, lineDir.clone().negate()));
       this._labelGroup.add(new THREE.Line(
@@ -1595,6 +1623,8 @@ class Wind3DRenderer {
       this._labelGroup.add(mkSlTick(B));
     } else if (p2End === 'inside' || (p2End === 'auto' && span >= OUTSIDE_S)) {
       this._labelGroup.add(mkSlArr(B, lineDir.clone().negate()));
+      this._labelGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([B.clone(), B.clone().addScaledVector(lineDir.clone(), aLen)]), lineMat));
     } else {
       this._labelGroup.add(mkSlArr(B, lineDir.clone()));
       this._labelGroup.add(new THREE.Line(
