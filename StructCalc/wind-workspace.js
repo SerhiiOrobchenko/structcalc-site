@@ -155,10 +155,10 @@ function gatherWindState(base) {
 }
 
 /* Format a stored number for display in an input field:
-   ≤2 decimal places, no trailing zeros  (12.000000000000004 → "12", 5.5 → "5.5") */
+   ≤1 decimal place, no trailing zeros  (12.000000000000004 → "12", 5.5 → "5.5") */
 function fmtInputVal(val) {
   if (typeof val === 'number' && isFinite(val)) {
-    return parseFloat(val.toFixed(2)).toString();
+    return parseFloat(val.toFixed(1)).toString();
   }
   return val;
 }
@@ -166,10 +166,19 @@ function fmtInputVal(val) {
 function restoreWindInputs(saved) {
   var revMap = {};
   Object.entries(WIND_INPUT_MAP).forEach(function(e){ revMap[e[1]] = e[0]; });
+  /* wind-h must show user-entered eave height (hEave), not computed hMean (h) */
+  var hInp = document.getElementById('wind-h');
+  if (hInp) {
+    var eaveVal = saved.hEave !== undefined ? saved.hEave : saved.h;
+    if (eaveVal !== undefined) hInp.value = fmtInputVal(eaveVal);
+  }
+
   Object.entries(saved).forEach(function(e) {
     var key = e[0], val = e[1];
     /* Skip V if it was never explicitly set by user (old default = 115) */
     if (key === 'V' && (val === 115 || val === '' || val === null)) return;
+    /* Skip h/hEave — handled above to show eave height, not computed mean */
+    if (key === 'h' || key === 'hEave') return;
     var inp = document.getElementById(revMap[key]);
     if (inp) inp.value = fmtInputVal(val);
     /* Sync structure type button visuals + block visibility */
@@ -2068,10 +2077,17 @@ function wireWindInputs() {
   var debounce = null;
   var onInput  = function(){ clearTimeout(debounce); debounce = setTimeout(recalcWind, 250); };
 
-  /* All mapped inputs */
+  /* All mapped inputs — trigger recalc on input; round to 1dp on blur */
   Object.keys(WIND_INPUT_MAP).forEach(function(id) {
     var inp = document.getElementById(id);
-    if (inp) inp.addEventListener('input', onInput);
+    if (!inp) return;
+    inp.addEventListener('input', onInput);
+    if (inp.classList.contains('num') || inp.type === 'number') {
+      inp.addEventListener('blur', function() {
+        var v = parseFloat(this.value);
+        if (!isNaN(v)) this.value = parseFloat(v.toFixed(1)).toString();
+      });
+    }
   });
 
   /* Procedure toggle */
