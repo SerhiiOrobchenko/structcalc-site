@@ -521,7 +521,7 @@ class Wind3DRenderer {
 
   /* ── building geometry ──────────────────────────────────────────────────── */
 
-  _buildStructure(B, L, hEave, hRidge) {
+  _buildStructure(B, L, hEave, hRidge, wo = 0) {
     const hB = B/2, hL = L/2;
     const grp = new THREE.Group();
     const EDGE_R = 0.11;
@@ -624,12 +624,71 @@ class Wind3DRenderer {
       if (t) grp.add(t);
     }
 
+    /* ── Eave overhangs (gable/flat) ─────────────────────────────────── */
+    if (wo > 0) {
+      const slope   = hB > 0 ? (hRidge - hEave) / hB : 0;
+      const hOh     = hEave - wo * slope;   // rendered height at outer edge
+      const FASCIA  = Math.min(1.2, wo * 0.5);
+      const roofOh  = new THREE.MeshStandardMaterial({
+        color: THEME.roofFill, transparent: false, side: THREE.DoubleSide,
+      });
+      const fascMat = new THREE.MeshStandardMaterial({
+        color: THEME.wallFill, transparent: false, side: THREE.DoubleSide,
+      });
+
+      // Left overhang: extends from x = -hB outward to x = -(hB+wo)
+      {
+        const ohGeo = this._quad(
+          new THREE.Vector3(-hB,      hEave, -hL),
+          new THREE.Vector3(-hB,      hEave,  hL),
+          new THREE.Vector3(-(hB+wo), hOh,    hL),
+          new THREE.Vector3(-(hB+wo), hOh,   -hL),
+        );
+        grp.add(new THREE.Mesh(ohGeo, roofOh));
+        segs([
+          [new THREE.Vector3(-hB, hEave, -hL),    new THREE.Vector3(-(hB+wo), hOh, -hL)],
+          [new THREE.Vector3(-hB, hEave,  hL),    new THREE.Vector3(-(hB+wo), hOh,  hL)],
+          [new THREE.Vector3(-(hB+wo), hOh, -hL), new THREE.Vector3(-(hB+wo), hOh,  hL)],
+        ], THEME.roofEdge);
+        // Fascia board
+        grp.add(new THREE.Mesh(this._quad(
+          new THREE.Vector3(-(hB+wo), hOh,         -hL),
+          new THREE.Vector3(-(hB+wo), hOh - FASCIA,-hL),
+          new THREE.Vector3(-(hB+wo), hOh - FASCIA, hL),
+          new THREE.Vector3(-(hB+wo), hOh,          hL),
+        ), fascMat));
+      }
+
+      // Right overhang: extends from x = +hB outward to x = +(hB+wo)
+      {
+        const ohGeo = this._quad(
+          new THREE.Vector3(hB,     hEave, -hL),
+          new THREE.Vector3(hB+wo,  hOh,   -hL),
+          new THREE.Vector3(hB+wo,  hOh,    hL),
+          new THREE.Vector3(hB,     hEave,  hL),
+        );
+        grp.add(new THREE.Mesh(ohGeo, roofOh));
+        segs([
+          [new THREE.Vector3(hB,    hEave, -hL), new THREE.Vector3(hB+wo, hOh, -hL)],
+          [new THREE.Vector3(hB,    hEave,  hL), new THREE.Vector3(hB+wo, hOh,  hL)],
+          [new THREE.Vector3(hB+wo, hOh,   -hL), new THREE.Vector3(hB+wo, hOh,  hL)],
+        ], THEME.roofEdge);
+        // Fascia board
+        grp.add(new THREE.Mesh(this._quad(
+          new THREE.Vector3(hB+wo, hOh,          -hL),
+          new THREE.Vector3(hB+wo, hOh,           hL),
+          new THREE.Vector3(hB+wo, hOh - FASCIA,  hL),
+          new THREE.Vector3(hB+wo, hOh - FASCIA, -hL),
+        ), fascMat));
+      }
+    }
+
     return grp;
   }
 
   /* ── hip roof builder ───────────────────────────────────────────────────── */
 
-  _buildStructureHip(B, L, hEave, hRidge) {
+  _buildStructureHip(B, L, hEave, hRidge, wo = 0) {
     /* Hip roof geometry:
        B <= L: ridge along Z, trapezoidal slopes at x=+/-hB, triangular ends at z=+/-hL
        B >  L: ridge along X, trapezoidal slopes at z=+/-hL, triangular ends at x=+/-hB */
@@ -748,12 +807,109 @@ class Wind3DRenderer {
       }
     }
 
+    /* ── Eave overhangs (hip main slopes) ───────────────────────────── */
+    if (wo > 0) {
+      const slope   = hB > 0 ? (hRidge - hEave) / hB : 0;
+      const hOh     = hEave - wo * slope;
+      const FASCIA  = Math.min(1.2, wo * 0.5);
+      const roofOh  = new THREE.MeshStandardMaterial({
+        color: THEME.roofFill, transparent: false, side: THREE.DoubleSide,
+      });
+      const fascMat = new THREE.MeshStandardMaterial({
+        color: THEME.wallFill, transparent: false, side: THREE.DoubleSide,
+      });
+      const addOhSegs = (pairs) => {
+        for (const [a, b] of pairs) { const t = this._tube(a, b, THEME.roofEdge, 0.11); if (t) grp.add(t); }
+      };
+
+      if (B <= L) {
+        // Left main slope overhang (x = -hB direction)
+        grp.add(new THREE.Mesh(this._quad(
+          new THREE.Vector3(-hB,      hEave, -hL),
+          new THREE.Vector3(-hB,      hEave,  hL),
+          new THREE.Vector3(-(hB+wo), hOh,    hL),
+          new THREE.Vector3(-(hB+wo), hOh,   -hL),
+        ), roofOh));
+        addOhSegs([
+          [new THREE.Vector3(-hB, hEave, -hL),    new THREE.Vector3(-(hB+wo), hOh, -hL)],
+          [new THREE.Vector3(-hB, hEave,  hL),    new THREE.Vector3(-(hB+wo), hOh,  hL)],
+          [new THREE.Vector3(-(hB+wo), hOh, -hL), new THREE.Vector3(-(hB+wo), hOh,  hL)],
+        ]);
+        grp.add(new THREE.Mesh(this._quad(
+          new THREE.Vector3(-(hB+wo), hOh,         -hL),
+          new THREE.Vector3(-(hB+wo), hOh - FASCIA,-hL),
+          new THREE.Vector3(-(hB+wo), hOh - FASCIA, hL),
+          new THREE.Vector3(-(hB+wo), hOh,          hL),
+        ), fascMat));
+
+        // Right main slope overhang (x = +hB direction)
+        grp.add(new THREE.Mesh(this._quad(
+          new THREE.Vector3(hB,     hEave, -hL),
+          new THREE.Vector3(hB+wo,  hOh,   -hL),
+          new THREE.Vector3(hB+wo,  hOh,    hL),
+          new THREE.Vector3(hB,     hEave,  hL),
+        ), roofOh.clone()));
+        addOhSegs([
+          [new THREE.Vector3(hB,    hEave, -hL), new THREE.Vector3(hB+wo, hOh, -hL)],
+          [new THREE.Vector3(hB,    hEave,  hL), new THREE.Vector3(hB+wo, hOh,  hL)],
+          [new THREE.Vector3(hB+wo, hOh,   -hL), new THREE.Vector3(hB+wo, hOh,  hL)],
+        ]);
+        grp.add(new THREE.Mesh(this._quad(
+          new THREE.Vector3(hB+wo, hOh,          -hL),
+          new THREE.Vector3(hB+wo, hOh,           hL),
+          new THREE.Vector3(hB+wo, hOh - FASCIA,  hL),
+          new THREE.Vector3(hB+wo, hOh - FASCIA, -hL),
+        ), fascMat.clone()));
+
+      } else {
+        // B > L: ridge along X — front/back main slopes (z direction)
+        const slopeZ = hL > 0 ? (hRidge - hEave) / hL : 0;
+        const hOhZ   = hEave - wo * slopeZ;
+        // Front slope overhang (z = +hL → +(hL+wo))
+        grp.add(new THREE.Mesh(this._quad(
+          new THREE.Vector3(-hB, hEave,  hL),
+          new THREE.Vector3( hB, hEave,  hL),
+          new THREE.Vector3( hB, hOhZ,   hL+wo),
+          new THREE.Vector3(-hB, hOhZ,   hL+wo),
+        ), roofOh));
+        addOhSegs([
+          [new THREE.Vector3(-hB, hEave, hL), new THREE.Vector3(-hB, hOhZ, hL+wo)],
+          [new THREE.Vector3( hB, hEave, hL), new THREE.Vector3( hB, hOhZ, hL+wo)],
+          [new THREE.Vector3(-hB, hOhZ, hL+wo), new THREE.Vector3(hB, hOhZ, hL+wo)],
+        ]);
+        grp.add(new THREE.Mesh(this._quad(
+          new THREE.Vector3(-hB, hOhZ,         hL+wo),
+          new THREE.Vector3( hB, hOhZ,         hL+wo),
+          new THREE.Vector3( hB, hOhZ - FASCIA,hL+wo),
+          new THREE.Vector3(-hB, hOhZ - FASCIA,hL+wo),
+        ), fascMat));
+        // Back slope overhang (z = -hL → -(hL+wo))
+        grp.add(new THREE.Mesh(this._quad(
+          new THREE.Vector3( hB, hEave, -hL),
+          new THREE.Vector3(-hB, hEave, -hL),
+          new THREE.Vector3(-hB, hOhZ,  -(hL+wo)),
+          new THREE.Vector3( hB, hOhZ,  -(hL+wo)),
+        ), roofOh.clone()));
+        addOhSegs([
+          [new THREE.Vector3( hB, hEave, -hL), new THREE.Vector3( hB, hOhZ, -(hL+wo))],
+          [new THREE.Vector3(-hB, hEave, -hL), new THREE.Vector3(-hB, hOhZ, -(hL+wo))],
+          [new THREE.Vector3(-hB, hOhZ, -(hL+wo)), new THREE.Vector3(hB, hOhZ, -(hL+wo))],
+        ]);
+        grp.add(new THREE.Mesh(this._quad(
+          new THREE.Vector3( hB, hOhZ,          -(hL+wo)),
+          new THREE.Vector3(-hB, hOhZ,          -(hL+wo)),
+          new THREE.Vector3(-hB, hOhZ - FASCIA, -(hL+wo)),
+          new THREE.Vector3( hB, hOhZ - FASCIA, -(hL+wo)),
+        ), fascMat.clone()));
+      }
+    }
+
     return grp;
   }
 
   /* ── monoslope roof builder ──────────────────────────────────────────────── */
 
-  _buildStructureMonoslope(B, L, hLow, hHigh) {
+  _buildStructureMonoslope(B, L, hLow, hHigh, wo = 0) {
     /* hLow  = low eave height  (leeward,  X = +B/2)
        hHigh = high eave height (windward, X = -B/2) */
     const hB = B / 2, hL = L / 2;
@@ -817,6 +973,62 @@ class Wind3DRenderer {
       THEME.ridge, EDGE_R
     );
     if (t) grp.add(t);
+
+    /* ── Eave overhangs (monoslope) ──────────────────────────────────── */
+    if (wo > 0) {
+      // Slope rise/run = (hHigh - hLow) / (2*hB)
+      const slopeM  = (2 * hB) > 0 ? (hHigh - hLow) / (2 * hB) : 0;
+      const hHighOh = hHigh + wo * slopeM;  // high-side tip goes higher
+      const hLowOh  = hLow  - wo * slopeM;  // low-side tip goes lower
+      const FASCIA  = Math.min(1.2, wo * 0.5);
+      const roofOh  = new THREE.MeshStandardMaterial({
+        color: THEME.roofFill, transparent: false, side: THREE.DoubleSide,
+      });
+      const fascMat = new THREE.MeshStandardMaterial({
+        color: THEME.wallFill, transparent: false, side: THREE.DoubleSide,
+      });
+      const addOhSegs = (pairs) => {
+        for (const [a, b] of pairs) { const t2 = this._tube(a, b, THEME.roofEdge, 0.11); if (t2) grp.add(t2); }
+      };
+
+      // High (windward) overhang: x = -hB → -(hB+wo)
+      grp.add(new THREE.Mesh(this._quad(
+        new THREE.Vector3(-hB,      hHigh,   -hL),
+        new THREE.Vector3(-hB,      hHigh,    hL),
+        new THREE.Vector3(-(hB+wo), hHighOh,  hL),
+        new THREE.Vector3(-(hB+wo), hHighOh, -hL),
+      ), roofOh));
+      addOhSegs([
+        [new THREE.Vector3(-hB, hHigh, -hL),    new THREE.Vector3(-(hB+wo), hHighOh, -hL)],
+        [new THREE.Vector3(-hB, hHigh,  hL),    new THREE.Vector3(-(hB+wo), hHighOh,  hL)],
+        [new THREE.Vector3(-(hB+wo), hHighOh, -hL), new THREE.Vector3(-(hB+wo), hHighOh, hL)],
+      ]);
+      grp.add(new THREE.Mesh(this._quad(
+        new THREE.Vector3(-(hB+wo), hHighOh,          -hL),
+        new THREE.Vector3(-(hB+wo), hHighOh - FASCIA, -hL),
+        new THREE.Vector3(-(hB+wo), hHighOh - FASCIA,  hL),
+        new THREE.Vector3(-(hB+wo), hHighOh,           hL),
+      ), fascMat));
+
+      // Low (leeward) overhang: x = +hB → +(hB+wo)
+      grp.add(new THREE.Mesh(this._quad(
+        new THREE.Vector3(hB,     hLow,   -hL),
+        new THREE.Vector3(hB+wo,  hLowOh, -hL),
+        new THREE.Vector3(hB+wo,  hLowOh,  hL),
+        new THREE.Vector3(hB,     hLow,    hL),
+      ), roofOh.clone()));
+      addOhSegs([
+        [new THREE.Vector3(hB,    hLow,   -hL), new THREE.Vector3(hB+wo, hLowOh, -hL)],
+        [new THREE.Vector3(hB,    hLow,    hL), new THREE.Vector3(hB+wo, hLowOh,  hL)],
+        [new THREE.Vector3(hB+wo, hLowOh, -hL), new THREE.Vector3(hB+wo, hLowOh,  hL)],
+      ]);
+      grp.add(new THREE.Mesh(this._quad(
+        new THREE.Vector3(hB+wo, hLowOh,          -hL),
+        new THREE.Vector3(hB+wo, hLowOh,           hL),
+        new THREE.Vector3(hB+wo, hLowOh - FASCIA,  hL),
+        new THREE.Vector3(hB+wo, hLowOh - FASCIA, -hL),
+      ), fascMat.clone()));
+    }
 
     return grp;
   }
@@ -1782,8 +1994,9 @@ class Wind3DRenderer {
    * @param {number} theta   Roof pitch, degrees
    * @param {number} zone_a  ASCE 7-22 §26.2 edge dimension, ft
    */
-  update3DModel(B, L, h, theta, zone_a, roofShape) {
+  update3DModel(B, L, h, theta, zone_a, roofShape, overhangOpts) {
     B = +B||48; L = +L||96; h = +h||66; theta = +theta||15; zone_a = +zone_a||4;
+    const _wo = (overhangOpts && overhangOpts.has) ? (+overhangOpts.wo || 2) : 0;
 
     /* For hip roofs, always orient so B <= L (B = short cross-wind span that
        sets eave height; L = long ridge axis). Apply swap before all geometry
@@ -1813,12 +2026,12 @@ class Wind3DRenderer {
 
     // building — dispatch by roof shape
     if (_shape === 'hip') {
-      this._building = this._buildStructureHip(B, L, hEave, hRidge);
+      this._building = this._buildStructureHip(B, L, hEave, hRidge, _wo);
     } else if (_shape === 'monoslope') {
-      this._building = this._buildStructureMonoslope(B, L, hEave, hRidge);
+      this._building = this._buildStructureMonoslope(B, L, hEave, hRidge, _wo);
     } else {
       /* gable or flat (flat = gable with theta=0, already handled by caller) */
-      this._building = this._buildStructure(B, L, hEave, hRidge);
+      this._building = this._buildStructure(B, L, hEave, hRidge, _wo);
     }
 
     // dim lines (pass hRidge_ft so label shows real engineering value, not scaled)

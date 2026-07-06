@@ -37,7 +37,7 @@ async function loadWindScripts() {
   await loadScriptTag('zones-cc-gable-steep.js?v=1');
   await loadScriptTag('zones-cc-hip.js?v=1');
   await loadScriptTag('zones-cc-monoslope.js?v=1');
-  await loadScriptTag('renderer.js?v=37');
+  await loadScriptTag('renderer.js?v=38');
   await loadScriptTag('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
   await loadScriptTag('map-module.js?v=3');
   windScriptsLoaded = true;
@@ -275,7 +275,7 @@ function recalcWind() {
   var rendererShape = s.roofShape;
   if (s.roofShape === 'stepped' || s.roofShape === 'sawtooth' || s.roofShape === 'dome') rendererShape = 'flat';
   if (s.roofShape === 'multispan') rendererShape = 'gable';
-  if (windRenderer) windRenderer.update3DModel(B, L, hR, th, za, rendererShape);
+  if (windRenderer) windRenderer.update3DModel(B, L, hR, th, za, rendererShape, {has: s.hasOverhang, wo: s.wo});
 
   var vDisp = document.getElementById('wind-V-display');
   if (vDisp) vDisp.textContent = s.V || '—';
