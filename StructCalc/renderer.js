@@ -628,12 +628,8 @@ class Wind3DRenderer {
     if (wo > 0) {
       const slope  = hB > 0 ? (hRidge - hEave) / hB : 0;
       const hOh    = hEave - wo * slope;
-      const FASCIA = Math.min(1.2, wo * 0.5);
       const roofOh = new THREE.MeshStandardMaterial({
         color: THEME.roofFill, transparent: false, side: THREE.DoubleSide,
-      });
-      const fascMat = new THREE.MeshStandardMaterial({
-        color: THEME.wallFill, transparent: false, side: THREE.DoubleSide,
       });
 
       // Left eave (full Z including rake corners)
@@ -648,12 +644,6 @@ class Wind3DRenderer {
         [new THREE.Vector3(-hB,      hEave, +(hL+wo)), new THREE.Vector3(-(hB+wo), hOh, +(hL+wo))],
         [new THREE.Vector3(-(hB+wo), hOh,   -(hL+wo)), new THREE.Vector3(-(hB+wo), hOh, +(hL+wo))],
       ], THEME.roofEdge);
-      grp.add(new THREE.Mesh(this._quad(
-        new THREE.Vector3(-(hB+wo), hOh,        -(hL+wo)),
-        new THREE.Vector3(-(hB+wo), hOh-FASCIA, -(hL+wo)),
-        new THREE.Vector3(-(hB+wo), hOh-FASCIA, +(hL+wo)),
-        new THREE.Vector3(-(hB+wo), hOh,        +(hL+wo)),
-      ), fascMat));
 
       // Right eave (full Z including rake corners)
       grp.add(new THREE.Mesh(this._quad(
@@ -667,12 +657,6 @@ class Wind3DRenderer {
         [new THREE.Vector3(hB,    hEave, +(hL+wo)), new THREE.Vector3(hB+wo, hOh, +(hL+wo))],
         [new THREE.Vector3(hB+wo, hOh,   -(hL+wo)), new THREE.Vector3(hB+wo, hOh, +(hL+wo))],
       ], THEME.roofEdge);
-      grp.add(new THREE.Mesh(this._quad(
-        new THREE.Vector3(hB+wo, hOh,        -(hL+wo)),
-        new THREE.Vector3(hB+wo, hOh,        +(hL+wo)),
-        new THREE.Vector3(hB+wo, hOh-FASCIA, +(hL+wo)),
-        new THREE.Vector3(hB+wo, hOh-FASCIA, -(hL+wo)),
-      ), fascMat.clone()));
 
       // Front rake (z = +hL → +(hL+wo)): left and right slope portions
       grp.add(new THREE.Mesh(this._quad(
@@ -851,12 +835,8 @@ class Wind3DRenderer {
     if (wo > 0) {
       const slope  = hB > 0 ? (hRidge - hEave) / hB : 0;
       const hOh    = hEave - wo * slope;
-      const FASCIA = Math.min(1.2, wo * 0.5);
       const roofOh = new THREE.MeshStandardMaterial({
         color: THEME.roofFill, transparent: false, side: THREE.DoubleSide,
-      });
-      const fascMat = new THREE.MeshStandardMaterial({
-        color: THEME.wallFill, transparent: false, side: THREE.DoubleSide,
       });
       const addOhSegs = (pairs) => {
         for (const [a, b] of pairs) { const t = this._tube(a, b, THEME.roofEdge, 0.11); if (t) grp.add(t); }
@@ -875,12 +855,6 @@ class Wind3DRenderer {
           [new THREE.Vector3(-hB,      hEave, +hL), new THREE.Vector3(-(hB+wo), hOh, +hL)],
           [new THREE.Vector3(-(hB+wo), hOh,   -hL), new THREE.Vector3(-(hB+wo), hOh, +hL)],
         ]);
-        grp.add(new THREE.Mesh(this._quad(
-          new THREE.Vector3(-(hB+wo), hOh,        -hL),
-          new THREE.Vector3(-(hB+wo), hOh-FASCIA, -hL),
-          new THREE.Vector3(-(hB+wo), hOh-FASCIA, +hL),
-          new THREE.Vector3(-(hB+wo), hOh,        +hL),
-        ), fascMat));
 
         // Right main slope (x = +hB → +(hB+wo)), full Z
         grp.add(new THREE.Mesh(this._quad(
@@ -894,12 +868,6 @@ class Wind3DRenderer {
           [new THREE.Vector3(hB,    hEave, +hL), new THREE.Vector3(hB+wo, hOh, +hL)],
           [new THREE.Vector3(hB+wo, hOh,   -hL), new THREE.Vector3(hB+wo, hOh, +hL)],
         ]);
-        grp.add(new THREE.Mesh(this._quad(
-          new THREE.Vector3(hB+wo, hOh,        -hL),
-          new THREE.Vector3(hB+wo, hOh,        +hL),
-          new THREE.Vector3(hB+wo, hOh-FASCIA, +hL),
-          new THREE.Vector3(hB+wo, hOh-FASCIA, -hL),
-        ), fascMat.clone()));
 
         // Front hip-end strip (z = +hL → +(hL+wo))
         grp.add(new THREE.Mesh(this._quad(
@@ -913,12 +881,6 @@ class Wind3DRenderer {
           [new THREE.Vector3( hB,      hEave, hL),    new THREE.Vector3(  hB+wo,  hOh, hL+wo)],
           [new THREE.Vector3(-(hB+wo), hOh,   hL+wo), new THREE.Vector3(  hB+wo,  hOh, hL+wo)],
         ]);
-        grp.add(new THREE.Mesh(this._quad(
-          new THREE.Vector3(-(hB+wo), hOh,        hL+wo),
-          new THREE.Vector3(  hB+wo,  hOh,        hL+wo),
-          new THREE.Vector3(  hB+wo,  hOh-FASCIA, hL+wo),
-          new THREE.Vector3(-(hB+wo), hOh-FASCIA, hL+wo),
-        ), fascMat.clone()));
 
         // Back hip-end strip (z = -hL → -(hL+wo))
         grp.add(new THREE.Mesh(this._quad(
@@ -932,12 +894,38 @@ class Wind3DRenderer {
           [new THREE.Vector3( hB,    hEave, -hL),    new THREE.Vector3(  hB+wo,  hOh, -(hL+wo))],
           [new THREE.Vector3(-(hB+wo), hOh, -(hL+wo)), new THREE.Vector3(hB+wo,  hOh, -(hL+wo))],
         ]);
-        grp.add(new THREE.Mesh(this._quad(
-          new THREE.Vector3(-(hB+wo), hOh,        -(hL+wo)),
-          new THREE.Vector3(  hB+wo,  hOh,        -(hL+wo)),
-          new THREE.Vector3(  hB+wo,  hOh-FASCIA, -(hL+wo)),
-          new THREE.Vector3(-(hB+wo), hOh-FASCIA, -(hL+wo)),
-        ), fascMat.clone()));
+        // Corner stitch triangles — fill gaps at 4 hip junction corners
+        const _mkTri = (p0, p1, p2) => {
+          const g = new THREE.BufferGeometry();
+          g.setAttribute('position', new THREE.BufferAttribute(
+            new Float32Array([p0.x,p0.y,p0.z, p1.x,p1.y,p1.z, p2.x,p2.y,p2.z]), 3));
+          g.computeVertexNormals();
+          return new THREE.Mesh(g, roofOh.clone());
+        };
+        // Front-left corner
+        grp.add(_mkTri(
+          new THREE.Vector3(-(hB+wo), hOh,   +hL),
+          new THREE.Vector3(-hB,      hEave, +hL),
+          new THREE.Vector3(-(hB+wo), hOh,   hL+wo),
+        ));
+        // Front-right corner
+        grp.add(_mkTri(
+          new THREE.Vector3(hB,    hEave, +hL),
+          new THREE.Vector3(hB+wo, hOh,   +hL),
+          new THREE.Vector3(hB+wo, hOh,   hL+wo),
+        ));
+        // Back-left corner
+        grp.add(_mkTri(
+          new THREE.Vector3(-hB,      hEave, -hL),
+          new THREE.Vector3(-(hB+wo), hOh,   -hL),
+          new THREE.Vector3(-(hB+wo), hOh,   -(hL+wo)),
+        ));
+        // Back-right corner
+        grp.add(_mkTri(
+          new THREE.Vector3(hB+wo, hOh,   -hL),
+          new THREE.Vector3(hB,    hEave, -hL),
+          new THREE.Vector3(hB+wo, hOh,   -(hL+wo)),
+        ));
 
       } else {
         /* B > L: ridge along X */
@@ -958,12 +946,6 @@ class Wind3DRenderer {
             [new THREE.Vector3( hB, hEave, z0), new THREE.Vector3( hB, hOhZ, z1)],
             [new THREE.Vector3(-hB, hOhZ,  z1), new THREE.Vector3( hB, hOhZ, z1)],
           ]);
-          grp.add(new THREE.Mesh(this._quad(
-            new THREE.Vector3(-hB, hOhZ,        z1),
-            new THREE.Vector3( hB, hOhZ,        z1),
-            new THREE.Vector3( hB, hOhZ-FASCIA, z1),
-            new THREE.Vector3(-hB, hOhZ-FASCIA, z1),
-          ), fascMat.clone()));
         }
         // Left / right hip-end strips (x direction)
         for (const [xs] of [[-1], [1]]) {
@@ -979,12 +961,6 @@ class Wind3DRenderer {
             [new THREE.Vector3(x0, hEave, +hL),    new THREE.Vector3(x1, hOh, +(hL+wo))],
             [new THREE.Vector3(x1, hOh,   -(hL+wo)), new THREE.Vector3(x1, hOh, +(hL+wo))],
           ]);
-          grp.add(new THREE.Mesh(this._quad(
-            new THREE.Vector3(x1, hOh,        -(hL+wo)),
-            new THREE.Vector3(x1, hOh,        +(hL+wo)),
-            new THREE.Vector3(x1, hOh-FASCIA, +(hL+wo)),
-            new THREE.Vector3(x1, hOh-FASCIA, -(hL+wo)),
-          ), fascMat.clone()));
         }
       }
     }
@@ -1064,12 +1040,8 @@ class Wind3DRenderer {
       const slopeM  = (2 * hB) > 0 ? (hHigh - hLow) / (2 * hB) : 0;
       const hHighOh = hHigh + wo * slopeM;
       const hLowOh  = hLow  - wo * slopeM;
-      const FASCIA  = Math.min(1.2, wo * 0.5);
       const roofOh  = new THREE.MeshStandardMaterial({
         color: THEME.roofFill, transparent: false, side: THREE.DoubleSide,
-      });
-      const fascMat = new THREE.MeshStandardMaterial({
-        color: THEME.wallFill, transparent: false, side: THREE.DoubleSide,
       });
       const addOhSegs = (pairs) => {
         for (const [a, b] of pairs) { const t2 = this._tube(a, b, THEME.roofEdge, 0.11); if (t2) grp.add(t2); }
@@ -1087,12 +1059,6 @@ class Wind3DRenderer {
         [new THREE.Vector3(-hB,      hHigh,   +(hL+wo)), new THREE.Vector3(-(hB+wo), hHighOh, +(hL+wo))],
         [new THREE.Vector3(-(hB+wo), hHighOh, -(hL+wo)), new THREE.Vector3(-(hB+wo), hHighOh, +(hL+wo))],
       ]);
-      grp.add(new THREE.Mesh(this._quad(
-        new THREE.Vector3(-(hB+wo), hHighOh,        -(hL+wo)),
-        new THREE.Vector3(-(hB+wo), hHighOh-FASCIA, -(hL+wo)),
-        new THREE.Vector3(-(hB+wo), hHighOh-FASCIA, +(hL+wo)),
-        new THREE.Vector3(-(hB+wo), hHighOh,        +(hL+wo)),
-      ), fascMat));
 
       // Low (leeward) eave: x = +hB → +(hB+wo), full Z with rake corners
       grp.add(new THREE.Mesh(this._quad(
@@ -1106,12 +1072,6 @@ class Wind3DRenderer {
         [new THREE.Vector3(hB,    hLow,   +(hL+wo)), new THREE.Vector3(hB+wo, hLowOh, +(hL+wo))],
         [new THREE.Vector3(hB+wo, hLowOh, -(hL+wo)), new THREE.Vector3(hB+wo, hLowOh, +(hL+wo))],
       ]);
-      grp.add(new THREE.Mesh(this._quad(
-        new THREE.Vector3(hB+wo, hLowOh,        -(hL+wo)),
-        new THREE.Vector3(hB+wo, hLowOh,        +(hL+wo)),
-        new THREE.Vector3(hB+wo, hLowOh-FASCIA, +(hL+wo)),
-        new THREE.Vector3(hB+wo, hLowOh-FASCIA, -(hL+wo)),
-      ), fascMat.clone()));
 
       // Front rake: z = +hL → +(hL+wo)
       grp.add(new THREE.Mesh(this._quad(
@@ -2152,26 +2112,30 @@ class Wind3DRenderer {
       color:col, transparent:true, opacity:op, side:THREE.DoubleSide, depthWrite:false,
     });
 
-    const u_zone = Math.min(zone_a / hB, 0.45);
-    const v_zone = Math.min(zone_a / L,  0.45);
+    const hB_vis    = hB + _wo;
+    const hL_vis    = hL + _wo;
+    const hEave_vis = _wo > 0 ? hEave - _wo * (hRidge - hEave) / Math.max(hB, 0.001) : hEave;
+
+    const u_zone = Math.min((_wo + zone_a) / hB_vis, 0.45);
+    const v_zone = Math.min((_wo + zone_a) / (L + 2*_wo), 0.45);
     const u1 = 1 - u_zone, v1 = 1 - v_zone;
 
     /* addZone: maps region [u0..u1]×[v0..v1] onto the surface defined by ptFn/norm */
     const addZone = (u0,uu1,v0,vv1,col,op,zt,eps,ptFn,norm,label) => {
-      const m = this._zoneQuad(u0,uu1,v0,vv1,ptFn,hB,hEave,hRidge,hL,norm,eps,matZ(col,op),zt);
+      const m = this._zoneQuad(u0,uu1,v0,vv1,ptFn,hB_vis,hEave_vis,hRidge,hL_vis,norm,eps,matZ(col,op),zt);
       this._zones.add(m);
       this._zoneMeshes.push(m);
       if (label) {
-        const ctr = this._zoneCentroid(u0,uu1,v0,vv1,ptFn,hB,hEave,hRidge,hL);
+        const ctr = this._zoneCentroid(u0,uu1,v0,vv1,ptFn,hB_vis,hEave_vis,hRidge,hL_vis);
         ctr.addScaledVector(norm, eps + 0.5);
-        this._makeZoneLabel(zt, ctr, norm, hB, zone_a, L);
+        this._makeZoneLabel(zt, ctr, norm, hB_vis, zone_a, L + 2*_wo);
       }
     };
 
     /* ── Zone descriptor dispatch — geometry lives in zones-cc-*.js ─────── */
     const ctx = {
-      B, L, hB, hL,
-      hEave_ft, hRidge_ft, hEave, hRidge,
+      B: B + 2*_wo, L: L + 2*_wo, hB: hB_vis, hL: hL_vis,
+      hEave_ft, hRidge_ft, hEave: hEave_vis, hRidge,
       zone_a, u_zone, u1, v_zone, v1,
       THEME, THREE,
       addZone,
@@ -2192,14 +2156,27 @@ class Wind3DRenderer {
     };
 
     if (_shape === 'monoslope') {
+      const slopeM   = (2*hB) > 0 ? (hRidge - hEave) / (2*hB) : 0;
+      const hHighVis = hRidge + _wo * slopeM;
+      const hLowVis  = hEave  - _wo * slopeM;
+      const addZoneM = (u0,uu1,v0,vv1,col,op,zt,eps,ptFn,norm,label) => {
+        const m = this._zoneQuad(u0,uu1,v0,vv1,ptFn,hB_vis,hLowVis,hHighVis,hL_vis,norm,eps,matZ(col,op),zt);
+        this._zones.add(m);
+        this._zoneMeshes.push(m);
+        if (label) {
+          const ctr = this._zoneCentroid(u0,uu1,v0,vv1,ptFn,hB_vis,hLowVis,hHighVis,hL_vis);
+          ctr.addScaledVector(norm, eps + 0.5);
+          this._makeZoneLabel(zt, ctr, norm, hB_vis, zone_a, L + 2*_wo);
+        }
+      };
       const ptMono = (u,v,_b,_e,_r,_l) =>
-        new THREE.Vector3(-hB + u*2*hB, hRidge - u*(hRidge-hEave), v*2*hL - hL);
-      const _e1 = new THREE.Vector3(2*hB, hEave-hRidge, 0);
-      const _e2 = new THREE.Vector3(0, 0, 2*hL);
+        new THREE.Vector3(-_b + u*2*_b, _r - u*(_r-_e), v*2*_l - _l);
+      const _e1 = new THREE.Vector3(2*hB_vis, hLowVis-hHighVis, 0);
+      const _e2 = new THREE.Vector3(0, 0, 2*hL_vis);
       const monoNorm = new THREE.Vector3().crossVectors(_e2, _e1).normalize();
       if (monoNorm.y < 0) monoNorm.negate();
       window.ZONE_DESCRIPTORS['cc-monoslope']
-        .drawZones({ ...ctx, ptFn: ptMono, norm: monoNorm, doLabel: true });
+        .drawZones({ ...ctx, addZone: addZoneM, ptFn: ptMono, norm: monoNorm, doLabel: true });
 
     } else if (_shape === 'hip') {
       window.ZONE_DESCRIPTORS['cc-hip'].drawZones(ctx);
