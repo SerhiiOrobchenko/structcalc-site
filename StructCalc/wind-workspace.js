@@ -151,6 +151,16 @@ function gatherWindState(base) {
   s.hasDomeRoof      = (s.roofShape === 'dome');
   s.hasMonoslopeRoof = (s.roofShape === 'monoslope');
   if (specialRoofs.indexOf(s.roofShape) !== -1) { s.roofType = 'flat'; }
+  /* Checkboxes — not in WIND_INPUT_MAP (value != checked) */
+  var ckMap = {
+    'wind-hasOverhang': 'hasOverhang',
+    'wind-hasParapet':  'hasParapet',
+    'wind-hasCanopy':   'hasCanopy',
+  };
+  Object.keys(ckMap).forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) s[ckMap[id]] = el.checked;
+  });
   return s;
 }
 
