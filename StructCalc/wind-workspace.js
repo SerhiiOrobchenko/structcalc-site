@@ -111,7 +111,7 @@ function gatherWindState(base) {
   var s = Object.assign({}, base || {});
   var defs = {
     unitSystem:'US', mode:'mwfrs', roofType:'sloped',
-    h:60, minDim:40, buildingL:72, theta:15, roofShape:'gable',
+    h:12, minDim:40, buildingL:72, theta:15, roofShape:'gable',
     exposure:'C', kzt:1.0, kztMode:'manual',
     groundElev:0, enclosure:'enclosed', riskCategory:'II',
     areaWall:20, areaRoof:50, areaEff:20,
@@ -154,6 +154,15 @@ function gatherWindState(base) {
   return s;
 }
 
+/* Format a stored number for display in an input field:
+   ≤2 decimal places, no trailing zeros  (12.000000000000004 → "12", 5.5 → "5.5") */
+function fmtInputVal(val) {
+  if (typeof val === 'number' && isFinite(val)) {
+    return parseFloat(val.toFixed(2)).toString();
+  }
+  return val;
+}
+
 function restoreWindInputs(saved) {
   var revMap = {};
   Object.entries(WIND_INPUT_MAP).forEach(function(e){ revMap[e[1]] = e[0]; });
@@ -162,7 +171,7 @@ function restoreWindInputs(saved) {
     /* Skip V if it was never explicitly set by user (old default = 115) */
     if (key === 'V' && (val === 115 || val === '' || val === null)) return;
     var inp = document.getElementById(revMap[key]);
-    if (inp) inp.value = val;
+    if (inp) inp.value = fmtInputVal(val);
     /* Sync structure type button visuals + block visibility */
     if (key === 'structureCategory') {
       var isBuilding = (val !== 'otherStructure');
