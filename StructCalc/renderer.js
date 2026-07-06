@@ -543,7 +543,7 @@ class Wind3DRenderer {
         new THREE.Vector3(-hB, hEave,  hL), new THREE.Vector3(-hB, hEave, -hL),
       ];
       grp.add(new THREE.Mesh(this._quad(p[0],p[1],p[2],p[3]), solidMat(THEME.wallFill)));
-      segs([[p[0],p[1]],[p[1],p[2]],[p[2],p[3]],[p[3],p[0]]], THEME.wallEdge);
+      segs([[p[0],p[1]],[p[1],p[2]],[p[3],p[0]]], THEME.wallEdge); // no top edge
     }
 
     /* ── RIGHT wall (x = +hB) — rectangle ──────────────────────────────── */
@@ -553,7 +553,7 @@ class Wind3DRenderer {
         new THREE.Vector3(hB, hEave, -hL), new THREE.Vector3(hB, hEave,  hL),
       ];
       grp.add(new THREE.Mesh(this._quad(p[0],p[1],p[2],p[3]), solidMat(THEME.wallFill)));
-      segs([[p[0],p[1]],[p[1],p[2]],[p[2],p[3]],[p[3],p[0]]], THEME.wallEdge);
+      segs([[p[0],p[1]],[p[1],p[2]],[p[3],p[0]]], THEME.wallEdge); // no top edge
     }
 
     /* ── BACK end wall + gable (z = -hL) — PENTAGON, same as front ─────
@@ -597,18 +597,21 @@ class Wind3DRenderer {
       segs([[BL,BR],[BR,RE],[RE,RG],[RG,LE],[LE,BL]], THEME.wallEdge);
     }
 
-    /* ── Roof slopes ─────────────────────────────────────────────────── */
+    /* -- Roof slopes (extend to overhang boundary) ----------------------- */
+    const slope  = hB > 0 ? (hRidge - hEave) / hB : 0;
+    const hOh    = hEave - wo * slope;
+    const hBo    = hB + wo, hLo = hL + wo;
     const leftGeo = this._quad(
-      new THREE.Vector3(-hB, hEave,-hL),
-      new THREE.Vector3(-hB, hEave, hL),
-      new THREE.Vector3(  0, hRidge, hL),
-      new THREE.Vector3(  0, hRidge,-hL),
+      new THREE.Vector3(-hBo, hOh,    -hLo),
+      new THREE.Vector3(-hBo, hOh,    +hLo),
+      new THREE.Vector3(  0,  hRidge, +hLo),
+      new THREE.Vector3(  0,  hRidge, -hLo),
     );
     const rightGeo = this._quad(
-      new THREE.Vector3( hB, hEave,-hL),
-      new THREE.Vector3(   0, hRidge,-hL),
-      new THREE.Vector3(   0, hRidge, hL),
-      new THREE.Vector3( hB, hEave, hL),
+      new THREE.Vector3( hBo, hOh,    -hLo),
+      new THREE.Vector3(   0, hRidge, -hLo),
+      new THREE.Vector3(   0, hRidge, +hLo),
+      new THREE.Vector3( hBo, hOh,    +hLo),
     );
     const roofSide = new THREE.MeshStandardMaterial({
       color:THEME.roofFill, transparent:false, side:THREE.DoubleSide,
@@ -618,94 +621,12 @@ class Wind3DRenderer {
       this._tubeEdges(new THREE.EdgesGeometry(g), THEME.roofEdge, EDGE_R, grp);
     }
 
-    /* ── Ridge ───────────────────────────────────────────────────────── */
+    /* -- Ridge -------------------------------------------------------------- */
     {
-      const t = this._tube(new THREE.Vector3(0,hRidge,-hL), new THREE.Vector3(0,hRidge,hL), THEME.ridge, EDGE_R);
+      const t = this._tube(new THREE.Vector3(0,hRidge,-hLo), new THREE.Vector3(0,hRidge,hLo), THEME.ridge, EDGE_R);
       if (t) grp.add(t);
     }
 
-    /* ── Perimeter eave + rake overhangs (gable/flat) ───────────────── */
-    if (wo > 0) {
-      const slope  = hB > 0 ? (hRidge - hEave) / hB : 0;
-      const hOh    = hEave - wo * slope;
-      const roofOh = new THREE.MeshStandardMaterial({
-        color: THEME.roofFill, transparent: false, side: THREE.DoubleSide,
-      });
-
-      // Left eave (full Z including rake corners)
-      grp.add(new THREE.Mesh(this._quad(
-        new THREE.Vector3(-hB,      hEave, -(hL+wo)),
-        new THREE.Vector3(-hB,      hEave, +(hL+wo)),
-        new THREE.Vector3(-(hB+wo), hOh,   +(hL+wo)),
-        new THREE.Vector3(-(hB+wo), hOh,   -(hL+wo)),
-      ), roofOh));
-      segs([
-        [new THREE.Vector3(-hB,      hEave, -(hL+wo)), new THREE.Vector3(-(hB+wo), hOh, -(hL+wo))],
-        [new THREE.Vector3(-hB,      hEave, +(hL+wo)), new THREE.Vector3(-(hB+wo), hOh, +(hL+wo))],
-        [new THREE.Vector3(-(hB+wo), hOh,   -(hL+wo)), new THREE.Vector3(-(hB+wo), hOh, +(hL+wo))],
-      ], THEME.roofEdge);
-
-      // Right eave (full Z including rake corners)
-      grp.add(new THREE.Mesh(this._quad(
-        new THREE.Vector3(hB,     hEave, -(hL+wo)),
-        new THREE.Vector3(hB+wo,  hOh,   -(hL+wo)),
-        new THREE.Vector3(hB+wo,  hOh,   +(hL+wo)),
-        new THREE.Vector3(hB,     hEave, +(hL+wo)),
-      ), roofOh.clone()));
-      segs([
-        [new THREE.Vector3(hB,    hEave, -(hL+wo)), new THREE.Vector3(hB+wo, hOh, -(hL+wo))],
-        [new THREE.Vector3(hB,    hEave, +(hL+wo)), new THREE.Vector3(hB+wo, hOh, +(hL+wo))],
-        [new THREE.Vector3(hB+wo, hOh,   -(hL+wo)), new THREE.Vector3(hB+wo, hOh, +(hL+wo))],
-      ], THEME.roofEdge);
-
-      // Front rake (z = +hL → +(hL+wo)): left and right slope portions
-      grp.add(new THREE.Mesh(this._quad(
-        new THREE.Vector3(-hB, hEave, hL),
-        new THREE.Vector3(  0, hRidge, hL),
-        new THREE.Vector3(  0, hRidge, hL+wo),
-        new THREE.Vector3(-hB, hEave,  hL+wo),
-      ), roofOh.clone()));
-      segs([
-        [new THREE.Vector3(-hB, hEave,  hL),   new THREE.Vector3(-hB, hEave,  hL+wo)],
-        [new THREE.Vector3(  0, hRidge, hL),   new THREE.Vector3(  0, hRidge, hL+wo)],
-        [new THREE.Vector3(-hB, hEave,  hL+wo), new THREE.Vector3(0,  hRidge, hL+wo)],
-      ], THEME.roofEdge);
-      grp.add(new THREE.Mesh(this._quad(
-        new THREE.Vector3(hB, hEave,  hL),
-        new THREE.Vector3(hB, hEave,  hL+wo),
-        new THREE.Vector3( 0, hRidge, hL+wo),
-        new THREE.Vector3( 0, hRidge, hL),
-      ), roofOh.clone()));
-      segs([
-        [new THREE.Vector3(hB, hEave,  hL),   new THREE.Vector3(hB, hEave,  hL+wo)],
-        [new THREE.Vector3( 0, hRidge, hL),   new THREE.Vector3( 0, hRidge, hL+wo)],
-        [new THREE.Vector3(hB, hEave,  hL+wo), new THREE.Vector3(0, hRidge, hL+wo)],
-      ], THEME.roofEdge);
-
-      // Back rake (z = -hL → -(hL+wo)): left and right slope portions
-      grp.add(new THREE.Mesh(this._quad(
-        new THREE.Vector3(-hB, hEave,  -hL),
-        new THREE.Vector3(-hB, hEave,  -(hL+wo)),
-        new THREE.Vector3(  0, hRidge, -(hL+wo)),
-        new THREE.Vector3(  0, hRidge, -hL),
-      ), roofOh.clone()));
-      segs([
-        [new THREE.Vector3(-hB, hEave,  -hL),   new THREE.Vector3(-hB, hEave,  -(hL+wo))],
-        [new THREE.Vector3(  0, hRidge, -hL),   new THREE.Vector3(  0, hRidge, -(hL+wo))],
-        [new THREE.Vector3(-hB, hEave,  -(hL+wo)), new THREE.Vector3(0, hRidge, -(hL+wo))],
-      ], THEME.roofEdge);
-      grp.add(new THREE.Mesh(this._quad(
-        new THREE.Vector3(hB, hEave,  -hL),
-        new THREE.Vector3( 0, hRidge, -hL),
-        new THREE.Vector3( 0, hRidge, -(hL+wo)),
-        new THREE.Vector3(hB, hEave,  -(hL+wo)),
-      ), roofOh.clone()));
-      segs([
-        [new THREE.Vector3(hB, hEave,  -hL),   new THREE.Vector3(hB, hEave,  -(hL+wo))],
-        [new THREE.Vector3( 0, hRidge, -hL),   new THREE.Vector3( 0, hRidge, -(hL+wo))],
-        [new THREE.Vector3(hB, hEave,  -(hL+wo)), new THREE.Vector3(0, hRidge, -(hL+wo))],
-      ], THEME.roofEdge);
-    }
 
     return grp;
   }
@@ -726,45 +647,62 @@ class Wind3DRenderer {
       color: THEME.roofFill, transparent: false, side: THREE.DoubleSide,
     });
 
-    /* Walls — box spans B (X) x hEave (Y) x L (Z) regardless of B vs L */
+    /* Walls -- box spans B (X) x hEave (Y) x L (Z) regardless of B vs L */
     const boxGeo = new THREE.BoxGeometry(B, hEave, L);
     boxGeo.translate(0, hEave / 2, 0);
     grp.add(new THREE.Mesh(boxGeo, solidMat(THEME.wallFill)));
-    this._tubeEdges(new THREE.EdgesGeometry(boxGeo), THEME.wallEdge, EDGE_R, grp);
+    // Wall edges: bottom perimeter + 4 verticals; top edges omitted (hidden under roof)
+    const segs = (pairs, col) => {
+      for (const [a, b] of pairs) { const t = this._tube(a, b, col, EDGE_R); if (t) grp.add(t); }
+    };
+    { const [x1,x2,z1,z2,y0,y1] = [-hB,hB,-hL,hL,0,hEave];
+      segs([[new THREE.Vector3(x1,y0,z1),new THREE.Vector3(x2,y0,z1)],
+            [new THREE.Vector3(x2,y0,z1),new THREE.Vector3(x2,y0,z2)],
+            [new THREE.Vector3(x2,y0,z2),new THREE.Vector3(x1,y0,z2)],
+            [new THREE.Vector3(x1,y0,z2),new THREE.Vector3(x1,y0,z1)]], THEME.wallEdge);
+      segs([[new THREE.Vector3(x1,y0,z1),new THREE.Vector3(x1,y1,z1)],
+            [new THREE.Vector3(x2,y0,z1),new THREE.Vector3(x2,y1,z1)],
+            [new THREE.Vector3(x2,y0,z2),new THREE.Vector3(x2,y1,z2)],
+            [new THREE.Vector3(x1,y0,z2),new THREE.Vector3(x1,y1,z2)]], THEME.wallEdge);
+    }
 
     if (B <= L) {
       /* Ridge along Z (classic: short span = B along X) */
       const ridgeL = Math.max(0, L - B);
       const r2 = ridgeL / 2;
+      /* Extended overhang dims */
+      const slope = hB > 0 ? (hRidge - hEave) / hB : 0;
+      const hOh   = hEave - wo * slope;
+      const hBo   = hB + wo, hLo = hL + wo;
 
-      /* Left main slope — trapezoid at x=-hB */
+      /* Left main slope -- trapezoid */
       const leftGeo = this._quad(
-        new THREE.Vector3(-hB, hEave, -hL),
-        new THREE.Vector3(-hB, hEave,  hL),
-        new THREE.Vector3(  0, hRidge,  r2),
-        new THREE.Vector3(  0, hRidge, -r2),
+        new THREE.Vector3(-hBo, hOh,    -hLo),
+        new THREE.Vector3(-hBo, hOh,    +hLo),
+        new THREE.Vector3(  0,  hRidge,  r2),
+        new THREE.Vector3(  0,  hRidge, -r2),
       );
-      /* Right main slope — trapezoid at x=+hB */
+      /* Right main slope -- trapezoid */
       const rightGeo = this._quad(
-        new THREE.Vector3(hB, hEave, -hL),
-        new THREE.Vector3( 0, hRidge, -r2),
-        new THREE.Vector3( 0, hRidge,  r2),
-        new THREE.Vector3(hB, hEave,  hL),
+        new THREE.Vector3(hBo, hOh,    -hLo),
+        new THREE.Vector3(  0, hRidge, -r2),
+        new THREE.Vector3(  0, hRidge,  r2),
+        new THREE.Vector3(hBo, hOh,    +hLo),
       );
       for (const g of [leftGeo, rightGeo]) {
         grp.add(new THREE.Mesh(g, roofMat()));
         this._tubeEdges(new THREE.EdgesGeometry(g), THEME.roofEdge, EDGE_R, grp);
       }
 
-      /* Hip triangles at each end (z=+/-hL) */
+      /* Hip triangles at each end (z = +/-hLo) */
       for (const zs of [-1, 1]) {
-        const z  = zs * hL;
+        const z  = zs * hLo;
         const rz = zs * r2;
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
-          -hB, hEave, z,
-           hB, hEave, z,
-            0, hRidge, rz,
+          -hBo, hOh,    z,
+           hBo, hOh,    z,
+             0, hRidge, rz,
         ]), 3));
         geo.computeVertexNormals();
         grp.add(new THREE.Mesh(geo, roofMat()));
@@ -785,34 +723,38 @@ class Wind3DRenderer {
       /* Ridge along X (B > L: long span = B along X) */
       const ridgeL = Math.max(0, B - L);
       const r2 = ridgeL / 2;
+      /* Extended overhang dims -- short axis is L so use Z-direction slope */
+      const slopeZ = hL > 0 ? (hRidge - hEave) / hL : 0;
+      const hOhZ   = hEave - wo * slopeZ;
+      const hBo    = hB + wo, hLo = hL + wo;
 
-      /* Front main slope — trapezoid at z=+hL */
+      /* Front main slope -- trapezoid at z=+hLo */
       const frontGeo = this._quad(
-        new THREE.Vector3(-hB, hEave,  hL),
-        new THREE.Vector3( hB, hEave,  hL),
-        new THREE.Vector3( r2, hRidge, 0),
-        new THREE.Vector3(-r2, hRidge, 0),
+        new THREE.Vector3(-hBo, hOhZ,  hLo),
+        new THREE.Vector3( hBo, hOhZ,  hLo),
+        new THREE.Vector3( r2,  hRidge, 0),
+        new THREE.Vector3(-r2,  hRidge, 0),
       );
-      /* Back main slope — trapezoid at z=-hL */
+      /* Back main slope -- trapezoid at z=-hLo */
       const backGeo = this._quad(
-        new THREE.Vector3( hB, hEave, -hL),
-        new THREE.Vector3(-hB, hEave, -hL),
-        new THREE.Vector3(-r2, hRidge, 0),
-        new THREE.Vector3( r2, hRidge, 0),
+        new THREE.Vector3( hBo, hOhZ, -hLo),
+        new THREE.Vector3(-hBo, hOhZ, -hLo),
+        new THREE.Vector3(-r2,  hRidge, 0),
+        new THREE.Vector3( r2,  hRidge, 0),
       );
       for (const g of [frontGeo, backGeo]) {
         grp.add(new THREE.Mesh(g, roofMat()));
         this._tubeEdges(new THREE.EdgesGeometry(g), THEME.roofEdge, EDGE_R, grp);
       }
 
-      /* Hip triangles at each end (x=+/-hB) */
+      /* Hip triangles at each end (x = +/-hBo) */
       for (const xs of [-1, 1]) {
-        const x  = xs * hB;
+        const x  = xs * hBo;
         const rx = xs * r2;
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
-          x, hEave,  hL,
-          x, hEave, -hL,
+          x, hOhZ,  hLo,
+          x, hOhZ, -hLo,
           rx, hRidge, 0,
         ]), 3));
         geo.computeVertexNormals();
@@ -831,139 +773,6 @@ class Wind3DRenderer {
       }
     }
 
-    /* ── Perimeter overhang (hip — all 4 eave sides) ────────────────── */
-    if (wo > 0) {
-      const slope  = hB > 0 ? (hRidge - hEave) / hB : 0;
-      const hOh    = hEave - wo * slope;
-      const roofOh = new THREE.MeshStandardMaterial({
-        color: THEME.roofFill, transparent: false, side: THREE.DoubleSide,
-      });
-      const addOhSegs = (pairs) => {
-        for (const [a, b] of pairs) { const t = this._tube(a, b, THEME.roofEdge, 0.11); if (t) grp.add(t); }
-      };
-
-      if (B <= L) {
-        // Left main slope (x = -hB → -(hB+wo)), full Z
-        grp.add(new THREE.Mesh(this._quad(
-          new THREE.Vector3(-hB,      hEave, -hL),
-          new THREE.Vector3(-hB,      hEave, +hL),
-          new THREE.Vector3(-(hB+wo), hOh,   +hL),
-          new THREE.Vector3(-(hB+wo), hOh,   -hL),
-        ), roofOh));
-        addOhSegs([
-          [new THREE.Vector3(-hB,      hEave, -hL), new THREE.Vector3(-(hB+wo), hOh, -hL)],
-          [new THREE.Vector3(-hB,      hEave, +hL), new THREE.Vector3(-(hB+wo), hOh, +hL)],
-          [new THREE.Vector3(-(hB+wo), hOh,   -hL), new THREE.Vector3(-(hB+wo), hOh, +hL)],
-        ]);
-
-        // Right main slope (x = +hB → +(hB+wo)), full Z
-        grp.add(new THREE.Mesh(this._quad(
-          new THREE.Vector3(hB,     hEave, -hL),
-          new THREE.Vector3(hB+wo,  hOh,   -hL),
-          new THREE.Vector3(hB+wo,  hOh,   +hL),
-          new THREE.Vector3(hB,     hEave, +hL),
-        ), roofOh.clone()));
-        addOhSegs([
-          [new THREE.Vector3(hB,    hEave, -hL), new THREE.Vector3(hB+wo, hOh, -hL)],
-          [new THREE.Vector3(hB,    hEave, +hL), new THREE.Vector3(hB+wo, hOh, +hL)],
-          [new THREE.Vector3(hB+wo, hOh,   -hL), new THREE.Vector3(hB+wo, hOh, +hL)],
-        ]);
-
-        // Front hip-end strip (z = +hL → +(hL+wo))
-        grp.add(new THREE.Mesh(this._quad(
-          new THREE.Vector3(-hB,      hEave, hL),
-          new THREE.Vector3( hB,      hEave, hL),
-          new THREE.Vector3( hB+wo,   hOh,   hL+wo),
-          new THREE.Vector3(-(hB+wo), hOh,   hL+wo),
-        ), roofOh.clone()));
-        addOhSegs([
-          [new THREE.Vector3(-hB,      hEave, hL),    new THREE.Vector3(-(hB+wo), hOh, hL+wo)],
-          [new THREE.Vector3( hB,      hEave, hL),    new THREE.Vector3(  hB+wo,  hOh, hL+wo)],
-          [new THREE.Vector3(-(hB+wo), hOh,   hL+wo), new THREE.Vector3(  hB+wo,  hOh, hL+wo)],
-        ]);
-
-        // Back hip-end strip (z = -hL → -(hL+wo))
-        grp.add(new THREE.Mesh(this._quad(
-          new THREE.Vector3( hB,      hEave, -hL),
-          new THREE.Vector3(-hB,      hEave, -hL),
-          new THREE.Vector3(-(hB+wo), hOh,   -(hL+wo)),
-          new THREE.Vector3(  hB+wo,  hOh,   -(hL+wo)),
-        ), roofOh.clone()));
-        addOhSegs([
-          [new THREE.Vector3(-hB,    hEave, -hL),    new THREE.Vector3(-(hB+wo), hOh, -(hL+wo))],
-          [new THREE.Vector3( hB,    hEave, -hL),    new THREE.Vector3(  hB+wo,  hOh, -(hL+wo))],
-          [new THREE.Vector3(-(hB+wo), hOh, -(hL+wo)), new THREE.Vector3(hB+wo,  hOh, -(hL+wo))],
-        ]);
-        // Corner stitch triangles — fill gaps at 4 hip junction corners
-        const _mkTri = (p0, p1, p2) => {
-          const g = new THREE.BufferGeometry();
-          g.setAttribute('position', new THREE.BufferAttribute(
-            new Float32Array([p0.x,p0.y,p0.z, p1.x,p1.y,p1.z, p2.x,p2.y,p2.z]), 3));
-          g.computeVertexNormals();
-          return new THREE.Mesh(g, roofOh.clone());
-        };
-        // Front-left corner
-        grp.add(_mkTri(
-          new THREE.Vector3(-(hB+wo), hOh,   +hL),
-          new THREE.Vector3(-hB,      hEave, +hL),
-          new THREE.Vector3(-(hB+wo), hOh,   hL+wo),
-        ));
-        // Front-right corner
-        grp.add(_mkTri(
-          new THREE.Vector3(hB,    hEave, +hL),
-          new THREE.Vector3(hB+wo, hOh,   +hL),
-          new THREE.Vector3(hB+wo, hOh,   hL+wo),
-        ));
-        // Back-left corner
-        grp.add(_mkTri(
-          new THREE.Vector3(-hB,      hEave, -hL),
-          new THREE.Vector3(-(hB+wo), hOh,   -hL),
-          new THREE.Vector3(-(hB+wo), hOh,   -(hL+wo)),
-        ));
-        // Back-right corner
-        grp.add(_mkTri(
-          new THREE.Vector3(hB+wo, hOh,   -hL),
-          new THREE.Vector3(hB,    hEave, -hL),
-          new THREE.Vector3(hB+wo, hOh,   -(hL+wo)),
-        ));
-
-      } else {
-        /* B > L: ridge along X */
-        const slopeZ = hL > 0 ? (hRidge - hEave) / hL : 0;
-        const hOhZ   = hEave - wo * slopeZ;
-
-        // Front / back main slopes (z direction)
-        for (const [zs] of [[-1], [1]]) {
-          const z0 = zs * hL, z1 = zs * (hL + wo);
-          grp.add(new THREE.Mesh(this._quad(
-            new THREE.Vector3(-hB, hEave, z0),
-            new THREE.Vector3( hB, hEave, z0),
-            new THREE.Vector3( hB, hOhZ,  z1),
-            new THREE.Vector3(-hB, hOhZ,  z1),
-          ), roofOh.clone()));
-          addOhSegs([
-            [new THREE.Vector3(-hB, hEave, z0), new THREE.Vector3(-hB, hOhZ, z1)],
-            [new THREE.Vector3( hB, hEave, z0), new THREE.Vector3( hB, hOhZ, z1)],
-            [new THREE.Vector3(-hB, hOhZ,  z1), new THREE.Vector3( hB, hOhZ, z1)],
-          ]);
-        }
-        // Left / right hip-end strips (x direction)
-        for (const [xs] of [[-1], [1]]) {
-          const x0 = xs * hB, x1 = xs * (hB + wo);
-          grp.add(new THREE.Mesh(this._quad(
-            new THREE.Vector3(x0, hEave, -hL),
-            new THREE.Vector3(x0, hEave, +hL),
-            new THREE.Vector3(x1, hOh,   +(hL+wo)),
-            new THREE.Vector3(x1, hOh,   -(hL+wo)),
-          ), roofOh.clone()));
-          addOhSegs([
-            [new THREE.Vector3(x0, hEave, -hL),    new THREE.Vector3(x1, hOh, -(hL+wo))],
-            [new THREE.Vector3(x0, hEave, +hL),    new THREE.Vector3(x1, hOh, +(hL+wo))],
-            [new THREE.Vector3(x1, hOh,   -(hL+wo)), new THREE.Vector3(x1, hOh, +(hL+wo))],
-          ]);
-        }
-      }
-    }
 
     return grp;
   }
@@ -984,13 +793,21 @@ class Wind3DRenderer {
     });
 
     /* 4 walls — all as quads (not a box, heights differ on each side) */
-    /* Windward wall  (X = -hB): rectangular, full height = hHigh */
+    /* 4 walls -- all as quads; top eave edges omitted (covered by roof) */
+    const monoSegs = (pairs) => {
+      for (const [a2, b2] of pairs) { const t = this._tube(a2, b2, THEME.wallEdge, EDGE_R); if (t) grp.add(t); }
+    };
+    /* Windward wall  (X = -hB): rectangular, height = hHigh */
     const windGeo = this._quad(
       new THREE.Vector3(-hB, 0,     -hL),
       new THREE.Vector3(-hB, 0,      hL),
       new THREE.Vector3(-hB, hHigh,  hL),
       new THREE.Vector3(-hB, hHigh, -hL),
     );
+    grp.add(new THREE.Mesh(windGeo, solidMat(THEME.wallFill)));
+    monoSegs([[new THREE.Vector3(-hB,0,-hL), new THREE.Vector3(-hB,0,+hL)],
+              [new THREE.Vector3(-hB,0,+hL), new THREE.Vector3(-hB,hHigh,+hL)],
+              [new THREE.Vector3(-hB,hHigh,-hL),new THREE.Vector3(-hB,0,-hL)]]);
     /* Leeward wall  (X = +hB): rectangular, height = hLow */
     const leeGeo = this._quad(
       new THREE.Vector3(hB, 0,    -hL),
@@ -998,6 +815,10 @@ class Wind3DRenderer {
       new THREE.Vector3(hB, hLow,  hL),
       new THREE.Vector3(hB, 0,     hL),
     );
+    grp.add(new THREE.Mesh(leeGeo, solidMat(THEME.wallFill)));
+    monoSegs([[new THREE.Vector3(hB,0,-hL),   new THREE.Vector3(hB,hLow,-hL)],
+              [new THREE.Vector3(hB,hLow,+hL), new THREE.Vector3(hB,0,+hL)],
+              [new THREE.Vector3(hB,0,-hL),    new THREE.Vector3(hB,0,+hL)]]);
     /* Left end wall  (Z = -hL): trapezoid */
     const leftEndGeo = this._quad(
       new THREE.Vector3(-hB, 0,     -hL),
@@ -1005,6 +826,10 @@ class Wind3DRenderer {
       new THREE.Vector3( hB, hLow,  -hL),
       new THREE.Vector3( hB, 0,     -hL),
     );
+    grp.add(new THREE.Mesh(leftEndGeo, solidMat(THEME.wallFill)));
+    monoSegs([[new THREE.Vector3(-hB,0,-hL),    new THREE.Vector3(-hB,hHigh,-hL)],
+              [new THREE.Vector3(hB,hLow,-hL),  new THREE.Vector3(hB,0,-hL)],
+              [new THREE.Vector3(hB,0,-hL),     new THREE.Vector3(-hB,0,-hL)]]);
     /* Right end wall (Z = +hL): trapezoid */
     const rightEndGeo = this._quad(
       new THREE.Vector3(-hB, 0,     hL),
@@ -1012,93 +837,34 @@ class Wind3DRenderer {
       new THREE.Vector3( hB, hLow,  hL),
       new THREE.Vector3(-hB, hHigh, hL),
     );
-    for (const g of [windGeo, leeGeo, leftEndGeo, rightEndGeo]) {
-      grp.add(new THREE.Mesh(g, solidMat(THEME.wallFill)));
-      this._tubeEdges(new THREE.EdgesGeometry(g), THEME.wallEdge, EDGE_R, grp);
-    }
+    grp.add(new THREE.Mesh(rightEndGeo, solidMat(THEME.wallFill)));
+    monoSegs([[new THREE.Vector3(-hB,0,+hL),    new THREE.Vector3(hB,0,+hL)],
+              [new THREE.Vector3(hB,0,+hL),     new THREE.Vector3(hB,hLow,+hL)],
+              [new THREE.Vector3(-hB,hHigh,+hL),new THREE.Vector3(-hB,0,+hL)]]);
 
     /* Sloped roof — single quad */
+    /* Sloped roof -- extend to overhang */
+    const slopeM  = (2 * hB) > 0 ? (hHigh - hLow) / (2 * hB) : 0;
+    const hHighOh = hHigh + wo * slopeM;
+    const hLowOh  = hLow  - wo * slopeM;
+    const hBo     = hB + wo, hLo = hL + wo;
     const roofGeo = this._quad(
-      new THREE.Vector3(-hB, hHigh, -hL),
-      new THREE.Vector3(-hB, hHigh,  hL),
-      new THREE.Vector3( hB, hLow,   hL),
-      new THREE.Vector3( hB, hLow,  -hL),
+      new THREE.Vector3(-hBo, hHighOh, -hLo),
+      new THREE.Vector3(-hBo, hHighOh,  hLo),
+      new THREE.Vector3( hBo, hLowOh,   hLo),
+      new THREE.Vector3( hBo, hLowOh,  -hLo),
     );
     grp.add(new THREE.Mesh(roofGeo, roofMat));
     this._tubeEdges(new THREE.EdgesGeometry(roofGeo), THEME.roofEdge, EDGE_R, grp);
 
-    /* High eave edge (accent) */
-    const t = this._tube(
-      new THREE.Vector3(-hB, hHigh, -hL),
-      new THREE.Vector3(-hB, hHigh,  hL),
+
+    /* High eave accent -- at outer windward tip */
+    const tHigh = this._tube(
+      new THREE.Vector3(-hBo, hHighOh, -hLo),
+      new THREE.Vector3(-hBo, hHighOh,  hLo),
       THEME.ridge, EDGE_R
     );
-    if (t) grp.add(t);
-
-    /* ── Perimeter overhang (monoslope — all 4 sides) ───────────────── */
-    if (wo > 0) {
-      const slopeM  = (2 * hB) > 0 ? (hHigh - hLow) / (2 * hB) : 0;
-      const hHighOh = hHigh + wo * slopeM;
-      const hLowOh  = hLow  - wo * slopeM;
-      const roofOh  = new THREE.MeshStandardMaterial({
-        color: THEME.roofFill, transparent: false, side: THREE.DoubleSide,
-      });
-      const addOhSegs = (pairs) => {
-        for (const [a, b] of pairs) { const t2 = this._tube(a, b, THEME.roofEdge, 0.11); if (t2) grp.add(t2); }
-      };
-
-      // High (windward) eave: x = -hB → -(hB+wo), full Z with rake corners
-      grp.add(new THREE.Mesh(this._quad(
-        new THREE.Vector3(-hB,      hHigh,   -(hL+wo)),
-        new THREE.Vector3(-hB,      hHigh,   +(hL+wo)),
-        new THREE.Vector3(-(hB+wo), hHighOh, +(hL+wo)),
-        new THREE.Vector3(-(hB+wo), hHighOh, -(hL+wo)),
-      ), roofOh));
-      addOhSegs([
-        [new THREE.Vector3(-hB,      hHigh,   -(hL+wo)), new THREE.Vector3(-(hB+wo), hHighOh, -(hL+wo))],
-        [new THREE.Vector3(-hB,      hHigh,   +(hL+wo)), new THREE.Vector3(-(hB+wo), hHighOh, +(hL+wo))],
-        [new THREE.Vector3(-(hB+wo), hHighOh, -(hL+wo)), new THREE.Vector3(-(hB+wo), hHighOh, +(hL+wo))],
-      ]);
-
-      // Low (leeward) eave: x = +hB → +(hB+wo), full Z with rake corners
-      grp.add(new THREE.Mesh(this._quad(
-        new THREE.Vector3(hB,     hLow,   -(hL+wo)),
-        new THREE.Vector3(hB+wo,  hLowOh, -(hL+wo)),
-        new THREE.Vector3(hB+wo,  hLowOh, +(hL+wo)),
-        new THREE.Vector3(hB,     hLow,   +(hL+wo)),
-      ), roofOh.clone()));
-      addOhSegs([
-        [new THREE.Vector3(hB,    hLow,   -(hL+wo)), new THREE.Vector3(hB+wo, hLowOh, -(hL+wo))],
-        [new THREE.Vector3(hB,    hLow,   +(hL+wo)), new THREE.Vector3(hB+wo, hLowOh, +(hL+wo))],
-        [new THREE.Vector3(hB+wo, hLowOh, -(hL+wo)), new THREE.Vector3(hB+wo, hLowOh, +(hL+wo))],
-      ]);
-
-      // Front rake: z = +hL → +(hL+wo)
-      grp.add(new THREE.Mesh(this._quad(
-        new THREE.Vector3(-hB, hHigh, hL),
-        new THREE.Vector3( hB, hLow,  hL),
-        new THREE.Vector3( hB, hLow,  hL+wo),
-        new THREE.Vector3(-hB, hHigh, hL+wo),
-      ), roofOh.clone()));
-      addOhSegs([
-        [new THREE.Vector3(-hB, hHigh, hL),    new THREE.Vector3(-hB, hHigh, hL+wo)],
-        [new THREE.Vector3( hB, hLow,  hL),    new THREE.Vector3( hB, hLow,  hL+wo)],
-        [new THREE.Vector3(-hB, hHigh, hL+wo), new THREE.Vector3( hB, hLow,  hL+wo)],
-      ]);
-
-      // Back rake: z = -hL → -(hL+wo)
-      grp.add(new THREE.Mesh(this._quad(
-        new THREE.Vector3(-hB, hHigh, -hL),
-        new THREE.Vector3(-hB, hHigh, -(hL+wo)),
-        new THREE.Vector3( hB, hLow,  -(hL+wo)),
-        new THREE.Vector3( hB, hLow,  -hL),
-      ), roofOh.clone()));
-      addOhSegs([
-        [new THREE.Vector3(-hB, hHigh, -hL),    new THREE.Vector3(-hB, hHigh, -(hL+wo))],
-        [new THREE.Vector3( hB, hLow,  -hL),    new THREE.Vector3( hB, hLow,  -(hL+wo))],
-        [new THREE.Vector3(-hB, hHigh, -(hL+wo)), new THREE.Vector3(hB, hLow, -(hL+wo))],
-      ]);
-    }
+    if (tHigh) grp.add(tHigh);
 
     return grp;
   }
@@ -1182,7 +948,7 @@ class Wind3DRenderer {
     }
   }
 
-  _drawWallZones(B, L, hEave, hRidge, zone_a, matZ) {
+  _drawWallZones(B, L, hEave, hRidge, zone_a, matZ, roofShape = 'gable') {
     const hB = B / 2, hL = L / 2;
     const EPS = 0.06;   // tiny outward offset to avoid z-fighting with wall mesh
     const Z4_OP = 0.22, Z5_OP = 0.45;   // opacities for field and corner zones
@@ -1209,10 +975,7 @@ class Wind3DRenderer {
       this._makeZoneLabelFlat(zt, ctr, norm, tDir);
     };
 
-    /* ── FRONT end wall + gable (z = +hL, outward normal +Z) ────────────────
-       Zones 4 and 5 cover the full wall height including the gable triangle
-       above hEave.  The gable slope height at horizontal distance d from the
-       building corner is: hEave + (d/hB)*(hRidge-hEave).                  */
+    /* -- FRONT end wall (z = +hL, outward normal +Z) ---------------------- */
     {
       const nF = new THREE.Vector3(0, 0, 1);
       const e  = EPS;
@@ -1220,44 +983,61 @@ class Wind3DRenderer {
       const a  = Math.min(zone_a, hB);
       const tD = new THREE.Vector3(1, 0, 0);
 
-      /* Gable slope height at horizontal distance d from each side corner */
-      const slopeY = d => hEave + (d / hB) * (hRidge - hEave);
-      const ya = slopeY(a);   // height at x = ±(hB - a)
-
-      // Zone 5 left: quad from ground up to gable slope
-      const fz5L = [
-        new THREE.Vector3(-hB,   0,    z), new THREE.Vector3(-hB+a, 0,  z),
-        new THREE.Vector3(-hB+a, ya,   z), new THREE.Vector3(-hB,   hEave, z),
-      ];
-      addWallQ(fz5L, 'zone-5', Z5_OP);
-      wallLabel('zone-5', fz5L[0], fz5L[1], fz5L[2], fz5L[3], nF, tD);
-
-      // Zone 5 right: quad from ground up to gable slope
-      const fz5R = [
-        new THREE.Vector3(hB-a, 0,    z), new THREE.Vector3(hB,   0,    z),
-        new THREE.Vector3(hB,   hEave, z), new THREE.Vector3(hB-a, ya,  z),
-      ];
-      addWallQ(fz5R, 'zone-5', Z5_OP);
-      wallLabel('zone-5', fz5R[0], fz5R[1], fz5R[2], fz5R[3], nF, tD);
-
-      // Zone 4 field (if wide enough): lower rectangle + upper triangle to ridge
-      if (2 * a < B - 0.1) {
-        const fz4Lo = [
-          new THREE.Vector3(-hB+a, 0,  z), new THREE.Vector3(hB-a, 0,  z),
-          new THREE.Vector3(hB-a,  ya, z), new THREE.Vector3(-hB+a, ya, z),
+      if (roofShape === 'hip' || roofShape === 'monoslope') {
+        /* Hip/monoslope: end wall is rectangular, no gable peak */
+        const fz5L = [
+          new THREE.Vector3(-hB,   0,     z), new THREE.Vector3(-hB+a, 0,     z),
+          new THREE.Vector3(-hB+a, hEave, z), new THREE.Vector3(-hB,   hEave, z),
         ];
-        addWallQ(fz4Lo, 'zone-4', Z4_OP);
-        wallLabel('zone-4', fz4Lo[0], fz4Lo[1], fz4Lo[2], fz4Lo[3], nF, tD);
-        /* Degenerate quad (last two vertices coincide) = triangle to ridge */
-        const fz4Hi = [
-          new THREE.Vector3(-hB+a, ya,     z), new THREE.Vector3(hB-a,  ya,     z),
-          new THREE.Vector3(0,     hRidge, z), new THREE.Vector3(0,     hRidge, z),
+        addWallQ(fz5L, 'zone-5', Z5_OP);
+        wallLabel('zone-5', fz5L[0], fz5L[1], fz5L[2], fz5L[3], nF, tD);
+        const fz5R = [
+          new THREE.Vector3(hB-a, 0,     z), new THREE.Vector3(hB,   0,     z),
+          new THREE.Vector3(hB,   hEave, z), new THREE.Vector3(hB-a, hEave, z),
         ];
-        addWallQ(fz4Hi, 'zone-4', Z4_OP);
+        addWallQ(fz5R, 'zone-5', Z5_OP);
+        wallLabel('zone-5', fz5R[0], fz5R[1], fz5R[2], fz5R[3], nF, tD);
+        if (2 * a < B - 0.1) {
+          const fz4 = [
+            new THREE.Vector3(-hB+a, 0,     z), new THREE.Vector3(hB-a, 0,     z),
+            new THREE.Vector3(hB-a,  hEave, z), new THREE.Vector3(-hB+a, hEave, z),
+          ];
+          addWallQ(fz4, 'zone-4', Z4_OP);
+          wallLabel('zone-4', fz4[0], fz4[1], fz4[2], fz4[3], nF, tD);
+        }
+      } else {
+        /* Gable/flat: end wall is pentagon including gable triangle */
+        const slopeY = d => hEave + (d / hB) * (hRidge - hEave);
+        const ya = slopeY(a);
+        const fz5L = [
+          new THREE.Vector3(-hB,   0,    z), new THREE.Vector3(-hB+a, 0,  z),
+          new THREE.Vector3(-hB+a, ya,   z), new THREE.Vector3(-hB,   hEave, z),
+        ];
+        addWallQ(fz5L, 'zone-5', Z5_OP);
+        wallLabel('zone-5', fz5L[0], fz5L[1], fz5L[2], fz5L[3], nF, tD);
+        const fz5R = [
+          new THREE.Vector3(hB-a, 0,    z), new THREE.Vector3(hB,   0,    z),
+          new THREE.Vector3(hB,   hEave, z), new THREE.Vector3(hB-a, ya,  z),
+        ];
+        addWallQ(fz5R, 'zone-5', Z5_OP);
+        wallLabel('zone-5', fz5R[0], fz5R[1], fz5R[2], fz5R[3], nF, tD);
+        if (2 * a < B - 0.1) {
+          const fz4Lo = [
+            new THREE.Vector3(-hB+a, 0,  z), new THREE.Vector3(hB-a, 0,  z),
+            new THREE.Vector3(hB-a,  ya, z), new THREE.Vector3(-hB+a, ya, z),
+          ];
+          addWallQ(fz4Lo, 'zone-4', Z4_OP);
+          wallLabel('zone-4', fz4Lo[0], fz4Lo[1], fz4Lo[2], fz4Lo[3], nF, tD);
+          const fz4Hi = [
+            new THREE.Vector3(-hB+a, ya,     z), new THREE.Vector3(hB-a,  ya,     z),
+            new THREE.Vector3(0,     hRidge, z), new THREE.Vector3(0,     hRidge, z),
+          ];
+          addWallQ(fz4Hi, 'zone-4', Z4_OP);
+        }
       }
     }
 
-    /* ── BACK end wall + gable (z = -hL): same zone layout as front ──────── */
+    /* -- BACK end wall (z = -hL, outward normal -Z) ---------------------- */
     {
       const nB = new THREE.Vector3(0, 0, -1);
       const e  = EPS;
@@ -1265,37 +1045,57 @@ class Wind3DRenderer {
       const a  = Math.min(zone_a, hB);
       const tD = new THREE.Vector3(-1, 0, 0);
 
-      const slopeY = d => hEave + (d / hB) * (hRidge - hEave);
-      const ya = slopeY(a);
-
-      // Zone 5 left (viewed from outside back = +X side)
-      const bz5L = [
-        new THREE.Vector3(hB-a, 0,    z), new THREE.Vector3(hB,   0,    z),
-        new THREE.Vector3(hB,   hEave, z), new THREE.Vector3(hB-a, ya,  z),
-      ];
-      addWallQ(bz5L, 'zone-5', Z5_OP);
-      wallLabel('zone-5', bz5L[0], bz5L[1], bz5L[2], bz5L[3], nB, tD);
-
-      // Zone 5 right
-      const bz5R = [
-        new THREE.Vector3(-hB,   0,    z), new THREE.Vector3(-hB+a, 0,  z),
-        new THREE.Vector3(-hB+a, ya,   z), new THREE.Vector3(-hB,   hEave, z),
-      ];
-      addWallQ(bz5R, 'zone-5', Z5_OP);
-      wallLabel('zone-5', bz5R[0], bz5R[1], bz5R[2], bz5R[3], nB, tD);
-
-      if (2 * a < B - 0.1) {
-        const bz4Lo = [
-          new THREE.Vector3(-hB+a, 0,  z), new THREE.Vector3(hB-a, 0,  z),
-          new THREE.Vector3(hB-a,  ya, z), new THREE.Vector3(-hB+a, ya, z),
+      if (roofShape === 'hip' || roofShape === 'monoslope') {
+        /* Hip/monoslope: end wall is rectangular */
+        const bz5L = [
+          new THREE.Vector3(hB-a, 0,     z), new THREE.Vector3(hB,   0,     z),
+          new THREE.Vector3(hB,   hEave, z), new THREE.Vector3(hB-a, hEave, z),
         ];
-        addWallQ(bz4Lo, 'zone-4', Z4_OP);
-        wallLabel('zone-4', bz4Lo[0], bz4Lo[1], bz4Lo[2], bz4Lo[3], nB, tD);
-        const bz4Hi = [
-          new THREE.Vector3(-hB+a, ya,     z), new THREE.Vector3(hB-a,  ya,     z),
-          new THREE.Vector3(0,     hRidge, z), new THREE.Vector3(0,     hRidge, z),
+        addWallQ(bz5L, 'zone-5', Z5_OP);
+        wallLabel('zone-5', bz5L[0], bz5L[1], bz5L[2], bz5L[3], nB, tD);
+        const bz5R = [
+          new THREE.Vector3(-hB,   0,     z), new THREE.Vector3(-hB+a, 0,     z),
+          new THREE.Vector3(-hB+a, hEave, z), new THREE.Vector3(-hB,   hEave, z),
         ];
-        addWallQ(bz4Hi, 'zone-4', Z4_OP);
+        addWallQ(bz5R, 'zone-5', Z5_OP);
+        wallLabel('zone-5', bz5R[0], bz5R[1], bz5R[2], bz5R[3], nB, tD);
+        if (2 * a < B - 0.1) {
+          const bz4 = [
+            new THREE.Vector3(-hB+a, 0,     z), new THREE.Vector3(hB-a, 0,     z),
+            new THREE.Vector3(hB-a,  hEave, z), new THREE.Vector3(-hB+a, hEave, z),
+          ];
+          addWallQ(bz4, 'zone-4', Z4_OP);
+          wallLabel('zone-4', bz4[0], bz4[1], bz4[2], bz4[3], nB, tD);
+        }
+      } else {
+        /* Gable/flat: pentagon with gable triangle */
+        const slopeY = d => hEave + (d / hB) * (hRidge - hEave);
+        const ya = slopeY(a);
+        const bz5L = [
+          new THREE.Vector3(hB-a, 0,    z), new THREE.Vector3(hB,   0,    z),
+          new THREE.Vector3(hB,   hEave, z), new THREE.Vector3(hB-a, ya,  z),
+        ];
+        addWallQ(bz5L, 'zone-5', Z5_OP);
+        wallLabel('zone-5', bz5L[0], bz5L[1], bz5L[2], bz5L[3], nB, tD);
+        const bz5R = [
+          new THREE.Vector3(-hB,   0,    z), new THREE.Vector3(-hB+a, 0,  z),
+          new THREE.Vector3(-hB+a, ya,   z), new THREE.Vector3(-hB,   hEave, z),
+        ];
+        addWallQ(bz5R, 'zone-5', Z5_OP);
+        wallLabel('zone-5', bz5R[0], bz5R[1], bz5R[2], bz5R[3], nB, tD);
+        if (2 * a < B - 0.1) {
+          const bz4Lo = [
+            new THREE.Vector3(-hB+a, 0,  z), new THREE.Vector3(hB-a, 0,  z),
+            new THREE.Vector3(hB-a,  ya, z), new THREE.Vector3(-hB+a, ya, z),
+          ];
+          addWallQ(bz4Lo, 'zone-4', Z4_OP);
+          wallLabel('zone-4', bz4Lo[0], bz4Lo[1], bz4Lo[2], bz4Lo[3], nB, tD);
+          const bz4Hi = [
+            new THREE.Vector3(-hB+a, ya,     z), new THREE.Vector3(hB-a,  ya,     z),
+            new THREE.Vector3(0,     hRidge, z), new THREE.Vector3(0,     hRidge, z),
+          ];
+          addWallQ(bz4Hi, 'zone-4', Z4_OP);
+        }
       }
     }
 
@@ -2196,7 +1996,7 @@ class Wind3DRenderer {
        Zone 5: vertical end strip width 'a' at each corner of every facade
        Zone 4: rest of wall field
        Drawn as flat quads offset 0.05 ft from each wall face.              */
-    this._drawWallZones(B, L, hEave, hRidge, zone_a, matZ);
+    this._drawWallZones(B, L, hEave, hRidge, zone_a, matZ, _shape);
 
     // Collect opaque building meshes for per-frame label occlusion raycasting
     this._buildingMeshes = [];
