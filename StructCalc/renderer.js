@@ -1521,7 +1521,8 @@ class Wind3DRenderer {
 
     // ── θ angle dim — at front-left eave corner, in XY plane at z=hL ─────────
     if (theta > 0) {
-      const thRad  = THREE.MathUtils.degToRad(theta);
+      // thRad from world-space geometry so ext line 2 lies exactly on slope surface
+      const thRad  = Math.atan2(hRidge - hEave, hB);
       const ax = -hB, ay = hEave, az = hL;
       // arcR = 3/4 × hB → arc sits at 1/4 of slope length from ridge
       const arcR   = 0.75 * hB;
