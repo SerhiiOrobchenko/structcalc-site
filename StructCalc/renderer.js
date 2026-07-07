@@ -1532,12 +1532,11 @@ class Wind3DRenderer {
       const legLen = arcR + ALEN + ATAIL;
       const lineMat = new THREE.LineBasicMaterial({ color: 0x000000 });
 
-      // Radial arrowhead: tip on arc endpoint, body along extension line (outward from corner),
-      // wings tangential to arc — avoids downward arrows regardless of pitch angle
-      const mkRadArrow = (tip, radialDir, tangentDir) => {
-        const base = tip.clone().addScaledVector(radialDir, ALEN);
-        const w1   = base.clone().addScaledVector(tangentDir,  HALFW);
-        const w2   = base.clone().addScaledVector(tangentDir, -HALFW);
+      // Arrowhead tangent to arc — arrow points INTO arc (perpendicular to extension line)
+      const mkArcArrow = (tip, arrowDir, radialDir) => {
+        const base = tip.clone().addScaledVector(arrowDir, -ALEN);
+        const w1   = base.clone().addScaledVector(radialDir,  HALFW);
+        const w2   = base.clone().addScaledVector(radialDir, -HALFW);
         const geo  = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
           tip.x,tip.y,tip.z, w1.x,w1.y,w1.z, w2.x,w2.y,w2.z,
@@ -1567,17 +1566,14 @@ class Wind3DRenderer {
       }
       grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(arcPts), lineMat));
 
-      // Arrowheads at arc endpoints:
-      //   tip on the arc, body along extension line (radially outward from corner),
-      //   wings tangential — extension line continues ATAIL past base = "tail"
-      // pt1: angle = 0 (horizontal leg) — radial=(1,0,0), tangent=(0,1,0)
+      // Arrowheads: tangential to arc, pointing toward each other (perpendicular to extension lines)
+      // pt1: angle = 0 (horizontal leg) — arrow points CCW (+Y), wings radial (1,0,0)
       const pt1 = new THREE.Vector3(ax + arcR, ay, az);
-      grp.add(mkRadArrow(pt1, new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0)));
+      grp.add(mkArcArrow(pt1, new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0)));
 
-      // pt2: angle = θ (slope leg) — radial=sDir, tangent=(-sinθ,cosθ,0)
+      // pt2: angle = θ (slope leg) — arrow points CW into arc (sinθ,-cosθ,0), wings = sDir
       const pt2 = new THREE.Vector3(ax + arcR * Math.cos(thRad), ay + arcR * Math.sin(thRad), az);
-      grp.add(mkRadArrow(pt2, sDir.clone(), new THREE.Vector3(-Math.sin(thRad), Math.cos(thRad), 0)));
-
+      grp.add(mkArcArrow(pt2, new THREE.Vector3(Math.sin(thRad), -Math.cos(thRad), 0), sDir.clone()));
       // CSS2D label — outside the arc at its midpoint
       if (THREE.CSS2DObject) {
         const midA = thRad / 2;
