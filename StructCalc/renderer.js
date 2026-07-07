@@ -572,7 +572,7 @@ class Wind3DRenderer {
       ]), 3));
       geo.computeVertexNormals();
       grp.add(new THREE.Mesh(geo, solidMat(THEME.wallFill)));
-      segs([[BL,BR],[BR,RE],[RE,RG],[RG,LE],[LE,BL]], THEME.wallEdge);
+      segs([[BL,BR],[BR,RE],[LE,BL]], THEME.wallEdge); // rake edges hidden under roof
     }
 
     /* ── FRONT end wall + gable (z = +hL) — PENTAGON, seamless ─────────
@@ -594,7 +594,7 @@ class Wind3DRenderer {
       geo.computeVertexNormals();
       grp.add(new THREE.Mesh(geo, solidMat(THEME.wallFill)));
       /* Perimeter only: BL→BR→RE→RG→LE→BL (5 edges, no horizontal seam) */
-      segs([[BL,BR],[BR,RE],[RE,RG],[RG,LE],[LE,BL]], THEME.wallEdge);
+      segs([[BL,BR],[BR,RE],[LE,BL]], THEME.wallEdge); // rake edges hidden under roof
     }
 
     /* -- Roof slopes (extend to overhang boundary) ----------------------- */
@@ -780,8 +780,8 @@ class Wind3DRenderer {
   /* ── monoslope roof builder ──────────────────────────────────────────────── */
 
   _buildStructureMonoslope(B, L, hLow, hHigh, wo = 0) {
-    /* hLow  = low eave height  (leeward,  X = +B/2)
-       hHigh = high eave height (windward, X = -B/2) */
+    /* hLow  = low eave height  (windward,  X = -B/2)
+       hHigh = high eave height (leeward,   X = +B/2) */
     const hB = B / 2, hL = L / 2;
     const grp = new THREE.Group();
     const EDGE_R = 0.11;
@@ -797,71 +797,69 @@ class Wind3DRenderer {
     const monoSegs = (pairs) => {
       for (const [a2, b2] of pairs) { const t = this._tube(a2, b2, THEME.wallEdge, EDGE_R); if (t) grp.add(t); }
     };
-    /* Windward wall  (X = -hB): rectangular, height = hHigh */
+    /* Windward wall  (X = -hB): low wall, height = hLow */
     const windGeo = this._quad(
-      new THREE.Vector3(-hB, 0,     -hL),
-      new THREE.Vector3(-hB, 0,      hL),
-      new THREE.Vector3(-hB, hHigh,  hL),
-      new THREE.Vector3(-hB, hHigh, -hL),
+      new THREE.Vector3(-hB, 0,    -hL),
+      new THREE.Vector3(-hB, 0,     hL),
+      new THREE.Vector3(-hB, hLow,  hL),
+      new THREE.Vector3(-hB, hLow, -hL),
     );
     grp.add(new THREE.Mesh(windGeo, solidMat(THEME.wallFill)));
-    monoSegs([[new THREE.Vector3(-hB,0,-hL), new THREE.Vector3(-hB,0,+hL)],
-              [new THREE.Vector3(-hB,0,+hL), new THREE.Vector3(-hB,hHigh,+hL)],
-              [new THREE.Vector3(-hB,hHigh,-hL),new THREE.Vector3(-hB,0,-hL)]]);
-    /* Leeward wall  (X = +hB): rectangular, height = hLow */
+    monoSegs([[new THREE.Vector3(-hB,0,-hL),  new THREE.Vector3(-hB,0,+hL)],
+              [new THREE.Vector3(-hB,0,+hL),  new THREE.Vector3(-hB,hLow,+hL)],
+              [new THREE.Vector3(-hB,hLow,-hL),new THREE.Vector3(-hB,0,-hL)]]);
+    /* Leeward wall  (X = +hB): high wall, height = hHigh */
     const leeGeo = this._quad(
-      new THREE.Vector3(hB, 0,    -hL),
-      new THREE.Vector3(hB, hLow, -hL),
-      new THREE.Vector3(hB, hLow,  hL),
-      new THREE.Vector3(hB, 0,     hL),
+      new THREE.Vector3(hB, 0,     -hL),
+      new THREE.Vector3(hB, hHigh, -hL),
+      new THREE.Vector3(hB, hHigh,  hL),
+      new THREE.Vector3(hB, 0,      hL),
     );
     grp.add(new THREE.Mesh(leeGeo, solidMat(THEME.wallFill)));
-    monoSegs([[new THREE.Vector3(hB,0,-hL),   new THREE.Vector3(hB,hLow,-hL)],
-              [new THREE.Vector3(hB,hLow,+hL), new THREE.Vector3(hB,0,+hL)],
-              [new THREE.Vector3(hB,0,-hL),    new THREE.Vector3(hB,0,+hL)]]);
-    /* Left end wall  (Z = -hL): trapezoid */
+    monoSegs([[new THREE.Vector3(hB,0,-hL),    new THREE.Vector3(hB,hHigh,-hL)],
+              [new THREE.Vector3(hB,hHigh,+hL), new THREE.Vector3(hB,0,+hL)],
+              [new THREE.Vector3(hB,0,-hL),     new THREE.Vector3(hB,0,+hL)]]);
+    /* Left end wall  (Z = -hL): trapezoid — low on left, high on right */
     const leftEndGeo = this._quad(
       new THREE.Vector3(-hB, 0,     -hL),
-      new THREE.Vector3(-hB, hHigh, -hL),
-      new THREE.Vector3( hB, hLow,  -hL),
+      new THREE.Vector3(-hB, hLow,  -hL),
+      new THREE.Vector3( hB, hHigh, -hL),
       new THREE.Vector3( hB, 0,     -hL),
     );
     grp.add(new THREE.Mesh(leftEndGeo, solidMat(THEME.wallFill)));
-    monoSegs([[new THREE.Vector3(-hB,0,-hL),    new THREE.Vector3(-hB,hHigh,-hL)],
-              [new THREE.Vector3(hB,hLow,-hL),  new THREE.Vector3(hB,0,-hL)],
+    monoSegs([[new THREE.Vector3(-hB,0,-hL),   new THREE.Vector3(-hB,hLow,-hL)],
+              [new THREE.Vector3(hB,hHigh,-hL), new THREE.Vector3(hB,0,-hL)],
               [new THREE.Vector3(hB,0,-hL),     new THREE.Vector3(-hB,0,-hL)]]);
-    /* Right end wall (Z = +hL): trapezoid */
+    /* Right end wall (Z = +hL): trapezoid — low on left, high on right */
     const rightEndGeo = this._quad(
       new THREE.Vector3(-hB, 0,     hL),
       new THREE.Vector3( hB, 0,     hL),
-      new THREE.Vector3( hB, hLow,  hL),
-      new THREE.Vector3(-hB, hHigh, hL),
+      new THREE.Vector3( hB, hHigh, hL),
+      new THREE.Vector3(-hB, hLow,  hL),
     );
     grp.add(new THREE.Mesh(rightEndGeo, solidMat(THEME.wallFill)));
     monoSegs([[new THREE.Vector3(-hB,0,+hL),    new THREE.Vector3(hB,0,+hL)],
-              [new THREE.Vector3(hB,0,+hL),     new THREE.Vector3(hB,hLow,+hL)],
-              [new THREE.Vector3(-hB,hHigh,+hL),new THREE.Vector3(-hB,0,+hL)]]);
+              [new THREE.Vector3(hB,0,+hL),     new THREE.Vector3(hB,hHigh,+hL)],
+              [new THREE.Vector3(-hB,hLow,+hL), new THREE.Vector3(-hB,0,+hL)]]);
 
-    /* Sloped roof — single quad */
-    /* Sloped roof -- extend to overhang */
+    /* Sloped roof -- extend to overhang; slope rises left → right */
     const slopeM  = (2 * hB) > 0 ? (hHigh - hLow) / (2 * hB) : 0;
-    const hHighOh = hHigh + wo * slopeM;
-    const hLowOh  = hLow  - wo * slopeM;
+    const hHighOh = hHigh + wo * slopeM;   // outer high eave (right, x=+hBo)
+    const hLowOh  = hLow  - wo * slopeM;   // outer low  eave (left,  x=-hBo)
     const hBo     = hB + wo, hLo = hL + wo;
     const roofGeo = this._quad(
-      new THREE.Vector3(-hBo, hHighOh, -hLo),
-      new THREE.Vector3(-hBo, hHighOh,  hLo),
-      new THREE.Vector3( hBo, hLowOh,   hLo),
-      new THREE.Vector3( hBo, hLowOh,  -hLo),
+      new THREE.Vector3(-hBo, hLowOh,  -hLo),   // left-back:   low
+      new THREE.Vector3(-hBo, hLowOh,   hLo),   // left-front:  low
+      new THREE.Vector3( hBo, hHighOh,  hLo),   // right-front: high
+      new THREE.Vector3( hBo, hHighOh, -hLo),   // right-back:  high
     );
     grp.add(new THREE.Mesh(roofGeo, roofMat));
     this._tubeEdges(new THREE.EdgesGeometry(roofGeo), THEME.roofEdge, EDGE_R, grp);
 
-
-    /* High eave accent -- at outer windward tip */
+    /* High eave accent -- at outer leeward (right) tip */
     const tHigh = this._tube(
-      new THREE.Vector3(-hBo, hHighOh, -hLo),
-      new THREE.Vector3(-hBo, hHighOh,  hLo),
+      new THREE.Vector3(+hBo, hHighOh, -hLo),
+      new THREE.Vector3(+hBo, hHighOh,  hLo),
       THEME.ridge, EDGE_R
     );
     if (tHigh) grp.add(tHigh);
@@ -983,8 +981,33 @@ class Wind3DRenderer {
       const a  = Math.min(zone_a, hB);
       const tD = new THREE.Vector3(1, 0, 0);
 
-      if (roofShape === 'hip' || roofShape === 'monoslope') {
-        /* Hip/monoslope: end wall is rectangular, no gable peak */
+      if (roofShape === 'monoslope') {
+        /* Trapezoidal: height varies from hEave (x=-hB, low/left) to hRidge (x=+hB, high/right) */
+        const hAtX = x => hEave + (x + hB) / B * (hRidge - hEave);
+        const ha  = hAtX(-hB + a);
+        const hBa = hAtX( hB - a);
+        const fz5L = [
+          new THREE.Vector3(-hB,   0,      z), new THREE.Vector3(-hB+a, 0,  z),
+          new THREE.Vector3(-hB+a, ha,     z), new THREE.Vector3(-hB,   hEave, z),
+        ];
+        addWallQ(fz5L, 'zone-5', Z5_OP);
+        wallLabel('zone-5', fz5L[0], fz5L[1], fz5L[2], fz5L[3], nF, tD);
+        const fz5R = [
+          new THREE.Vector3(hB-a, 0,      z), new THREE.Vector3(hB,   0,      z),
+          new THREE.Vector3(hB,   hRidge, z), new THREE.Vector3(hB-a, hBa,    z),
+        ];
+        addWallQ(fz5R, 'zone-5', Z5_OP);
+        wallLabel('zone-5', fz5R[0], fz5R[1], fz5R[2], fz5R[3], nF, tD);
+        if (2 * a < B - 0.1) {
+          const fz4 = [
+            new THREE.Vector3(-hB+a, 0,   z), new THREE.Vector3(hB-a, 0,   z),
+            new THREE.Vector3(hB-a,  hBa, z), new THREE.Vector3(-hB+a, ha, z),
+          ];
+          addWallQ(fz4, 'zone-4', Z4_OP);
+          wallLabel('zone-4', fz4[0], fz4[1], fz4[2], fz4[3], nF, tD);
+        }
+      } else if (roofShape === 'hip') {
+        /* Hip: rectangular up to hEave */
         const fz5L = [
           new THREE.Vector3(-hB,   0,     z), new THREE.Vector3(-hB+a, 0,     z),
           new THREE.Vector3(-hB+a, hEave, z), new THREE.Vector3(-hB,   hEave, z),
@@ -1006,7 +1029,7 @@ class Wind3DRenderer {
           wallLabel('zone-4', fz4[0], fz4[1], fz4[2], fz4[3], nF, tD);
         }
       } else {
-        /* Gable/flat: end wall is pentagon including gable triangle */
+        /* Gable/flat: pentagon including gable triangle */
         const slopeY = d => hEave + (d / hB) * (hRidge - hEave);
         const ya = slopeY(a);
         const fz5L = [
@@ -1045,8 +1068,34 @@ class Wind3DRenderer {
       const a  = Math.min(zone_a, hB);
       const tD = new THREE.Vector3(-1, 0, 0);
 
-      if (roofShape === 'hip' || roofShape === 'monoslope') {
-        /* Hip/monoslope: end wall is rectangular */
+      if (roofShape === 'monoslope') {
+        /* Trapezoidal: height varies from hEave (x=-hB) to hRidge (x=+hB) */
+        const hAtX = x => hEave + (x + hB) / B * (hRidge - hEave);
+        const ha  = hAtX(-hB + a);
+        const hBa = hAtX( hB - a);
+        // viewed from -Z: left side = x=+hB (high), right side = x=-hB (low)
+        const bz5L = [
+          new THREE.Vector3(hB-a, 0,      z), new THREE.Vector3(hB,   0,      z),
+          new THREE.Vector3(hB,   hRidge, z), new THREE.Vector3(hB-a, hBa,    z),
+        ];
+        addWallQ(bz5L, 'zone-5', Z5_OP);
+        wallLabel('zone-5', bz5L[0], bz5L[1], bz5L[2], bz5L[3], nB, tD);
+        const bz5R = [
+          new THREE.Vector3(-hB,   0,     z), new THREE.Vector3(-hB+a, 0,   z),
+          new THREE.Vector3(-hB+a, ha,    z), new THREE.Vector3(-hB,   hEave, z),
+        ];
+        addWallQ(bz5R, 'zone-5', Z5_OP);
+        wallLabel('zone-5', bz5R[0], bz5R[1], bz5R[2], bz5R[3], nB, tD);
+        if (2 * a < B - 0.1) {
+          const bz4 = [
+            new THREE.Vector3(-hB+a, 0,   z), new THREE.Vector3(hB-a, 0,   z),
+            new THREE.Vector3(hB-a,  hBa, z), new THREE.Vector3(-hB+a, ha, z),
+          ];
+          addWallQ(bz4, 'zone-4', Z4_OP);
+          wallLabel('zone-4', bz4[0], bz4[1], bz4[2], bz4[3], nB, tD);
+        }
+      } else if (roofShape === 'hip') {
+        /* Hip: rectangular up to hEave */
         const bz5L = [
           new THREE.Vector3(hB-a, 0,     z), new THREE.Vector3(hB,   0,     z),
           new THREE.Vector3(hB,   hEave, z), new THREE.Vector3(hB-a, hEave, z),
@@ -1106,27 +1155,28 @@ class Wind3DRenderer {
       const x  = hB + e;
       const a  = Math.min(zone_a, hL);
       const tD = new THREE.Vector3(0, 0, -1);
+      const hTop = roofShape === 'monoslope' ? hRidge : hEave;  // high wall on right for mono
 
-      // Zone 5 front strip (z=+hL side): z=hL-a … hL
+      // Zone 5 front strip (z=+hL side)
       const rz5F = [
-        new THREE.Vector3(x, 0, hL-a),  new THREE.Vector3(x, 0, hL),
-        new THREE.Vector3(x, hEave, hL), new THREE.Vector3(x, hEave, hL-a),
+        new THREE.Vector3(x, 0, hL-a),    new THREE.Vector3(x, 0, hL),
+        new THREE.Vector3(x, hTop, hL),    new THREE.Vector3(x, hTop, hL-a),
       ];
       addWallQ(rz5F, 'zone-5', Z5_OP);
       wallLabel('zone-5', rz5F[0], rz5F[1], rz5F[2], rz5F[3], nR, tD);
 
       // Zone 5 back strip: z=-hL … -hL+a
       const rz5B = [
-        new THREE.Vector3(x, 0, -hL),  new THREE.Vector3(x, 0, -hL+a),
-        new THREE.Vector3(x, hEave, -hL+a), new THREE.Vector3(x, hEave, -hL),
+        new THREE.Vector3(x, 0, -hL),      new THREE.Vector3(x, 0, -hL+a),
+        new THREE.Vector3(x, hTop, -hL+a),  new THREE.Vector3(x, hTop, -hL),
       ];
       addWallQ(rz5B, 'zone-5', Z5_OP);
       wallLabel('zone-5', rz5B[0], rz5B[1], rz5B[2], rz5B[3], nR, tD);
 
       if (2 * a < L - 0.1) {
         const rz4 = [
-          new THREE.Vector3(x, 0, -hL+a),  new THREE.Vector3(x, 0, hL-a),
-          new THREE.Vector3(x, hEave, hL-a), new THREE.Vector3(x, hEave, -hL+a),
+          new THREE.Vector3(x, 0, -hL+a),    new THREE.Vector3(x, 0, hL-a),
+          new THREE.Vector3(x, hTop, hL-a),   new THREE.Vector3(x, hTop, -hL+a),
         ];
         addWallQ(rz4, 'zone-4', Z4_OP);
         wallLabel('zone-4', rz4[0], rz4[1], rz4[2], rz4[3], nR, tD);
@@ -1325,7 +1375,7 @@ class Wind3DRenderer {
     return grp;
   }
 
-  _buildAllDims(B, L, hEave, hRidge, zone_a, hLabel = null, hEaveLabel = null, theta = 0, roofShape = 'hip') {
+  _buildAllDims(B, L, hEave, hRidge, zone_a, hLabel = null, hEaveLabel = null, theta = 0, roofShape = 'hip', wo = 0) {
     const hB = B/2, hL = L/2;
     const grp = new THREE.Group();
     const D   = Math.max(8, Math.max(B, L) * 0.10);
@@ -1432,31 +1482,32 @@ class Wind3DRenderer {
     if (roofShape !== 'hip' && roofShape !== 'monoslope') {
       const h_m    = hEaveLabel ?? (hEave / 1.8);
       const d06str = (+h_m * 0.6).toFixed(1);
-      const z3_06h = 0.6 * h_m;          // horizontal world-unit distance
+      const z3_06h = 0.6 * h_m;
+      const hBo    = hB + wo, hLo = hL + wo;  // outer edges include overhang
 
-      // Right facade: 0.6h in z direction at eave height — corner-box width from front gable
-      const z3RX = hB + 8;   // first dim: 8 ft from right face (at eave level)
+      // Right facade: 0.6h in z direction — from outer eave edge (hLo)
+      const z3RX = hBo + 8;
       grp.add(this._buildDim(
-        new THREE.Vector3(z3RX, hEave, hL - z3_06h),
-        new THREE.Vector3(z3RX, hEave, hL),
-        new THREE.Vector3(1, 0, 1).normalize(), // horizontal perpDir — matches L dim
+        new THREE.Vector3(z3RX, hEave, hLo - z3_06h),
+        new THREE.Vector3(z3RX, hEave, hLo),
+        new THREE.Vector3(1, 0, 1).normalize(),
         [
-          [new THREE.Vector3(hB, hEave, hL - z3_06h), new THREE.Vector3(z3RX, hEave, hL - z3_06h)],
-          [new THREE.Vector3(hB, hEave, hL),           new THREE.Vector3(z3RX, hEave, hL)],
+          [new THREE.Vector3(hBo, hEave, hLo - z3_06h), new THREE.Vector3(z3RX, hEave, hLo - z3_06h)],
+          [new THREE.Vector3(hBo, hEave, hLo),           new THREE.Vector3(z3RX, hEave, hLo)],
         ],
         `0.6h=${d06str}ft`, 'dim-z3-06h-r', null, new THREE.Vector3(1,0,0)
       ));
       this._dimHighlight['dim-z3-06h-r'] = grp.children[grp.children.length - 1];
 
-      // Front facade: 0.6h in x direction at eave height — eave-arm depth from eave
-      const z3FZ = hL + 8;   // first dim: 8 ft from front face (at eave level)
+      // Front facade: 0.6h in x direction — from outer eave edge (hBo)
+      const z3FZ = hLo + 8;
       grp.add(this._buildDim(
-        new THREE.Vector3(hB - z3_06h, hEave, z3FZ),
-        new THREE.Vector3(hB,           hEave, z3FZ),
-        new THREE.Vector3(1, 0, -1).normalize(), // horizontal perpDir — matches B dim
+        new THREE.Vector3(hBo - z3_06h, hEave, z3FZ),
+        new THREE.Vector3(hBo,           hEave, z3FZ),
+        new THREE.Vector3(1, 0, -1).normalize(),
         [
-          [new THREE.Vector3(hB - z3_06h, hEave, hL), new THREE.Vector3(hB - z3_06h, hEave, z3FZ)],
-          [new THREE.Vector3(hB,           hEave, hL), new THREE.Vector3(hB,           hEave, z3FZ)],
+          [new THREE.Vector3(hBo - z3_06h, hEave, hLo), new THREE.Vector3(hBo - z3_06h, hEave, z3FZ)],
+          [new THREE.Vector3(hBo,           hEave, hLo), new THREE.Vector3(hBo,           hEave, z3FZ)],
         ],
         `0.6h=${d06str}ft`, 'dim-z3-06h-f', null, new THREE.Vector3(0,0,1)
       ));
@@ -1905,7 +1956,7 @@ class Wind3DRenderer {
     }
 
     // dim lines (pass hRidge_ft so label shows real engineering value, not scaled)
-    this._dimGroup = this._buildAllDims(B, L, hEave, hRidge, zone_a, hRidge_ft, hEave_ft, theta, _shape);
+    this._dimGroup = this._buildAllDims(B, L, hEave, hRidge, zone_a, hRidge_ft, hEave_ft, theta, _shape, _wo);
 
     // zones — shape-specific surface mapping
     const matZ = (col, op) => new THREE.MeshBasicMaterial({
