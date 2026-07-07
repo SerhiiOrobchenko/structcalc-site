@@ -1484,22 +1484,27 @@ class Wind3DRenderer {
       const d06str = (+h_m * 0.6).toFixed(1);
       const z3_06h = 0.6 * h_m;
       const hBo    = hB + wo, hLo = hL + wo;  // outer edges include overhang
+      const slope3 = hB > 0 ? (hRidge - hEave) / hB : 0;  // roof pitch rise/run
 
       // Right facade: 0.6h in z direction — from outer eave edge (hLo)
-      const z3RX = hBo + 8;
+      // Second ext line follows slope plane (outward from eave, going downward)
+      const z3RX  = hBo + 8;
+      const p2yR  = hEave - (z3RX - hBo) * slope3;
+      const sDirR = new THREE.Vector3(1, -slope3, 0).normalize();
       grp.add(this._buildDim(
         new THREE.Vector3(z3RX, hEave, hLo - z3_06h),
-        new THREE.Vector3(z3RX, hEave, hLo),
-        new THREE.Vector3(1, 0, 1).normalize(),
+        new THREE.Vector3(z3RX, p2yR,  hLo),
+        sDirR,
         [
           [new THREE.Vector3(hBo, hEave, hLo - z3_06h), new THREE.Vector3(z3RX, hEave, hLo - z3_06h)],
-          [new THREE.Vector3(hBo, hEave, hLo),           new THREE.Vector3(z3RX, hEave, hLo)],
+          [new THREE.Vector3(hBo, hEave, hLo),           new THREE.Vector3(z3RX, p2yR,  hLo)],
         ],
         `0.6h=${d06str}ft`, 'dim-z3-06h-r', null, new THREE.Vector3(1,0,0)
       ));
       this._dimHighlight['dim-z3-06h-r'] = grp.children[grp.children.length - 1];
 
       // Front facade: 0.6h in x direction — from outer eave edge (hBo)
+      // Second ext line goes along Z (eave direction — lies in slope plane)
       const z3FZ = hLo + 8;
       grp.add(this._buildDim(
         new THREE.Vector3(hBo - z3_06h, hEave, z3FZ),
