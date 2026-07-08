@@ -870,15 +870,15 @@ class Wind3DRenderer {
   /* ── Stepped Roof (ASCE 7-22 Fig. 30.3-3) ─────────────────────────────────
      2-level: W3=0 → sections [W1(hz1), W2(hTop)] left→right
      3-level: W3>0 → sections [W1(hz1), W2(hz2), W3(hTop)] left→right      */
-  _buildStructureStepped(W1, W2, W3, L, hz1, hz2, hTop) {
+  _buildStructureStepped(W1, W2, W3, L, h1, hs1, h3) {
     const H_SCALE = 1.8;
     const EDGE_R  = 0.11;
     const is3 = W3 > 0;
 
-    // sections from low (left) to high (right)
+    // W1 (left) = tallest (h1), W2 = lower (hs1), W3 (right, optional) = h3
     const secs = is3
-      ? [{ w: W1, h: hz1 }, { w: W2, h: hz2 }, { w: W3, h: hTop }]
-      : [{ w: W1, h: hz1 }, { w: W2, h: hTop }];
+      ? [{ w: W1, h: h1 }, { w: W2, h: hs1 }, { w: W3, h: h3 }]
+      : [{ w: W1, h: h1 }, { w: W2, h: hs1 }];
 
     // total plan width & half-length
     const Wt = secs.reduce((acc, s) => acc + s.w, 0);
@@ -1467,6 +1467,22 @@ class Wind3DRenderer {
     // Helper: remove trailing .0 from toFixed(1)
     const fmt = v => { const s = v.toFixed(1); return s.endsWith('.0') ? s.slice(0,-2) : s; };
 
+    // ── Stepped: only L dim here; W/h chain drawn by _buildSteppedDims ──
+    if (roofShape === 'stepped') {
+      const lX = hB + 16;
+      grp.add(this._buildDim(
+        new THREE.Vector3(lX, EPS_Y, -hL),
+        new THREE.Vector3(lX, EPS_Y,  hL),
+        new THREE.Vector3(1, 0, 1).normalize(),
+        [
+          [new THREE.Vector3(hB, EPS_Y, -hL), new THREE.Vector3(lX, EPS_Y, -hL)],
+          [new THREE.Vector3(hB, EPS_Y,  hL), new THREE.Vector3(lX, EPS_Y,  hL)],
+        ],
+        `L=${fmt(L)}ft`, 'dim-L', 'wind-L', new THREE.Vector3(1,0,0)
+      ));
+      this._dimHighlight['dim-L'] = grp.children[grp.children.length - 1];
+      return grp;
+    }
 
     // ── B (Width) — Front face (z = +hL) ──────────────────────────────────
     const bZ = hL + 16;   // second dim: 16 ft from front face
@@ -1760,6 +1776,127 @@ class Wind3DRenderer {
 
     /* ── zone overlays ──────────────────────────────────────────────────────── */
 
+  /** Width chain W1/W2/W3/W + height chain hs1/hs2/h + a= dims for stepped roof. */
+  _buildSteppedDims(so, L, zone_a, grp) {
+    const HS  = 1.8;
+    const W1  = so.W1  || 20, W2 = so.W2 || 20, W3 = so.W3 || 0;
+    const h1  = so.h1  || 24, hs1 = so.hs1 || 12;
+    const h3  = so.h3  || h1;
+    const is3 = W3 > 0;
+    const Wt  = W1 + W2 + (is3 ? W3 : 0);
+    const hL  = L / 2;
+    const EY  = 0.2;
+    const fmt = v => { const s = v.toFixed(1); return s.endsWith('.0') ? s.slice(0,-2) : s; };
+
+    // x-boundaries: W1 (tall, left), W2 (lower, middle), W3 (optional, right)
+    const x0 = -Wt / 2;
+    const x1 = x0 + W1;
+    const x2 = x1 + W2;
+    const xR = Wt / 2;
+
+    const h1W  = h1  * HS;
+    const hs1W = hs1 * HS;
+    const hs2  = h1 - hs1;
+
+    const tickW = new THREE.Vector3(1, 0, -1).normalize();
+    const tickH = new THREE.Vector3(1, 1, 0).normalize();
+
+    /* ── Width chain at z = hL+8 ── */
+    const bZ  = hL + 8;
+    const bZW = hL + (is3 ? 24 : 16);
+
+    grp.add(this._buildDim(
+      new THREE.Vector3(x0, EY, bZ), new THREE.Vector3(x1, EY, bZ), tickW,
+      [[new THREE.Vector3(x0, EY, hL), new THREE.Vector3(x0, EY, bZ)],
+       [new THREE.Vector3(x1, EY, hL), new THREE.Vector3(x1, EY, bZ)]],
+      `W<sub>1</sub>=${fmt(W1)}ft`, 'dim-W1', 'wind-steppedW1',
+      new THREE.Vector3(0,0,1), false, 'auto', 'tick'
+    ));
+    this._dimHighlight['dim-W1'] = grp.children[grp.children.length - 1];
+
+    grp.add(this._buildDim(
+      new THREE.Vector3(x1, EY, bZ), new THREE.Vector3(x2, EY, bZ), tickW,
+      [[new THREE.Vector3(x1, EY, hL), new THREE.Vector3(x1, EY, bZ)],
+       [new THREE.Vector3(x2, EY, hL), new THREE.Vector3(x2, EY, bZ)]],
+      `W<sub>2</sub>=${fmt(W2)}ft`, 'dim-W2', 'wind-steppedW2',
+      new THREE.Vector3(0,0,1), false, 'tick', is3 ? 'tick' : 'auto'
+    ));
+    this._dimHighlight['dim-W2'] = grp.children[grp.children.length - 1];
+
+    if (is3) {
+      grp.add(this._buildDim(
+        new THREE.Vector3(x2, EY, bZ), new THREE.Vector3(xR, EY, bZ), tickW,
+        [[new THREE.Vector3(x2, EY, hL), new THREE.Vector3(x2, EY, bZ)],
+         [new THREE.Vector3(xR, EY, hL), new THREE.Vector3(xR, EY, bZ)]],
+        `W<sub>3</sub>=${fmt(W3)}ft`, 'dim-W3', 'wind-steppedW3',
+        new THREE.Vector3(0,0,1), false, 'tick', 'auto'
+      ));
+      this._dimHighlight['dim-W3'] = grp.children[grp.children.length - 1];
+    }
+
+    grp.add(this._buildDim(
+      new THREE.Vector3(x0, EY, bZW), new THREE.Vector3(xR, EY, bZW), tickW,
+      [[new THREE.Vector3(x0, EY, bZ), new THREE.Vector3(x0, EY, bZW)],
+       [new THREE.Vector3(xR, EY, bZ), new THREE.Vector3(xR, EY, bZW)]],
+      `W=${fmt(Wt)}ft`, 'dim-W', null, new THREE.Vector3(0,0,1)
+    ));
+    this._dimHighlight['dim-W'] = grp.children[grp.children.length - 1];
+
+    /* ── Height chain right of W2 (x2 + 8) ── */
+    const hX1 = x2 + 8;
+    const hX2 = x2 + 18;
+
+    grp.add(this._buildDim(
+      new THREE.Vector3(hX1, EY,   0), new THREE.Vector3(hX1, hs1W, 0), tickH,
+      [[new THREE.Vector3(x2, EY,   0), new THREE.Vector3(hX1, EY,   0)],
+       [new THREE.Vector3(x2, hs1W, 0), new THREE.Vector3(hX1, hs1W, 0)]],
+      `h<sub>s1</sub>=${fmt(hs1)}ft`, 'dim-hs1', 'wind-steppedHz1',
+      new THREE.Vector3(1,0,0), false, 'auto', 'tick'
+    ));
+    this._dimHighlight['dim-hs1'] = grp.children[grp.children.length - 1];
+
+    grp.add(this._buildDim(
+      new THREE.Vector3(hX1, hs1W, 0), new THREE.Vector3(hX1, h1W, 0), tickH,
+      [[new THREE.Vector3(x1, hs1W, 0), new THREE.Vector3(hX1, hs1W, 0)],
+       [new THREE.Vector3(x1, h1W,  0), new THREE.Vector3(hX1, h1W,  0)]],
+      `h<sub>s2</sub>=${fmt(hs2)}ft`, 'dim-hs2', null,
+      new THREE.Vector3(1,0,0), false, 'tick', 'auto'
+    ));
+    this._dimHighlight['dim-hs2'] = grp.children[grp.children.length - 1];
+
+    grp.add(this._buildDim(
+      new THREE.Vector3(hX2, EY,  0), new THREE.Vector3(hX2, h1W, 0), tickH,
+      [[new THREE.Vector3(hX1, EY,  0), new THREE.Vector3(hX2, EY,  0)],
+       [new THREE.Vector3(hX1, h1W, 0), new THREE.Vector3(hX2, h1W, 0)]],
+      `h=${fmt(h1)}ft`, 'dim-h', 'wind-h', new THREE.Vector3(1,0,0)
+    ));
+    this._dimHighlight['dim-h'] = grp.children[grp.children.length - 1];
+
+    /* ── a= dims at Zone 5 boundaries ── */
+    const zaX = Math.min(zone_a, Wt / 2);
+    const zaZ = Math.min(zone_a, hL);
+    const EY2 = EY;
+
+    const aFZ = hL + 4;
+    grp.add(this._buildDim(
+      new THREE.Vector3(xR - zaX, EY2, aFZ), new THREE.Vector3(xR, EY2, aFZ), tickW,
+      [[new THREE.Vector3(xR - zaX, EY2, hL), new THREE.Vector3(xR - zaX, EY2, aFZ)],
+       [new THREE.Vector3(xR,       EY2, hL), new THREE.Vector3(xR,       EY2, aFZ)]],
+      `a=${fmt(zone_a)}ft`, 'dim-a2', null, new THREE.Vector3(0,0,1)
+    ));
+    this._dimHighlight['dim-a2'] = grp.children[grp.children.length - 1];
+
+    const aRX = xR + 4;
+    grp.add(this._buildDim(
+      new THREE.Vector3(aRX, EY2, hL - zaZ), new THREE.Vector3(aRX, EY2, hL),
+      new THREE.Vector3(1, 0, 1).normalize(),
+      [[new THREE.Vector3(xR, EY2, hL - zaZ), new THREE.Vector3(aRX, EY2, hL - zaZ)],
+       [new THREE.Vector3(xR, EY2, hL),       new THREE.Vector3(aRX, EY2, hL)]],
+      `a=${fmt(zone_a)}ft`, 'dim-a', null, new THREE.Vector3(1,0,0)
+    ));
+    this._dimHighlight['dim-a'] = grp.children[grp.children.length - 1];
+  }
+
   _zoneQuad(u0, u1, v0, v1, ptFn, hB, hEave, hRidge, hL, norm, eps, mat, zoneType) {
     const off = norm.clone().multiplyScalar(eps);
     const geo = this._quad(
@@ -2039,7 +2176,7 @@ class Wind3DRenderer {
       const so = steppedOpts;
       this._building = this._buildStructureStepped(
         so.W1 || 20, so.W2 || 20, so.W3 || 0, L,
-        so.hz1 || 12, so.hz2 || 20, so.hTop || h
+        so.h1 || h, so.hs1 || 12, so.h3 || (so.h1 || h)
       );
     } else {
       /* gable or flat (flat = gable with theta=0, already handled by caller) */
@@ -2047,7 +2184,13 @@ class Wind3DRenderer {
     }
 
     // dim lines (pass hRidge_ft so label shows real engineering value, not scaled)
-    this._dimGroup = this._buildAllDims(B, L, hEave, hRidge, zone_a, hRidge_ft, hEave_ft, theta, _shape, _wo);
+    const _dimB = (_shape === 'stepped' && steppedOpts)
+      ? ((steppedOpts.W1||20) + (steppedOpts.W2||20) + (steppedOpts.W3||0))
+      : B;
+    this._dimGroup = this._buildAllDims(_dimB, L, hEave, hRidge, zone_a, hRidge_ft, hEave_ft, theta, _shape, _wo);
+    if (_shape === 'stepped' && steppedOpts) {
+      this._buildSteppedDims(steppedOpts, L, zone_a, this._dimGroup);
+    }
 
     // zones — shape-specific surface mapping
     const matZ = (col, op) => new THREE.MeshBasicMaterial({
@@ -2131,8 +2274,8 @@ class Wind3DRenderer {
       const _so  = steppedOpts;
       const _is3 = (_so.W3 || 0) > 0;
       const _secs = _is3
-        ? [{ w: _so.W1||20, h: _so.hz1||12 }, { w: _so.W2||20, h: _so.hz2||20 }, { w: _so.W3||0, h: _so.hTop||h }]
-        : [{ w: _so.W1||20, h: _so.hz1||12 }, { w: _so.W2||20, h: _so.hTop||h }];
+        ? [{ w: _so.W1||20, h: _so.h1||h }, { w: _so.W2||20, h: _so.hs1||12 }, { w: _so.W3||0, h: _so.h3||(_so.h1||h) }]
+        : [{ w: _so.W1||20, h: _so.h1||h }, { w: _so.W2||20, h: _so.hs1||12 }];
       const _Wt = _secs.reduce((acc, s) => acc + s.w, 0);
       const _xL = []; let _xC = -_Wt / 2;
       for (const _s of _secs) { _xL.push(_xC); _xC += _s.w; }
@@ -2167,40 +2310,62 @@ class Wind3DRenderer {
       };
 
       /* ── ROOF ZONES per section ─────────────────────────────────────────── */
-      const _zaZ = Math.min(zone_a, hL * 0.9);   // zone strip half-depth along Z
-      const _lbl = { z1: false, z2: false };      // label once per zone type
+      const _lbl = { z1: false, z2: false, z3: false };  // label once per zone type
 
       for (let i = 0; i < _secs.length; i++) {
         const _x0 = _xL[i], _x1 = _xL[i+1], _w = _x1 - _x0;
-        const _yR = _secs[i].h * _HS + 0.05;          // roof surface + tiny clearance
-        const _zaX = Math.min(zone_a, _w * 0.45);     // zone strip width along X
+        const _yR = _secs[i].h * _HS + 0.05;  // roof surface + tiny clearance
 
-        const _xa = _x0 + _zaX, _xb = _x1 - _zaX;    // inner X edges
-        const _zF = -hL + _zaZ, _zB = hL - _zaZ;      // inner Z edges
+        /* Zone 3 L-shape dimensions: 0.2h and 0.6h arms (ASCE 7-22 Fig 30.3-1) */
+        const _hm  = _secs[i].h;  // section height ft (flat roof)
+        const _dX3 = Math.min(0.2 * _hm, 0.45 * _w);
+        const _dX2 = Math.min(0.6 * _hm, 0.45 * _w);
+        const _dZ3 = Math.min(0.2 * _hm, 0.45 * 2 * hL);
+        const _dZ2 = Math.min(0.6 * _hm, 0.45 * 2 * hL);
 
-        /* Zone 1 — interior field */
-        if (_xa < _xb && _zF < _zB) {
-          const lbl1 = !_lbl.z1; _lbl.z1 = true;
-          _addRoof(_xa, _xb, _zF, _zB, _yR, THEME.zone1, 0.22, 'zone-1', lbl1);
+        /* Zone 1 — interior */
+        const _xi0 = _x0 + _dX2, _xi1 = _x1 - _dX2;
+        const _zi0 = -hL + _dZ2, _zi1 =  hL - _dZ2;
+        if (_xi0 < _xi1 && _zi0 < _zi1) {
+          const _lbl1 = !_lbl.z1; _lbl.z1 = true;
+          _addRoof(_xi0, _xi1, _zi0, _zi1, _yR, THEME.zone1, 0.22, 'zone-1', _lbl1);
         }
 
-        /* Zone 2 — perimeter strips (corners subtracted) */
-        const lbl2 = !_lbl.z2;
-        if (_zF < _zB) {
-          _addRoof(_x0, _xa, _zF, _zB, _yR, THEME.zone2, 0.35, 'zone-2', lbl2);  // left strip
-          _addRoof(_xb, _x1, _zF, _zB, _yR, THEME.zone2, 0.35, 'zone-2', false); // right strip
-          _lbl.z2 = true;
+        /* Zone 2 — perimeter (exact quads, no overlap with Zone 3) */
+        let _lbl2 = !_lbl.z2;
+        if (_xi0 < _xi1) {
+          _addRoof(_xi0, _xi1, -hL, -hL+_dZ2, _yR, THEME.zone2, 0.35, 'zone-2', _lbl2);
+          if (_lbl2) { _lbl.z2 = true; _lbl2 = false; }
+          _addRoof(_xi0, _xi1,  hL-_dZ2, hL,  _yR, THEME.zone2, 0.35, 'zone-2', false);
         }
-        if (_xa < _xb) {
-          _addRoof(_xa, _xb, -hL, _zF, _yR, THEME.zone2, 0.35, 'zone-2', false); // front strip
-          _addRoof(_xa, _xb,  _zB, hL, _yR, THEME.zone2, 0.35, 'zone-2', false); // back strip
+        if (_zi0 < _zi1) {
+          _addRoof(_x0, _x0+_dX2, _zi0, _zi1, _yR, THEME.zone2, 0.35, 'zone-2', _lbl2);
+          if (_lbl2) { _lbl.z2 = true; _lbl2 = false; }
+          _addRoof(_x1-_dX2, _x1, _zi0, _zi1, _yR, THEME.zone2, 0.35, 'zone-2', false);
+        }
+        if (_dX3 < _dX2 && _dZ3 < _dZ2) {  // elbows between Z-arm and X-arm
+          _addRoof(_x0+_dX3, _x0+_dX2, -hL+_dZ3, -hL+_dZ2, _yR, THEME.zone2, 0.35, 'zone-2', _lbl2);
+          if (_lbl2) { _lbl.z2 = true; _lbl2 = false; }
+          _addRoof(_x1-_dX2, _x1-_dX3, -hL+_dZ3, -hL+_dZ2, _yR, THEME.zone2, 0.35, 'zone-2', false);
+          _addRoof(_x0+_dX3, _x0+_dX2,  hL-_dZ2,  hL-_dZ3, _yR, THEME.zone2, 0.35, 'zone-2', false);
+          _addRoof(_x1-_dX2, _x1-_dX3,  hL-_dZ2,  hL-_dZ3, _yR, THEME.zone2, 0.35, 'zone-2', false);
         }
 
-        /* Zone 3 — corners (4 per section) */
-        _addRoof(_x0, _xa, -hL, _zF, _yR, THEME.zone3, 0.65, 'zone-3', false); // front-left
-        _addRoof(_xb, _x1, -hL, _zF, _yR, THEME.zone3, 0.65, 'zone-3', false); // front-right
-        _addRoof(_x0, _xa,  _zB, hL, _yR, THEME.zone3, 0.65, 'zone-3', false); // back-left
-        _addRoof(_xb, _x1,  _zB, hL, _yR, THEME.zone3, 0.65, 'zone-3', false); // back-right
+        /* Zone 3 — L-shapes at 4 corners (Z-arm + X-arm each) */
+        let _lbl3 = !_lbl.z3; _lbl.z3 = true;
+        // Front-left
+        _addRoof(_x0,      _x0+_dX3, -hL, -hL+_dZ2, _yR, THEME.zone3, 0.65, 'zone-3', _lbl3);
+        _lbl3 = false;
+        _addRoof(_x0+_dX3, _x0+_dX2, -hL, -hL+_dZ3, _yR, THEME.zone3, 0.65, 'zone-3', false);
+        // Front-right
+        _addRoof(_x1-_dX3, _x1,      -hL, -hL+_dZ2, _yR, THEME.zone3, 0.65, 'zone-3', false);
+        _addRoof(_x1-_dX2, _x1-_dX3, -hL, -hL+_dZ3, _yR, THEME.zone3, 0.65, 'zone-3', false);
+        // Back-left
+        _addRoof(_x0,      _x0+_dX3, hL-_dZ2, hL, _yR, THEME.zone3, 0.65, 'zone-3', false);
+        _addRoof(_x0+_dX3, _x0+_dX2, hL-_dZ3, hL, _yR, THEME.zone3, 0.65, 'zone-3', false);
+        // Back-right
+        _addRoof(_x1-_dX3, _x1,      hL-_dZ2, hL, _yR, THEME.zone3, 0.65, 'zone-3', false);
+        _addRoof(_x1-_dX2, _x1-_dX3, hL-_dZ3, hL, _yR, THEME.zone3, 0.65, 'zone-3', false);
       }
 
       /* ── WALL ZONES (outer perimeter only, 4-corner Zone 5 logic) ─────── */
@@ -2251,12 +2416,23 @@ class Wind3DRenderer {
         }
       }
 
-      /* Step faces (normal +X, at section junctions) — always Zone 4 */
+      /* Step faces (normal +X, at section junctions) */
       for (let i = 0; i < _secs.length - 1; i++) {
         const _xS  = _xL[i+1] + _EPS;
         const _hLo = _secs[i].h * _HS, _hHi = _secs[i+1].h * _HS;
         _addWall([new THREE.Vector3(_xS,_hLo, hL), new THREE.Vector3(_xS,_hLo,-hL),
                   new THREE.Vector3(_xS,_hHi,-hL), new THREE.Vector3(_xS,_hHi, hL)], 'zone-4', _Z4OP);
+      }
+
+      /* ── Zone card labels for wall zones 4 and 5 ───────────────────── */
+      { const _nWL = new THREE.Vector3(-1, 0, 0);
+        this._makeZoneLabelFlat('zone-5',
+          new THREE.Vector3(-_Wt/2 - _EPS - 0.3, _secs[0].h * _HS * 0.35, -hL + _zaWL * 0.5),
+          _nWL, _nWL);
+        if (2*_zaWL < 2*hL - 0.1)
+          this._makeZoneLabelFlat('zone-4',
+            new THREE.Vector3(-_Wt/2 - _EPS - 0.3, _secs[0].h * _HS * 0.35, 0),
+            _nWL, _nWL);
       }
 
     } else {
@@ -2288,8 +2464,11 @@ class Wind3DRenderer {
     this._scene.add(this._labelGroup);
 
     // reframe camera
-    const span = Math.max(B, L, h);
-    this._controls.target.set(0, hEave * 0.6, 0);
+    const _camW = (_shape === 'stepped' && steppedOpts)
+      ? ((steppedOpts.W1||20) + (steppedOpts.W2||20) + (steppedOpts.W3||0)) : B;
+    const _camH = (_shape === 'stepped' && steppedOpts) ? (steppedOpts.h1||h) : hEave;
+    const span  = Math.max(_camW, L, h);
+    this._controls.target.set(0, _camH * 0.6, 0);
     this._camera.position.set(span*1.5, span*0.9, span*1.7);
     this._controls.update();
   }

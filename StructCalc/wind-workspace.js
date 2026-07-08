@@ -298,9 +298,9 @@ function recalcWind() {
       W1:  +(s.steppedW1)  || 20,
       W2:  +(s.steppedW2)  || 20,
       W3:  +(s.steppedW3)  || 0,
-      hz1: +(s.steppedHz1) || 12,
-      hz2: +(s.steppedHz2) || 20,
-      hTop: hR
+      h1:  hR,
+      hs1: +(s.steppedHz1) || 12,
+      h3:  +(s.steppedHz2) || hR,
     };
   }
   if (windRenderer) windRenderer.update3DModel(B, L, hR, th, za, rendererShape, {has: s.hasOverhang, wo: s.wo}, steppedOpts);
