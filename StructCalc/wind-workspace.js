@@ -57,8 +57,11 @@ var WIND_INPUT_MAP = {
   'wind-L':               'buildingL',
   'wind-theta':           'theta',
   'wind-roofShape':       'roofShape',
-  'wind-steppedLowerH':   'steppedLowerH',
-  'wind-steppedLowerW':   'steppedLowerW',
+  'wind-steppedW1':       'steppedW1',
+  'wind-steppedHz1':      'steppedHz1',
+  'wind-steppedW2':       'steppedW2',
+  'wind-steppedW3':       'steppedW3',
+  'wind-steppedHz2':      'steppedHz2',
   'wind-msModuleW':       'msModuleW',
   'wind-swModuleW':       'swModuleW',
   'wind-domeD':           'domeD',
@@ -236,6 +239,10 @@ function recalcWind() {
   s.hEave = hE;
   s.h     = hMean;
 
+  /* Map new stepped inputs to engine's expected property names */
+  s.steppedLowerH = +(s.steppedHz1) || 12;
+  s.steppedLowerW = +(s.steppedW1)  || 20;
+
   var r = null;
   try { r = window.compute(s); } catch(e) { console.warn('Wind compute error', e); }
   window._windLastR = r; window._windLastS = s;
@@ -283,9 +290,20 @@ function recalcWind() {
     if (el) el.classList.toggle('hidden', s.roofShape !== t);
   });
   var rendererShape = s.roofShape;
-  if (s.roofShape === 'stepped' || s.roofShape === 'sawtooth' || s.roofShape === 'dome') rendererShape = 'flat';
+  if (s.roofShape === 'sawtooth' || s.roofShape === 'dome') rendererShape = 'flat';
   if (s.roofShape === 'multispan') rendererShape = 'gable';
-  if (windRenderer) windRenderer.update3DModel(B, L, hR, th, za, rendererShape, {has: s.hasOverhang, wo: s.wo});
+  var steppedOpts = null;
+  if (s.roofShape === 'stepped') {
+    steppedOpts = {
+      W1:  +(s.steppedW1)  || 20,
+      W2:  +(s.steppedW2)  || 20,
+      W3:  +(s.steppedW3)  || 0,
+      hz1: +(s.steppedHz1) || 12,
+      hz2: +(s.steppedHz2) || 20,
+      hTop: hR
+    };
+  }
+  if (windRenderer) windRenderer.update3DModel(B, L, hR, th, za, rendererShape, {has: s.hasOverhang, wo: s.wo}, steppedOpts);
 
   var vDisp = document.getElementById('wind-V-display');
   if (vDisp) vDisp.textContent = s.V || '—';
@@ -2283,6 +2301,18 @@ function wireWindInputs() {
   /* Exposure → re-check tornado */
   var expEl = document.getElementById('wind-exposure');
   if (expEl) expEl.addEventListener('change', function(){ updateTornadoAlert(); recalcWind(); });
+
+  /* Stepped roof W3 → show/hide hz2 row */
+  (function() {
+    var w3El  = document.getElementById('wind-steppedW3');
+    var hz2Row = document.getElementById('ws-stepped-hz2-row');
+    function syncHz2() {
+      if (!hz2Row || !w3El) return;
+      hz2Row.style.display = (+w3El.value > 0) ? '' : 'none';
+    }
+    if (w3El) w3El.addEventListener('input', function(){ syncHz2(); recalcWind(); });
+    syncHz2();
+  }());
 
   /* Roof pitch unit toggle */
   wirePitchToggle();

@@ -867,6 +867,89 @@ class Wind3DRenderer {
     return grp;
   }
 
+  /* ── Stepped Roof (ASCE 7-22 Fig. 30.3-3) ─────────────────────────────────
+     2-level: W3=0 → sections [W1(hz1), W2(hTop)] left→right
+     3-level: W3>0 → sections [W1(hz1), W2(hz2), W3(hTop)] left→right      */
+  _buildStructureStepped(W1, W2, W3, L, hz1, hz2, hTop) {
+    const H_SCALE = 1.8;
+    const EDGE_R  = 0.11;
+    const is3 = W3 > 0;
+
+    // sections from low (left) to high (right)
+    const secs = is3
+      ? [{ w: W1, h: hz1 }, { w: W2, h: hz2 }, { w: W3, h: hTop }]
+      : [{ w: W1, h: hz1 }, { w: W2, h: hTop }];
+
+    // total plan width & half-length
+    const Wt = secs.reduce((acc, s) => acc + s.w, 0);
+    const hL = L / 2;
+
+    // world-unit x-boundaries (left edge of each section)
+    const xL = [];
+    let xCur = -Wt / 2;
+    for (const sec of secs) { xL.push(xCur); xCur += sec.w; }
+    xL.push(Wt / 2);  // right outer edge
+
+    const grp = new THREE.Group();
+    const solidMat = (col) => new THREE.MeshStandardMaterial({
+      color: col, side: THREE.DoubleSide, roughness: 0.55, metalness: 0.0
+    });
+    const wallMat = solidMat(THEME.wallFill);
+    const roofMat = solidMat(THEME.roofFill);
+
+    // Helper: world-space Vector3 with H_SCALE on Y
+    const V = (x, yFt, z) => new THREE.Vector3(x, yFt * H_SCALE, z);
+
+    for (let i = 0; i < secs.length; i++) {
+      const x0 = xL[i], x1 = xL[i + 1];
+      const hS = secs[i].h;   // section height, ft
+
+      // Front wall (+Z face)
+      const fw = this._quad(V(x0,0,hL), V(x1,0,hL), V(x1,hS,hL), V(x0,hS,hL));
+      grp.add(new THREE.Mesh(fw, wallMat));
+      this._tubeEdges(new THREE.EdgesGeometry(fw), THEME.wallEdge, EDGE_R, grp);
+
+      // Back wall (−Z face)
+      const bw = this._quad(V(x1,0,-hL), V(x0,0,-hL), V(x0,hS,-hL), V(x1,hS,-hL));
+      grp.add(new THREE.Mesh(bw, wallMat));
+      this._tubeEdges(new THREE.EdgesGeometry(bw), THEME.wallEdge, EDGE_R, grp);
+
+      // Flat roof
+      const rf = this._quad(V(x0,hS,-hL), V(x1,hS,-hL), V(x1,hS,hL), V(x0,hS,hL));
+      grp.add(new THREE.Mesh(rf, roofMat));
+      this._tubeEdges(new THREE.EdgesGeometry(rf), THEME.roofEdge, EDGE_R, grp);
+
+      // Left outer wall (leftmost section only)
+      if (i === 0) {
+        const lw = this._quad(V(x0,0,-hL), V(x0,0,hL), V(x0,hS,hL), V(x0,hS,-hL));
+        grp.add(new THREE.Mesh(lw, wallMat));
+        this._tubeEdges(new THREE.EdgesGeometry(lw), THEME.wallEdge, EDGE_R, grp);
+      }
+
+      // Right outer wall (rightmost section only)
+      if (i === secs.length - 1) {
+        const rw = this._quad(V(x1,0,hL), V(x1,0,-hL), V(x1,hS,-hL), V(x1,hS,hL));
+        grp.add(new THREE.Mesh(rw, wallMat));
+        this._tubeEdges(new THREE.EdgesGeometry(rw), THEME.wallEdge, EDGE_R, grp);
+      }
+
+      // Step wall at right junction (vertical face between this section roof & next section wall)
+      if (i < secs.length - 1) {
+        const hN = secs[i + 1].h;
+        const sw = this._quad(V(x1,hS,hL), V(x1,hS,-hL), V(x1,hN,-hL), V(x1,hN,hL));
+        grp.add(new THREE.Mesh(sw, wallMat));
+        this._tubeEdges(new THREE.EdgesGeometry(sw), THEME.wallEdge, EDGE_R, grp);
+      }
+    }
+
+    // Bottom perimeter edges (ground line)
+    const flr = this._quad(V(-Wt/2,0,-hL), V(Wt/2,0,-hL), V(Wt/2,0,hL), V(-Wt/2,0,hL));
+    this._tubeEdges(new THREE.EdgesGeometry(flr), THEME.wallEdge, EDGE_R, grp);
+
+    return grp;
+  }
+
+
   /* ── dimension system ───────────────────────────────────────────────────── */
 
   /* ── wall zone 4/5 overlay ─────────────────────────────────────────────────
@@ -1917,7 +2000,7 @@ class Wind3DRenderer {
    * @param {number} theta   Roof pitch, degrees
    * @param {number} zone_a  ASCE 7-22 §26.2 edge dimension, ft
    */
-  update3DModel(B, L, h, theta, zone_a, roofShape, overhangOpts) {
+  update3DModel(B, L, h, theta, zone_a, roofShape, overhangOpts, steppedOpts) {
     B = +B||48; L = +L||96; h = +h||66; theta = +theta||15; zone_a = +zone_a||4;
     const _wo = (overhangOpts && overhangOpts.has) ? (+overhangOpts.wo || 2) : 0;
 
@@ -1952,6 +2035,12 @@ class Wind3DRenderer {
       this._building = this._buildStructureHip(B, L, hEave, hRidge, _wo);
     } else if (_shape === 'monoslope') {
       this._building = this._buildStructureMonoslope(B, L, hEave, hRidge, _wo);
+    } else if (_shape === 'stepped' && steppedOpts) {
+      const so = steppedOpts;
+      this._building = this._buildStructureStepped(
+        so.W1 || 20, so.W2 || 20, so.W3 || 0, L,
+        so.hz1 || 12, so.hz2 || 20, so.hTop || h
+      );
     } else {
       /* gable or flat (flat = gable with theta=0, already handled by caller) */
       this._building = this._buildStructure(B, L, hEave, hRidge, _wo);

@@ -438,12 +438,28 @@
                 <div id="ws-extra-stepped" class="hidden">
                   <div class="field-row">
                     <div class="field">
-                      <label>Lower roof height, h<sub>L</sub> <span class="unit">(ft)</span></label>
-                      <input class="num" id="wind-steppedLowerH" value="12" min="0" step="any">
+                      <label>W<sub>1</sub> &ndash; lower width <span class="unit">(ft)</span></label>
+                      <input class="num" id="wind-steppedW1" value="20" min="0" step="any">
                     </div>
                     <div class="field">
-                      <label>Lower roof width, W<sub>L</sub> <span class="unit">(ft)</span></label>
-                      <input class="num" id="wind-steppedLowerW" value="20" min="0" step="any">
+                      <label>h<sub>z1</sub> &ndash; lower height <span class="unit">(ft)</span></label>
+                      <input class="num" id="wind-steppedHz1" value="12" min="0" step="any">
+                    </div>
+                  </div>
+                  <div class="field-row">
+                    <div class="field">
+                      <label>W<sub>2</sub> &ndash; mid width <span class="unit">(ft)</span></label>
+                      <input class="num" id="wind-steppedW2" value="20" min="0" step="any">
+                    </div>
+                    <div class="field">
+                      <label>W<sub>3</sub> &ndash; upper width <span class="unit">(ft)</span> <span class="hint">(0 = 2-level)</span></label>
+                      <input class="num" id="wind-steppedW3" value="0" min="0" step="any">
+                    </div>
+                  </div>
+                  <div class="field-row" id="ws-stepped-hz2-row" style="display:none">
+                    <div class="field">
+                      <label>h<sub>z2</sub> &ndash; mid height <span class="unit">(ft)</span></label>
+                      <input class="num" id="wind-steppedHz2" value="20" min="0" step="any">
                     </div>
                   </div>
                 </div>
