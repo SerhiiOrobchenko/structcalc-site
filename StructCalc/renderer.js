@@ -1776,7 +1776,12 @@ class Wind3DRenderer {
 
     /* ── zone overlays ──────────────────────────────────────────────────────── */
 
-  /** Width chain W1/W2/W3/W + height chain hs1/hs2/h + a= dims for stepped roof. */
+  /** Width chain W1/W2/W3/W + height chain hs1/hs2/h + zone extent dims for stepped roof.
+   *  R-E: all width chain ends use auto-arrows (no ticks at junctions).
+   *  R-F: height chain moved LEFT of W1 (hX1=x0-8, hX2=x0-18); ext-line 2 of hs1 anchors
+   *       at the step junction (x1, hs1W) = W2 roof level.
+   *  R-D: zone 3 extent dims (0.6h in X and Z) added per section at roof level.
+   */
   _buildSteppedDims(so, L, zone_a, grp) {
     const HS  = 1.8;
     const W1  = so.W1  || 20, W2 = so.W2 || 20, W3 = so.W3 || 0;
@@ -1788,7 +1793,7 @@ class Wind3DRenderer {
     const EY  = 0.2;
     const fmt = v => { const s = v.toFixed(1); return s.endsWith('.0') ? s.slice(0,-2) : s; };
 
-    // x-boundaries: W1 (tall, left), W2 (lower, middle), W3 (optional, right)
+    // x-boundaries
     const x0 = -Wt / 2;
     const x1 = x0 + W1;
     const x2 = x1 + W2;
@@ -1798,10 +1803,10 @@ class Wind3DRenderer {
     const hs1W = hs1 * HS;
     const hs2  = h1 - hs1;
 
-    const tickW = new THREE.Vector3(1, 0, -1).normalize();
-    const tickH = new THREE.Vector3(1, 1, 0).normalize();
+    const tickW = new THREE.Vector3(1, 0, -1).normalize();    // horiz width dims
+    const tickH = new THREE.Vector3(-1, 1, 0).normalize();    // vert height dims (left side → -X)
 
-    /* ── Width chain at z = hL+8 ── */
+    /* ── Width chain at z = hL+8 — independent arrows at every end (R-E) ── */
     const bZ  = hL + 8;
     const bZW = hL + (is3 ? 24 : 16);
 
@@ -1810,7 +1815,7 @@ class Wind3DRenderer {
       [[new THREE.Vector3(x0, EY, hL), new THREE.Vector3(x0, EY, bZ)],
        [new THREE.Vector3(x1, EY, hL), new THREE.Vector3(x1, EY, bZ)]],
       `W<sub>1</sub>=${fmt(W1)}ft`, 'dim-W1', 'wind-steppedW1',
-      new THREE.Vector3(0,0,1), false, 'auto', 'tick'
+      new THREE.Vector3(0,0,1)
     ));
     this._dimHighlight['dim-W1'] = grp.children[grp.children.length - 1];
 
@@ -1819,7 +1824,7 @@ class Wind3DRenderer {
       [[new THREE.Vector3(x1, EY, hL), new THREE.Vector3(x1, EY, bZ)],
        [new THREE.Vector3(x2, EY, hL), new THREE.Vector3(x2, EY, bZ)]],
       `W<sub>2</sub>=${fmt(W2)}ft`, 'dim-W2', 'wind-steppedW2',
-      new THREE.Vector3(0,0,1), false, 'tick', is3 ? 'tick' : 'auto'
+      new THREE.Vector3(0,0,1)
     ));
     this._dimHighlight['dim-W2'] = grp.children[grp.children.length - 1];
 
@@ -1829,7 +1834,7 @@ class Wind3DRenderer {
         [[new THREE.Vector3(x2, EY, hL), new THREE.Vector3(x2, EY, bZ)],
          [new THREE.Vector3(xR, EY, hL), new THREE.Vector3(xR, EY, bZ)]],
         `W<sub>3</sub>=${fmt(W3)}ft`, 'dim-W3', 'wind-steppedW3',
-        new THREE.Vector3(0,0,1), false, 'tick', 'auto'
+        new THREE.Vector3(0,0,1)
       ));
       this._dimHighlight['dim-W3'] = grp.children[grp.children.length - 1];
     }
@@ -1842,59 +1847,113 @@ class Wind3DRenderer {
     ));
     this._dimHighlight['dim-W'] = grp.children[grp.children.length - 1];
 
-    /* ── Height chain right of W2 (x2 + 8) ── */
-    const hX1 = x2 + 8;
-    const hX2 = x2 + 18;
+    /* ── Height chain LEFT of W1 (R-F) ─────────────────────────────────────
+       hX1 = x0 − 8  : hs1 (ground→W2 roof) + hs2 (W2 roof→W1 roof) chain
+       hX2 = x0 − 18 : h total outer dim
+       ext line 2 of hs1 runs from the step junction (x1, hs1W) → extends to W2 roof  */
+    const hX1 = x0 - 8;
+    const hX2 = x0 - 18;
+    const VN  = new THREE.Vector3(-1, 0, 0);   // viewed from left
 
+    // hs1 — ground → W2 roof height; tick at top (chain continues with hs2)
     grp.add(this._buildDim(
-      new THREE.Vector3(hX1, EY,   0), new THREE.Vector3(hX1, hs1W, 0), tickH,
-      [[new THREE.Vector3(x2, EY,   0), new THREE.Vector3(hX1, EY,   0)],
-       [new THREE.Vector3(x2, hs1W, 0), new THREE.Vector3(hX1, hs1W, 0)]],
+      new THREE.Vector3(hX1, EY,   0),
+      new THREE.Vector3(hX1, hs1W, 0),
+      tickH,
+      [[new THREE.Vector3(x0, EY,   0), new THREE.Vector3(hX1, EY,   0)],
+       [new THREE.Vector3(x1, hs1W, 0), new THREE.Vector3(hX1, hs1W, 0)]],
       `h<sub>s1</sub>=${fmt(hs1)}ft`, 'dim-hs1', 'wind-steppedHz1',
-      new THREE.Vector3(1,0,0), false, 'auto', 'tick'
+      VN, false, 'auto', 'tick'
     ));
     this._dimHighlight['dim-hs1'] = grp.children[grp.children.length - 1];
 
+    // hs2 — W2 roof → W1 roof; tick at bottom (continuing chain), arrow at top
     grp.add(this._buildDim(
-      new THREE.Vector3(hX1, hs1W, 0), new THREE.Vector3(hX1, h1W, 0), tickH,
+      new THREE.Vector3(hX1, hs1W, 0),
+      new THREE.Vector3(hX1, h1W,  0),
+      tickH,
       [[new THREE.Vector3(x1, hs1W, 0), new THREE.Vector3(hX1, hs1W, 0)],
-       [new THREE.Vector3(x1, h1W,  0), new THREE.Vector3(hX1, h1W,  0)]],
+       [new THREE.Vector3(x0, h1W,  0), new THREE.Vector3(hX1, h1W,  0)]],
       `h<sub>s2</sub>=${fmt(hs2)}ft`, 'dim-hs2', null,
-      new THREE.Vector3(1,0,0), false, 'tick', 'auto'
+      VN, false, 'tick', 'auto'
     ));
     this._dimHighlight['dim-hs2'] = grp.children[grp.children.length - 1];
 
+    // h total (outer)
     grp.add(this._buildDim(
-      new THREE.Vector3(hX2, EY,  0), new THREE.Vector3(hX2, h1W, 0), tickH,
+      new THREE.Vector3(hX2, EY,  0),
+      new THREE.Vector3(hX2, h1W, 0),
+      tickH,
       [[new THREE.Vector3(hX1, EY,  0), new THREE.Vector3(hX2, EY,  0)],
        [new THREE.Vector3(hX1, h1W, 0), new THREE.Vector3(hX2, h1W, 0)]],
-      `h=${fmt(h1)}ft`, 'dim-h', 'wind-h', new THREE.Vector3(1,0,0)
+      `h=${fmt(h1)}ft`, 'dim-h', 'wind-h', VN
     ));
     this._dimHighlight['dim-h'] = grp.children[grp.children.length - 1];
 
     /* ── a= dims at Zone 5 boundaries ── */
     const zaX = Math.min(zone_a, Wt / 2);
     const zaZ = Math.min(zone_a, hL);
-    const EY2 = EY;
 
     const aFZ = hL + 4;
     grp.add(this._buildDim(
-      new THREE.Vector3(xR - zaX, EY2, aFZ), new THREE.Vector3(xR, EY2, aFZ), tickW,
-      [[new THREE.Vector3(xR - zaX, EY2, hL), new THREE.Vector3(xR - zaX, EY2, aFZ)],
-       [new THREE.Vector3(xR,       EY2, hL), new THREE.Vector3(xR,       EY2, aFZ)]],
+      new THREE.Vector3(xR - zaX, EY, aFZ), new THREE.Vector3(xR, EY, aFZ), tickW,
+      [[new THREE.Vector3(xR - zaX, EY, hL), new THREE.Vector3(xR - zaX, EY, aFZ)],
+       [new THREE.Vector3(xR,       EY, hL), new THREE.Vector3(xR,       EY, aFZ)]],
       `a=${fmt(zone_a)}ft`, 'dim-a2', null, new THREE.Vector3(0,0,1)
     ));
     this._dimHighlight['dim-a2'] = grp.children[grp.children.length - 1];
 
     const aRX = xR + 4;
     grp.add(this._buildDim(
-      new THREE.Vector3(aRX, EY2, hL - zaZ), new THREE.Vector3(aRX, EY2, hL),
+      new THREE.Vector3(aRX, EY, hL - zaZ), new THREE.Vector3(aRX, EY, hL),
       new THREE.Vector3(1, 0, 1).normalize(),
-      [[new THREE.Vector3(xR, EY2, hL - zaZ), new THREE.Vector3(aRX, EY2, hL - zaZ)],
-       [new THREE.Vector3(xR, EY2, hL),       new THREE.Vector3(aRX, EY2, hL)]],
+      [[new THREE.Vector3(xR, EY, hL - zaZ), new THREE.Vector3(aRX, EY, hL - zaZ)],
+       [new THREE.Vector3(xR, EY, hL),       new THREE.Vector3(aRX, EY, hL)]],
       `a=${fmt(zone_a)}ft`, 'dim-a', null, new THREE.Vector3(1,0,0)
     ));
     this._dimHighlight['dim-a'] = grp.children[grp.children.length - 1];
+
+    /* ── Zone 3 extent dims (0.6h) per section (R-D) ────────────────────────
+       For each section i:
+         Z-dir dim : Zone 3 depth from front face (+hL), placed right of section
+         X-dir dim : Zone 3 width from left corner, placed just in front of front face  */
+    const _secDs = [
+      { x0: x0, x1: x1, w: W1,  h: h1  },
+      { x0: x1, x1: x2, w: W2,  h: hs1 },
+      ...(is3 ? [{ x0: x2, x1: xR, w: W3, h: h3 }] : []),
+    ];
+    _secDs.forEach((_s, _i) => {
+      const _hs   = _s.h;
+      const _dX2  = Math.min(0.6 * _hs, 0.45 * _s.w);
+      const _dZ2  = Math.min(0.6 * _hs, 0.45 * 2 * hL);
+      const _yRs  = _hs * HS + 0.2;
+      const _last = _i === _secDs.length - 1;
+
+      // Z-direction: depth of Zone 3 from front face, at right edge of section
+      // Last section uses +8 offset (aRX is at xR+4, so +8 clears it); others use +5
+      const _zdX = _s.x1 + (_last ? 8 : 5);
+      grp.add(this._buildDim(
+        new THREE.Vector3(_zdX, _yRs, hL - _dZ2),
+        new THREE.Vector3(_zdX, _yRs, hL),
+        new THREE.Vector3(1, 0, 1).normalize(),
+        [[new THREE.Vector3(_s.x1, _yRs, hL - _dZ2), new THREE.Vector3(_zdX, _yRs, hL - _dZ2)],
+         [new THREE.Vector3(_s.x1, _yRs, hL),         new THREE.Vector3(_zdX, _yRs, hL)]],
+        `0.6h=${fmt(_dZ2)}ft`, `dim-z3z${_i}`, null,
+        new THREE.Vector3(1, 0, 0)
+      ));
+
+      // X-direction: width of Zone 3 from left corner of section, in front of building
+      const _xdZ = hL + 6;   // between building face (hL) and width chain (hL+8)
+      grp.add(this._buildDim(
+        new THREE.Vector3(_s.x0,         _yRs, _xdZ),
+        new THREE.Vector3(_s.x0 + _dX2,  _yRs, _xdZ),
+        tickW,
+        [[new THREE.Vector3(_s.x0,        _yRs, hL), new THREE.Vector3(_s.x0,        _yRs, _xdZ)],
+         [new THREE.Vector3(_s.x0 + _dX2, _yRs, hL), new THREE.Vector3(_s.x0 + _dX2, _yRs, _xdZ)]],
+        `0.6h=${fmt(_dX2)}ft`, `dim-z3x${_i}`, null,
+        new THREE.Vector3(0, 0, 1)
+      ));
+    });
   }
 
   _zoneQuad(u0, u1, v0, v1, ptFn, hB, hEave, hRidge, hL, norm, eps, mat, zoneType) {
@@ -2313,6 +2372,7 @@ class Wind3DRenderer {
       const _lbl = { z1: false, z2: false, z3: false };  // label once per zone type
 
       for (let i = 0; i < _secs.length; i++) {
+        _lbl.z1 = false; _lbl.z2 = false; _lbl.z3 = false;  // label each section
         const _x0 = _xL[i], _x1 = _xL[i+1], _w = _x1 - _x0;
         const _yR = _secs[i].h * _HS + 0.05;  // roof surface + tiny clearance
 
