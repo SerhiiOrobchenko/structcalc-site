@@ -2123,6 +2123,142 @@ class Wind3DRenderer {
     } else if (_shape === 'hip') {
       window.ZONE_DESCRIPTORS['cc-hip'].drawZones(ctx);
 
+    } else if (_shape === 'stepped' && steppedOpts) {
+      /* ── Stepped roof zones (ASCE 7-22 Fig. 30.3-3) ─────────────────────────
+         Roof: Zone 3 (corners) · Zone 2 (perimeter) · Zone 1 (field) per section
+         Walls: 4 outer building corners = Zone 5 · everything else = Zone 4      */
+      const _HS  = 1.8;
+      const _so  = steppedOpts;
+      const _is3 = (_so.W3 || 0) > 0;
+      const _secs = _is3
+        ? [{ w: _so.W1||20, h: _so.hz1||12 }, { w: _so.W2||20, h: _so.hz2||20 }, { w: _so.W3||0, h: _so.hTop||h }]
+        : [{ w: _so.W1||20, h: _so.hz1||12 }, { w: _so.W2||20, h: _so.hTop||h }];
+      const _Wt = _secs.reduce((acc, s) => acc + s.w, 0);
+      const _xL = []; let _xC = -_Wt / 2;
+      for (const _s of _secs) { _xL.push(_xC); _xC += _s.w; }
+      _xL.push(_Wt / 2);
+
+      const _Z4OP = 0.22, _Z5OP = 0.45, _EPS = 0.06;
+      const _upN = new THREE.Vector3(0, 1, 0);
+
+      /* Flat horizontal zone quad on roof surface */
+      const _addRoof = (x0, x1, z0, z1, yOff, col, op, zt, lbl) => {
+        const geo = this._quad(
+          new THREE.Vector3(x0, yOff, z0), new THREE.Vector3(x1, yOff, z0),
+          new THREE.Vector3(x1, yOff, z1), new THREE.Vector3(x0, yOff, z1)
+        );
+        const m = new THREE.Mesh(geo, matZ(col, op));
+        m.userData.zoneType = zt;
+        this._zones.add(m); this._zoneMeshes.push(m);
+        if (lbl) {
+          const ctr = new THREE.Vector3((x0+x1)/2, yOff+0.5, (z0+z1)/2);
+          this._makeZoneLabel(zt, ctr, _upN, _Wt, zone_a, 2*hL);
+        }
+      };
+
+      /* Vertical wall zone quad */
+      const _addWall = (pts4, zt, op) => {
+        const col = zt === 'zone-5' ? THEME.zone5 : THEME.zone4;
+        const geo = this._quad(pts4[0], pts4[1], pts4[2], pts4[3]);
+        const m = new THREE.Mesh(geo, matZ(col, op));
+        m.renderOrder = 1;
+        m.userData = { zoneType: zt };
+        this._zones.add(m); this._zoneMeshes.push(m);
+      };
+
+      /* ── ROOF ZONES per section ─────────────────────────────────────────── */
+      const _zaZ = Math.min(zone_a, hL * 0.9);   // zone strip half-depth along Z
+      const _lbl = { z1: false, z2: false };      // label once per zone type
+
+      for (let i = 0; i < _secs.length; i++) {
+        const _x0 = _xL[i], _x1 = _xL[i+1], _w = _x1 - _x0;
+        const _yR = _secs[i].h * _HS + 0.05;          // roof surface + tiny clearance
+        const _zaX = Math.min(zone_a, _w * 0.45);     // zone strip width along X
+
+        const _xa = _x0 + _zaX, _xb = _x1 - _zaX;    // inner X edges
+        const _zF = -hL + _zaZ, _zB = hL - _zaZ;      // inner Z edges
+
+        /* Zone 1 — interior field */
+        if (_xa < _xb && _zF < _zB) {
+          const lbl1 = !_lbl.z1; _lbl.z1 = true;
+          _addRoof(_xa, _xb, _zF, _zB, _yR, THEME.zone1, 0.22, 'zone-1', lbl1);
+        }
+
+        /* Zone 2 — perimeter strips (corners subtracted) */
+        const lbl2 = !_lbl.z2;
+        if (_zF < _zB) {
+          _addRoof(_x0, _xa, _zF, _zB, _yR, THEME.zone2, 0.35, 'zone-2', lbl2);  // left strip
+          _addRoof(_xb, _x1, _zF, _zB, _yR, THEME.zone2, 0.35, 'zone-2', false); // right strip
+          _lbl.z2 = true;
+        }
+        if (_xa < _xb) {
+          _addRoof(_xa, _xb, -hL, _zF, _yR, THEME.zone2, 0.35, 'zone-2', false); // front strip
+          _addRoof(_xa, _xb,  _zB, hL, _yR, THEME.zone2, 0.35, 'zone-2', false); // back strip
+        }
+
+        /* Zone 3 — corners (4 per section) */
+        _addRoof(_x0, _xa, -hL, _zF, _yR, THEME.zone3, 0.65, 'zone-3', false); // front-left
+        _addRoof(_xb, _x1, -hL, _zF, _yR, THEME.zone3, 0.65, 'zone-3', false); // front-right
+        _addRoof(_x0, _xa,  _zB, hL, _yR, THEME.zone3, 0.65, 'zone-3', false); // back-left
+        _addRoof(_xb, _x1,  _zB, hL, _yR, THEME.zone3, 0.65, 'zone-3', false); // back-right
+      }
+
+      /* ── WALL ZONES (outer perimeter only, 4-corner Zone 5 logic) ─────── */
+      const _zaWL = Math.min(zone_a, hL);         // zone strip in Z for side walls
+      const _zaWX = Math.min(zone_a, _Wt / 2);    // zone strip in X for end walls
+
+      /* Left outer wall (x = −Wt/2, normal −X) */
+      { const _hH = _secs[0].h * _HS, _xW = -_Wt/2 - _EPS;
+        _addWall([new THREE.Vector3(_xW,0,-hL),      new THREE.Vector3(_xW,0,-hL+_zaWL),
+                  new THREE.Vector3(_xW,_hH,-hL+_zaWL), new THREE.Vector3(_xW,_hH,-hL)], 'zone-5', _Z5OP);
+        _addWall([new THREE.Vector3(_xW,0,hL-_zaWL), new THREE.Vector3(_xW,0,hL),
+                  new THREE.Vector3(_xW,_hH,hL),      new THREE.Vector3(_xW,_hH,hL-_zaWL)], 'zone-5', _Z5OP);
+        if (2*_zaWL < 2*hL - 0.1)
+          _addWall([new THREE.Vector3(_xW,0,-hL+_zaWL), new THREE.Vector3(_xW,0,hL-_zaWL),
+                    new THREE.Vector3(_xW,_hH,hL-_zaWL), new THREE.Vector3(_xW,_hH,-hL+_zaWL)], 'zone-4', _Z4OP);
+      }
+
+      /* Right outer wall (x = +Wt/2, normal +X) */
+      { const _hH = _secs[_secs.length-1].h * _HS, _xW = _Wt/2 + _EPS;
+        _addWall([new THREE.Vector3(_xW,0,hL-_zaWL), new THREE.Vector3(_xW,0,hL),
+                  new THREE.Vector3(_xW,_hH,hL),      new THREE.Vector3(_xW,_hH,hL-_zaWL)], 'zone-5', _Z5OP);
+        _addWall([new THREE.Vector3(_xW,0,-hL),      new THREE.Vector3(_xW,0,-hL+_zaWL),
+                  new THREE.Vector3(_xW,_hH,-hL+_zaWL), new THREE.Vector3(_xW,_hH,-hL)], 'zone-5', _Z5OP);
+        if (2*_zaWL < 2*hL - 0.1)
+          _addWall([new THREE.Vector3(_xW,0,-hL+_zaWL), new THREE.Vector3(_xW,0,hL-_zaWL),
+                    new THREE.Vector3(_xW,_hH,hL-_zaWL), new THREE.Vector3(_xW,_hH,-hL+_zaWL)], 'zone-4', _Z4OP);
+      }
+
+      /* Front (z=+hL) and back (z=−hL) walls — per section height */
+      for (const _face of ['front', 'back']) {
+        const _z = _face === 'front' ? hL + _EPS : -hL - _EPS;
+        const _xZ5L = -_Wt/2 + _zaWX, _xZ5R = _Wt/2 - _zaWX;
+        for (let i = 0; i < _secs.length; i++) {
+          const _x0 = _xL[i], _x1 = _xL[i+1], _hH = _secs[i].h * _HS;
+          /* Zone 5 — left corner strip */
+          if (_x0 < _xZ5L)
+            _addWall([new THREE.Vector3(_x0,0,_z),              new THREE.Vector3(Math.min(_x1,_xZ5L),0,_z),
+                      new THREE.Vector3(Math.min(_x1,_xZ5L),_hH,_z), new THREE.Vector3(_x0,_hH,_z)], 'zone-5', _Z5OP);
+          /* Zone 5 — right corner strip */
+          if (_x1 > _xZ5R)
+            _addWall([new THREE.Vector3(Math.max(_x0,_xZ5R),0,_z), new THREE.Vector3(_x1,0,_z),
+                      new THREE.Vector3(_x1,_hH,_z),              new THREE.Vector3(Math.max(_x0,_xZ5R),_hH,_z)], 'zone-5', _Z5OP);
+          /* Zone 4 — middle field */
+          const _x04 = Math.max(_x0,_xZ5L), _x14 = Math.min(_x1,_xZ5R);
+          if (_x04 < _x14)
+            _addWall([new THREE.Vector3(_x04,0,_z), new THREE.Vector3(_x14,0,_z),
+                      new THREE.Vector3(_x14,_hH,_z), new THREE.Vector3(_x04,_hH,_z)], 'zone-4', _Z4OP);
+        }
+      }
+
+      /* Step faces (normal +X, at section junctions) — always Zone 4 */
+      for (let i = 0; i < _secs.length - 1; i++) {
+        const _xS  = _xL[i+1] + _EPS;
+        const _hLo = _secs[i].h * _HS, _hHi = _secs[i+1].h * _HS;
+        _addWall([new THREE.Vector3(_xS,_hLo, hL), new THREE.Vector3(_xS,_hLo,-hL),
+                  new THREE.Vector3(_xS,_hHi,-hL), new THREE.Vector3(_xS,_hHi, hL)], 'zone-4', _Z4OP);
+      }
+
     } else {
       /* gable or flat — pitch selects the descriptor */
       const _leftNorm  = this._leftNormal(hB, hEave, hRidge, hL);
@@ -2138,7 +2274,9 @@ class Wind3DRenderer {
        Zone 5: vertical end strip width 'a' at each corner of every facade
        Zone 4: rest of wall field
        Drawn as flat quads offset 0.05 ft from each wall face.              */
-    this._drawWallZones(B, L, hEave, hRidge, zone_a, matZ, _shape);
+    if (_shape !== 'stepped') {
+      this._drawWallZones(B, L, hEave, hRidge, zone_a, matZ, _shape);
+    }
 
     // Collect opaque building meshes for per-frame label occlusion raycasting
     this._buildingMeshes = [];
