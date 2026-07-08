@@ -299,7 +299,7 @@ function recalcWind() {
       W2:  +(s.steppedW2)  || 20,
       W3:  +(s.steppedW3)  || 0,
       h1:  hR,
-      hs1: +(s.steppedHz1) || 12,
+      hs2: +(s.steppedHz1) || 12,  // W2 absolute height from ground
       h3:  hR,                          // always equals h1 (building 3 same height as building 1)
     };
   }
