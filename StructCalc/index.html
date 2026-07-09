@@ -200,7 +200,7 @@
 
             <div class="panel-section">
               <div class="panel-section-head">
-                <h4>Risk Category</h4>
+                <h4>Risk Category <button type="button" class="info-btn" data-info="riskCategory" aria-label="Learn more">i</button></h4>
                 <span class="panel-section-note">Table 1.5-1</span>
               </div>
               <div class="field">
@@ -219,12 +219,12 @@
                 <span class="panel-section-note">§26.5.1</span>
               </div>
               <div class="field">
-                <label>Basic Wind Speed, V <span class="unit">(mph)</span></label>
+                <label>Basic Wind Speed, V <span class="unit">(mph)</span> <button type="button" class="info-btn" data-info="windSpeed" aria-label="Learn more">i</button></label>
                 <input class="num" id="wind-V" placeholder="—" min="85" max="200">
                 <div class="field-hint">&#8594; <a href="https://ascehazardtool.org/" target="_blank" class="hint-link">ASCE Hazard Tool</a> to look up V by location &amp; RC</div>
               </div>
               <div class="field">
-                <label>Exposure Category</label>
+                <label>Exposure Category <button type="button" class="info-btn" data-info="exposure" aria-label="Learn more">i</button></label>
                 <select id="wind-exposure">
                   <option value="B">B — Suburban / wooded</option>
                   <option value="C" selected>C — Open terrain</option>
@@ -235,7 +235,7 @@
 
             <div class="panel-section">
               <div class="panel-section-head">
-                <h4>Ground Elevation Factor, K<sub>e</sub></h4>
+                <h4>Ground Elevation Factor, K<sub>e</sub> <button type="button" class="info-btn" data-info="ke" aria-label="Learn more">i</button></h4>
                 <span class="panel-section-note">§26.9</span>
               </div>
               <div class="field-row">
@@ -253,7 +253,7 @@
 
             <div class="panel-section">
               <div class="panel-section-head">
-                <h4>Topographic Factor, K<sub>zt</sub></h4>
+                <h4>Topographic Factor, K<sub>zt</sub> <button type="button" class="info-btn" data-info="kzt" aria-label="Learn more">i</button></h4>
                 <span class="panel-section-note">§26.8 / Fig. 26.8-1</span>
               </div>
               <label class="toggle-label">
@@ -310,7 +310,7 @@
               </label>
               <div class="tornado-vt-block hidden" id="tornadoVtBlock">
                 <div class="field" style="margin-top:10px;">
-                  <label>V<sub>T</sub> — tornado wind speed <span class="unit">(mph)</span></label>
+                  <label>V<sub>T</sub> — tornado wind speed <span class="unit">(mph)</span> <button type="button" class="info-btn" data-info="tornado" aria-label="Learn more">i</button></label>
                   <input class="num" id="wind-Vt" value="0" min="0" max="250">
                   <div class="field-hint">&#8594; <a href="https://ascehazardtool.org/" target="_blank" class="hint-link">ASCE Hazard Tool</a> &#8594; Ch. 32 tornado map</div>
                 </div>
@@ -345,7 +345,7 @@
 
               <div class="panel-section">
                 <div class="panel-section-head">
-                  <h4>Calculation Procedure</h4>
+                  <h4>Calculation Procedure <button type="button" class="info-btn" data-info="calcProc" aria-label="Learn more">i</button></h4>
                   <span class="panel-section-note">Ch. 27–30</span>
                 </div>
                 <div class="proc-toggle" id="windProcToggle">
@@ -374,7 +374,7 @@
                 </div>
 
                 <label class="toggle-label" style="margin-top:14px;">
-                  <input type="checkbox" id="wind-calcOpenings"> Calculate from opening areas
+                  <input type="checkbox" id="wind-calcOpenings"> Calculate from opening areas <button type="button" class="info-btn" data-info="openings" aria-label="Learn more">i</button>
                 </label>
 
                 <div class="openings-table hidden" id="openingsTable">
@@ -414,7 +414,7 @@
                 </div>
 
                 <div class="field">
-                  <label>Roof Profile</label>
+                  <label>Roof Profile <button type="button" class="info-btn" data-info="roofProfile" aria-label="Learn more">i</button></label>
                   <select id="wind-roofShape">
                     <option value="gable">Gable</option>
                     <option value="hip">Hip</option>
@@ -500,23 +500,23 @@
 
                 <div class="field-row">
                   <div class="field">
-                    <label>Width, B <span class="unit">(ft)</span></label>
+                    <label>Width, B <span class="unit">(ft)</span> <button type="button" class="info-btn" data-info="buildingDims" aria-label="Learn more">i</button></label>
                     <input class="num" id="wind-B" value="40" min="1" data-dim="B">
                   </div>
                   <div class="field">
-                    <label>Length, L <span class="unit">(ft)</span></label>
+                    <label>Length, L <span class="unit">(ft)</span> <button type="button" class="info-btn" data-info="buildingDims" aria-label="Learn more">i</button></label>
                     <input class="num" id="wind-L" value="60" min="1" data-dim="L">
                   </div>
                 </div>
 
                 <div class="field-row">
                   <div class="field">
-                    <label>Eave height, h<sub>e</sub> <span class="unit">(ft)</span></label>
+                    <label>Eave height, h<sub>e</sub> <span class="unit">(ft)</span> <button type="button" class="info-btn" data-info="eaveHeight" aria-label="Learn more">i</button></label>
                     <input class="num" id="wind-h" value="12" min="1" max="500" data-dim="h">
                   </div>
                   <div class="field">
                     <div class="pitch-label-row">
-                      <label id="wind-theta-label">Roof pitch, &#952; <span class="unit">(&#176;)</span></label>
+                      <label id="wind-theta-label">Roof pitch, &#952; <span class="unit">(&#176;)</span> <button type="button" class="info-btn" data-info="roofPitch" aria-label="Learn more">i</button></label>
                       <div class="view-toggle pitch-unit-toggle" id="pitchUnitToggle">
                         <button class="active" data-unit="deg">°</button>
                         <button data-unit="slope">X:12</button>
@@ -555,7 +555,7 @@
                   <h4>Roof Appurtenances</h4>
                 </div>
                 <label class="toggle-label">
-                  <input type="checkbox" id="wind-hasParapet"> Parapet
+                  <input type="checkbox" id="wind-hasParapet"> Parapet <button type="button" class="info-btn" data-info="parapet" aria-label="Learn more">i</button>
                 </label>
                 <div class="appurt-sub hidden" id="parapetSub">
                   <div class="field" style="margin-top:8px;">
@@ -564,7 +564,7 @@
                   </div>
                 </div>
                 <label class="toggle-label" style="margin-top:8px;">
-                  <input type="checkbox" id="wind-hasOverhang"> Roof Overhang
+                  <input type="checkbox" id="wind-hasOverhang"> Roof Overhang <button type="button" class="info-btn" data-info="overhang" aria-label="Learn more">i</button>
                 </label>
                 <div class="appurt-sub hidden" id="overhangSub">
                   <div class="field" style="margin-top:8px;">
@@ -577,7 +577,7 @@
 
               <div class="panel-section hidden" id="ccAreaSection">
                 <div class="panel-section-head">
-                  <h4>Components &amp; Cladding — Effective Area</h4>
+                  <h4>Components &amp; Cladding — Effective Area <button type="button" class="info-btn" data-info="effectiveArea" aria-label="Learn more">i</button></h4>
                   <span class="panel-section-note">§26.2</span>
                 </div>
                 <div class="field-row">

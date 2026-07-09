@@ -2647,51 +2647,292 @@ function renderPrintPreview(r, s) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   INFO MODAL — stepped-roof parameter explanations
+   INFO MODAL — parameter explanations for Site + Geometry tabs
    ═══════════════════════════════════════════════════════════════════════════ */
 const WIND_INFO = {
+
+  // ── SITE TAB ─────────────────────────────────────────────────────────────
+  riskCategory: {
+    title: 'Risk Category — Table 1.5-1',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, Table 1.5-1</span> — The Risk Category
+      determines the importance of the structure and controls the design wind speed V used
+      (via the hazard maps in Ch. 26 / Ch. 32).</p>
+      <p><b>Category I</b> — Low hazard to human life in case of failure (storage, agricultural).
+      Lowest design loads.</p>
+      <p><b>Category II</b> — Standard occupancy (offices, residential, commercial). Most common.
+      Use this unless a higher category is justified.</p>
+      <p><b>Category III</b> — Substantial hazard to human life: assembly halls &gt;300 occupants,
+      schools, colleges, hospitals without critical care. Also triggers tornado assessment (§32.1.1).</p>
+      <p><b>Category IV</b> — Essential facilities: hospitals with surgery/emergency, fire/police
+      stations, emergency shelters, power-generating stations critical to national security.
+      Triggers tornado assessment. Highest design loads.</p>`
+  },
+  windSpeed: {
+    title: 'Basic Wind Speed V — §26.5.1 / Fig. 26.5-1A–D',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, §26.5.1, Figs. 26.5-1A to 26.5-1D</span> —
+      V is the 3-second gust wind speed at 33 ft (10 m) above ground, Exposure C, corresponding
+      to the annual probability of exceedance specified for each Risk Category:</p>
+      <p>RC I: 15% in 50 yr (≈63 mph min) · RC II: 7% in 50 yr · RC III: 3% in 50 yr ·
+      RC IV: 3% in 50 yr (same map, separate figure)</p>
+      <p>Look up V using the <a href="https://ascehazardtool.org/" target="_blank" class="hint-link">ASCE
+      Hazard Tool</a> — enter your address and Risk Category to get the site-specific V.
+      Do not use generic regional defaults; V varies significantly across the country.</p>
+      <p>V feeds directly into the velocity pressure: q<sub>h</sub> = 0.00256 K<sub>h</sub> K<sub>zt</sub>
+      K<sub>e</sub> V² (Eq. 26.10-1).</p>`
+  },
+  exposure: {
+    title: 'Exposure Category — §26.7',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, §26.7</span> — Exposure category accounts for the
+      roughness of the terrain upwind of the site. K<sub>z</sub> and the boundary-layer height z<sub>g</sub>
+      depend on this choice (Table 26.10-1).</p>
+      <p><b>Exposure B</b> — Urban/suburban areas, wooded terrain; surface roughness B prevails upwind
+      for ≥ 1,500 ft (450 m) and for ≥ 10 times the building height.
+      K<sub>z</sub> is lowest here; α = 7, z<sub>g</sub> = 1,200 ft.</p>
+      <p><b>Exposure C</b> (default) — Open terrain with scattered obstructions &lt; 30 ft high; flat,
+      open land, farmland, grassland. Applies where Exposures B or D do not apply.
+      α = 9.5, z<sub>g</sub> = 900 ft.</p>
+      <p><b>Exposure D</b> — Flat, unobstructed areas including water surfaces; applies within
+      1,500 ft (450 m) of water. Highest K<sub>z</sub>.
+      α = 11.5, z<sub>g</sub> = 700 ft.</p>
+      <p>Always use the exposure that results in the highest wind loads for the given site, evaluated
+      separately for each wind direction of concern.</p>`
+  },
+  ke: {
+    title: 'Ground Elevation Factor K<sub>e</sub> — §26.9, Table 26.9-1',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, §26.9, Table 26.9-1</span> — K<sub>e</sub> adjusts
+      for the reduction in air density at sites above sea level.</p>
+      <p>Formula: K<sub>e</sub> = e<sup>−0.0000362 z<sub>e</sub></sup>, where z<sub>e</sub> is the
+      ground elevation in feet above sea level.</p>
+      <p>At sea level z<sub>e</sub> = 0 → K<sub>e</sub> = 1.00 (no reduction).<br>
+      At 5,000 ft → K<sub>e</sub> ≈ 0.83.<br>
+      At 10,000 ft → K<sub>e</sub> ≈ 0.69.</p>
+      <p>This reduces the velocity pressure q<sub>h</sub> proportionally. For buildings near sea level
+      K<sub>e</sub> = 1.00 is acceptable per the table note.</p>`
+  },
+  kzt: {
+    title: 'Topographic Factor K<sub>zt</sub> — §26.8, Fig. 26.8-1',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, §26.8, Fig. 26.8-1, Eq. 26.8-1</span> —
+      K<sub>zt</sub> accounts for wind speed-up over isolated hills, ridges, and escarpments.
+      K<sub>zt</sub> = (1 + K<sub>1</sub> K<sub>2</sub> K<sub>3</sub>)².</p>
+      <p>K<sub>zt</sub> = 1.00 for flat or gently rolling terrain (no topographic effect) — this is
+      the default and applies to most sites.</p>
+      <p>K<sub>zt</sub> > 1.00 only when ALL three conditions of §26.8.1 are met:
+      (1) the hill/ridge/escarpment is isolated and unobstructed upwind for ≥ 100× H;
+      (2) H/L<sub>h</sub> ≥ 0.2 (steep enough);
+      (3) building is within the speed-up zone (x ≤ 2L<sub>h</sub> horizontally, z ≤ z<sub>max</sub>
+      vertically from crest).</p>
+      <p>Use the "Calculate from hill geometry" toggle to compute K<sub>1</sub>K<sub>2</sub>K<sub>3</sub>
+      from H, L<sub>h</sub>, x, z values per Fig. 26.8-1. Otherwise enter K<sub>zt</sub> directly
+      from a site study.</p>`
+  },
+  tornado: {
+    title: 'Tornado Hazard Assessment — Ch. 32, §32.1.1',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, Chapter 32</span> — Tornado loads are required
+      for Risk Category III and IV buildings in Tornado-Prone Regions as defined by §32.1.1 and
+      Fig. 32.1-1 (essentially the continental US east of the Rockies).</p>
+      <p>V<sub>T</sub> is the tornado wind speed from the hazard maps (Fig. 32.1-2A–D) corresponding
+      to the building's Risk Category. Look it up at the
+      <a href="https://ascehazardtool.org/" target="_blank" class="hint-link">ASCE Hazard Tool</a>
+      under the Ch. 32 tornado map option.</p>
+      <p>Tornado pressures are computed the same way as regular wind (same Kz/Kzt/Ke/G/GCp factors)
+      but using V<sub>T</sub> instead of V, with K<sub>e</sub> = 1.0 (§32.4.2).
+      If V<sub>T</sub>² > V², tornado governs; otherwise regular wind governs.</p>`
+  },
+
+  // ── GEOMETRY TAB ─────────────────────────────────────────────────────────
+  calcProc: {
+    title: 'Calculation Procedure — Ch. 27–30',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, Chapters 27–30</span> — Three calculation
+      paths are available depending on building type and what you're designing:</p>
+      <p><b>MWFRS Envelope (Ch. 28)</b> — Main Wind-Force Resisting System using the simplified
+      Envelope Procedure. Applicable to enclosed/partially enclosed buildings with h ≤ 60 ft,
+      flat/gable/hip roofs. Produces loads for the whole lateral system (frames, shear walls).
+      Simplest method for low-rise buildings.</p>
+      <p><b>MWFRS Directional (Ch. 27)</b> — Main Wind-Force Resisting System using the Directional
+      Procedure. No height limit; required for h > 60 ft. More detailed than Envelope — computes
+      pressures by wind direction. Also handles sloped roofs (θ > 10°) per Fig. 27.3-1.</p>
+      <p><b>C&amp;C (Ch. 30)</b> — Components and Cladding pressures for individual façade
+      elements (windows, wall panels, roof cladding). Higher local peak coefficients than MWFRS;
+      governs fastener and attachment design. Uses Fig. 30.3-1/2 for roofs, Fig. 30.3-1 for walls.
+      Part 1 (h ≤ 60 ft) or Part 2 (h > 60 ft) is selected automatically.</p>`
+  },
+  enclosure: {
+    title: 'Enclosure Classification — §26.12, Table 26.13-1',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, §26.12</span> — The enclosure classification
+      determines the internal pressure coefficient (GC<sub>pi</sub>) used in all pressure
+      calculations. Internal pressure adds to or subtracts from the external pressure, depending
+      on sign.</p>
+      <p><b>Enclosed</b> (most common) — (GC<sub>pi</sub>) = ±0.18. Applies when the building
+      does not meet the criteria for Partially Enclosed or Open.</p>
+      <p><b>Partially Enclosed</b> — (GC<sub>pi</sub>) = ±0.55. Higher internal pressure; applies
+      when A<sub>o</sub> > 1.10 A<sub>oi</sub> AND A<sub>o</sub> > max(4 ft², 0.01A<sub>g</sub>)
+      AND A<sub>oi</sub>/A<sub>gi</sub> ≤ 0.20 per §26.12.1.</p>
+      <p><b>Partially Open</b> — (GC<sub>pi</sub>) = 0.00. Buildings that do not fit either above
+      category.</p>
+      <p><b>Open Building</b> — Free roofs; internal pressure not applicable. Uses separate
+      roof C<sub>N</sub> coefficients (Figs. 27.3-4/28.3-3 etc.).</p>
+      <p>Use "Calculate from opening areas" to let the tool classify automatically per §26.12.1.</p>`
+  },
+  openings: {
+    title: 'Opening Areas — §26.12.1',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, §26.12.1</span> — Three conditions must ALL be
+      met for a building to be classified as Partially Enclosed:</p>
+      <p>1. A<sub>o</sub> &gt; 1.10 · A<sub>oi</sub></p>
+      <p>2. A<sub>o</sub> &gt; the larger of 4 ft² or 0.01 · A<sub>g</sub></p>
+      <p>3. A<sub>oi</sub> / A<sub>gi</sub> ≤ 0.20</p>
+      <p>Where:<br>
+      A<sub>o</sub> = total area of openings in the windward wall (ft²)<br>
+      A<sub>oi</sub> = total area of openings in all other walls (ft²)<br>
+      A<sub>g</sub> = gross area of windward wall (ft²)<br>
+      A<sub>gi</sub> = gross area of all other walls (ft²)</p>
+      <p>If any condition fails → building is Enclosed. If all three are met → Partially Enclosed.
+      This tool evaluates all three and reports the result automatically.</p>`
+  },
+  roofProfile: {
+    title: 'Roof Profile — Ch. 27–30',
+    html: `<p>The roof shape determines which GC<sub>pf</sub> / GC<sub>p</sub> tables and figures apply.</p>
+      <p><b>Gable / Hip / Monoslope</b> — Standard sloped roofs. Use C&amp;C mode for cladding
+      (Figs. 30.3-2A through 30.3-5B) and MWFRS mode for the lateral system
+      (Figs. 27.3-1 / 28.3-1).</p>
+      <p><b>Flat (θ ≤ 7°)</b> — Horizontal or very low-slope roof. Zone 1/2/3 by Fig. 30.3-2A.</p>
+      <p><b>Special C&amp;C profiles</b> — apply Ch. 30 only:</p>
+      <p>• <b>Stepped</b> (Fig. 30.3-3) — flat roof with level changes; wider edge zones near
+      step walls (1.5·h<sub>s</sub>).</p>
+      <p>• <b>Multispan gable</b> (Fig. 30.3-4) — two or more repeating gable spans sharing
+      valley lines; every ridge/valley gets Zone 2/3 treatment.</p>
+      <p>• <b>Sawtooth</b> (Fig. 30.3-6) — repeating monoslope spans with doubled 2a edge zone
+      at the low (step) eaves.</p>
+      <p>• <b>Domed</b> (Fig. 30.3-7) — circular base dome; GC<sub>p</sub> from table by θ.</p>`
+  },
+  buildingDims: {
+    title: 'Building Width B and Length L — §26.2 Notation',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, §26.2 Notation</span></p>
+      <p><b>B (Width)</b> — the horizontal dimension of the building measured perpendicular to the
+      wind direction being evaluated. For the Envelope Procedure (Ch. 28), B is the dimension
+      parallel to the ridge; it controls the end-zone depth a and Load Case layout on the
+      building faces. In the 3D model, B is the dimension along the X-axis (front face width).</p>
+      <p><b>L (Length)</b> — the horizontal dimension measured in the along-wind (ridge-parallel)
+      direction. Used together with B to compute the least horizontal dimension
+      (min(B, L)) for the zone width a calculation.</p>
+      <p>Zone dimension: a = min(0.1·min(B,L), 0.4h), not less than max(0.04·min(B,L), 3 ft)
+      per the Notation of Figs. 28.3-1 and 30.3-1.</p>`
+  },
+  eaveHeight: {
+    title: 'Eave Height h<sub>e</sub> — §26.2',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, §26.2</span> — The eave height h<sub>e</sub>
+      is the distance from grade (ground level) to the eave of the roof — the lowest edge of the
+      roof plane on a sloped roof, or the top of the wall on a flat roof.</p>
+      <p>The mean roof height h is computed automatically from h<sub>e</sub> and the roof
+      pitch θ: h = h<sub>e</sub> + (B/2) · tan θ for a symmetrical gable.
+      For flat roofs, h = h<sub>e</sub>.</p>
+      <p>h controls: K<sub>z</sub> (velocity pressure exposure coefficient), the zone dimension
+      a, and the applicability limits (e.g. Part 1 vs Part 2 C&amp;C at h = 60 ft).</p>`
+  },
+  roofPitch: {
+    title: 'Roof Pitch θ — §26.2, Figs. 28.3-1 / 30.3-2',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, §26.2</span> — θ is the angle of the roof
+      surface from horizontal, in degrees.</p>
+      <p>Key thresholds that change which figure and zone layout apply:</p>
+      <p>• <b>θ ≤ 7°</b> — flat roof zone layout (Fig. 30.3-2A); (GC<sub>pf</sub>) from
+      Fig. 28.3-1 Zone 2/3 with θ = 0 row.</p>
+      <p>• <b>7° &lt; θ ≤ 27°</b> — gable/hip zone layout with upwind corner intensification;
+      Figs. 30.3-2B/C for gable, 30.3-2D–G for hip.</p>
+      <p>• <b>θ &gt; 10°</b> — MWFRS Ch. 27 sloped roof Cp values (Fig. 27.3-1) apply in
+      addition to envelope approach.</p>
+      <p>Enter in degrees or switch to X:12 slope using the toggle. The converter shows
+      the equivalent slope ratio in real time.</p>`
+  },
+  gustFactor: {
+    title: 'Gust Factor G — §26.11',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, §26.11</span> — The gust factor G accounts for
+      dynamic amplification of wind loads due to atmospheric turbulence.</p>
+      <p><b>Rigid buildings (G = 0.85)</b> — The standard value per §26.11.1. A building is rigid
+      if its fundamental natural frequency f<sub>1</sub> ≥ 1 Hz (period ≤ 1 sec). This applies
+      to most low-rise and mid-rise structures with concrete/masonry or braced steel frames.</p>
+      <p><b>Flexible buildings</b> — f<sub>1</sub> &lt; 1 Hz (tall, slender, or unusually flexible
+      structures). G<sub>f</sub> must be calculated per §26.11.5 using building height, damping
+      ratio, and natural frequency — this calculator does not compute G<sub>f</sub> automatically.
+      Select this option only if you have already calculated G<sub>f</sub> separately and will
+      note it in the project inputs.</p>`
+  },
+  parapet: {
+    title: 'Parapet Wind Pressures — §27.3.4 / §28.3.4 / §30.6',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, §27.3.4, §28.3.4, §30.6</span> — Parapets
+      change the wind pressure on both the windward and leeward faces of the parapet wall itself,
+      and must be designed for the net combined wind pressure p<sub>p</sub>.</p>
+      <p>For <b>MWFRS</b> (§27.3.4 / §28.3.4): p<sub>p</sub> = q<sub>p</sub> G (C<sub>p,ww</sub> −
+      C<sub>p,lw</sub>). The windward parapet uses C<sub>p</sub> = +1.5 on the windward face and
+      C<sub>p</sub> = −1.0 on the leeward face; the leeward parapet uses C<sub>p</sub> = +1.5 and
+      −1.0 reversed.</p>
+      <p>For <b>C&amp;C</b> (§30.6): parapets are designed using the zone pressures of the adjacent
+      wall zone (Zone 4/5). This calculator adds the parapet contribution to the wall C&amp;C
+      pressures automatically when a parapet height h<sub>p</sub> > 0 is entered.</p>`
+  },
+  overhang: {
+    title: 'Roof Overhang — §30.7',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, §30.7</span> — Roof overhangs experience
+      additional uplift on their soffit (underside) due to positive pressure from wind entering
+      below the overhang. This is independent of the roof top-surface pressure.</p>
+      <p>Per §30.7.1.1: the net uplift pressure on the overhang soffit uses the C&amp;C pressure
+      coefficients from the adjacent roof zone (Zone 2 or Zone 3, whichever applies based on
+      location), combined with the internal pressure coefficient.</p>
+      <p>Overhang pressures govern the design of fascia boards, rafter tails, and soffit framing.
+      Enter the overhang width w<sub>o</sub> to include this check in the results.</p>`
+  },
+  effectiveArea: {
+    title: 'C&C Effective Wind Area — §26.2',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, §26.2</span> — The effective wind area A is
+      the area used to determine peak GC<sub>p</sub> values for individual components.
+      It is NOT necessarily the tributary area of the element.</p>
+      <p>For a panel or cladding unit: A = span × (span / 3), but not less than the actual
+      tributary area. This accounts for the fact that short, wide elements can have a higher peak
+      pressure than long narrow ones.</p>
+      <p>Key effect: smaller A → higher |GC<sub>p</sub>| because gusty pressure peaks average out
+      less over a small area. A large roof panel with A = 500 ft² will have much lower peak
+      GC<sub>p</sub> than a small fastener designed for A = 10 ft².</p>
+      <p><b>Typical values</b>: Wall cladding 10–50 ft²; Roof purlins 50–200 ft²; Roof decking
+      or metal panels 10–100 ft²; Connection fasteners 1–10 ft².</p>`
+  },
+
+  // ── STEPPED ROOF (already had these) ─────────────────────────────────────
   stepped: {
     title: 'Stepped Roof — Sec. 30.3.2.1, Fig. 30.3-3',
     html: `<p><span class="src-tag">ASCE/SEI 7-22, Sec. 30.3.2.1, Fig. 30.3-3</span> — applies to flat
       roofs (θ ≤ 7°) with one or more lower sections adjacent to a taller main section.</p>
-      <p><b>W<sub>1</sub></b> — width of the tallest (left/main) building section measured in the
-      direction perpendicular to the ridge line (i.e., the horizontal span of the elevated part).</p>
-      <p><b>W<sub>2</sub></b> — width of the middle (lower) section in the same direction. Zone widths
-      adjacent to the step are based on h<sub>s1</sub> (the step height = h − h<sub>s2</sub>):
+      <p><b>W<sub>1</sub></b> — width of the tallest (left/main) building section, measured perpendicular
+      to the ridge direction (horizontal span of the elevated part).</p>
+      <p><b>W<sub>2</sub></b> — width of the middle (lower) section. Zone widths adjacent to the step
+      wall are based on h<sub>s1</sub> = h − h<sub>s2</sub> (the step height):
       1.5·h<sub>s1</sub> wide along the step wall, 0.6·h deep from the step toward the far edge.</p>
-      <p>Per the figure's own note: <em>"On the lower level of flat, stepped roofs shown here, the zone
-      designations and pressure coefficients shown in Fig. 30.3-2A shall apply."</em> — i.e. the same
-      Zone 1/2/3 GC<sub>p</sub> values are used everywhere; only the zone <em>geometry</em> changes near
-      the step.</p>`
+      <p>Per the figure's note: <em>"On the lower level of flat, stepped roofs shown here, the zone
+      designations and pressure coefficients shown in Fig. 30.3-2A shall apply."</em> — Zone 1/2/3
+      GC<sub>p</sub> values are unchanged; only the zone <em>geometry</em> changes near the step.</p>`
   },
   steppedHs: {
     title: 'Stepped Roof Heights — h<sub>s2</sub> and h<sub>s1</sub>',
     html: `<p><span class="src-tag">Fig. 30.3-3 Notation</span></p>
       <p><b>h<sub>s2</sub></b> (this field) — <em>absolute</em> height of the W<sub>2</sub> (lower/middle)
-      section measured from ground to its roof surface. Enter the actual eave height of the shorter
-      building section.</p>
-      <p><b>h<sub>s1</sub></b> (computed automatically) — the <em>step height</em>, i.e. the vertical
-      distance between the W<sub>2</sub> roof and the W<sub>1</sub> roof:
-      h<sub>s1</sub> = h − h<sub>s2</sub>, where h is the main building height entered above in
-      Building Dimensions.</p>
-      <p>This step height h<sub>s1</sub> controls the zone widths on the lower roof adjacent to the
-      step wall: the edge strip width is 1.5·h<sub>s1</sub> (Fig. 30.3-3).</p>`
+      section from ground to its roof surface. Enter the actual eave height of the shorter section.</p>
+      <p><b>h<sub>s1</sub></b> (computed) — the <em>step height</em>: vertical distance from W<sub>2</sub>
+      roof to W<sub>1</sub> roof. h<sub>s1</sub> = h − h<sub>s2</sub>, where h is the main building
+      eave height entered above.</p>
+      <p>h<sub>s1</sub> controls zone widths on the lower roof adjacent to the step wall:
+      edge strip = 1.5·h<sub>s1</sub> (Fig. 30.3-3). Corner strip depth = 0.6·h (tall section height),
+      middle bar depth = 0.6·h<sub>s2</sub> for the 3-section П-shape.</p>`
   },
   stepped3: {
     title: 'Three-Section Stepped Roof — W<sub>3</sub> / h<sub>3</sub>',
     html: `<p><span class="src-tag">ASCE/SEI 7-22, Fig. 30.3-3</span></p>
-      <p><b>W<sub>3</sub></b> — width of the third (rightmost) building section. Set to <b>0</b> for a
+      <p><b>W<sub>3</sub></b> — width of the third (rightmost) section. Set to <b>0</b> for a
       two-level building (W<sub>1</sub> + W<sub>2</sub> only).</p>
-      <p>When W<sub>3</sub> &gt; 0, the building has three sections: W<sub>1</sub> (tallest, left),
-      W<sub>2</sub> (middle, lower), W<sub>3</sub> (rightmost, same height as W<sub>1</sub>).
-      This is the symmetric stepped configuration shown in Fig. 30.3-3.</p>
+      <p>When W<sub>3</sub> > 0: three sections exist — W<sub>1</sub> (tallest, left),
+      W<sub>2</sub> (middle, lower), W<sub>3</sub> (right, same height as W<sub>1</sub>).
+      This is the symmetric stepped configuration of Fig. 30.3-3.</p>
       <p><b>h<sub>3</sub></b> — height of the W<sub>3</sub> section (defaults to h = W<sub>1</sub>
-      height). For symmetric buildings leave as is; override only if W<sub>3</sub> has a different
-      eave height.</p>
-      <p>In the 3-section case, the W<sub>2</sub> lower roof is enclosed on both sides by taller
-      walls, so only <b>Zone 1</b> and <b>Zone 2</b> apply on it. Zone 2 is П-shaped on front and back:
-      corner strips of width 1.5·h<sub>s1</sub> (along the step), depth 0.6·h; middle bar depth
-      0.6·h<sub>s2</sub>.</p>`
+      height). Override only if W<sub>3</sub> has a different eave height.</p>
+      <p>In the 3-section case, the W<sub>2</sub> lower roof is bounded by taller walls on both
+      sides, so only <b>Zone 1</b> and <b>Zone 2</b> apply on it. Zone 2 is П-shaped on front and
+      back: corner strips (width 1.5·h<sub>s1</sub>, depth 0.6·h) + middle bar (depth 0.6·h<sub>s2</sub>).</p>`
   }
 };
 
@@ -2703,16 +2944,17 @@ const WIND_INFO = {
     const content = document.getElementById('infoModalContent');
     if (!modal || !content) return;
     content.innerHTML = '<h3>' + entry.title + '</h3>' + entry.html;
-    modal.classList.remove('hidden');
+    modal.classList.add('open');
   }
   function closeInfoModal() {
     const modal = document.getElementById('infoModal');
-    if (modal) modal.classList.add('hidden');
+    if (modal) modal.classList.remove('open');
   }
-  document.addEventListener('DOMContentLoaded', function() {
+  // Use direct listener — with defer, DOM is ready; DOMContentLoaded may already have fired
+  function setup() {
     document.addEventListener('click', function(e) {
-      const btn = e.target.closest('.info-btn');
-      if (btn) { e.stopPropagation(); openInfoModal(btn.dataset.info); }
+      const btn = e.target.closest && e.target.closest('.info-btn');
+      if (btn) { e.preventDefault(); e.stopPropagation(); openInfoModal(btn.dataset.info); }
     });
     const closeBtn = document.getElementById('infoModalClose');
     if (closeBtn) closeBtn.addEventListener('click', closeInfoModal);
@@ -2723,7 +2965,12 @@ const WIND_INFO = {
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') closeInfoModal();
     });
-  });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setup);
+  } else {
+    setup();
+  }
 })();
 
 
