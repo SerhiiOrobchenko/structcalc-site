@@ -145,8 +145,7 @@ function gatherWindState(base) {
   if (pitchActiveBtn && pitchActiveBtn.dataset.unit === 'slope') {
     s.theta = Math.atan(s.theta / 12) * 180 / Math.PI;
   }
-  s.roofType = (s.theta <= 7 || s.roofShape === 'flat') ? 'flat' : 'sloped';
-  if (s.roofShape === 'flat') s.theta = 0;
+  s.roofType = s.theta <= 7 ? 'flat' : 'sloped';
   var specialRoofs = ['stepped', 'multispan', 'sawtooth', 'dome'];
   s.hasSteppedRoof   = (s.roofShape === 'stepped');
   s.hasMultispanRoof = (s.roofShape === 'multispan');
@@ -225,7 +224,7 @@ function recalcWind() {
   var th = s.theta     || 0;
   /* Mean roof height per ASCE 7-22 Sec. 26.2: h = (hEave + hRidge) / 2.
      For θ ≤ 10° the standard permits h = hEave (simplification). */
-  var _trueFlat = (s.roofShape === 'flat' || th === 0);
+  var _trueFlat = (th === 0);
   var hR;
   if (_trueFlat) {
     hR = hE;
@@ -310,7 +309,7 @@ function recalcWind() {
 
   var cap = document.getElementById('windDiagramCaption');
   if (cap) {
-    var sh = {gable:'Gable Roof',hip:'Hip Roof',flat:'Flat Roof',monoslope:'Monoslope Roof',stepped:'Stepped Roof',multispan:'Multispan Gable',sawtooth:'Sawtooth Roof',dome:'Domed Roof'};
+    var sh = {gable:'Gable Roof',hip:'Hip Roof',monoslope:'Monoslope Roof',stepped:'Stepped Roof',multispan:'Multispan Gable',sawtooth:'Sawtooth Roof',dome:'Domed Roof'};
     var pr = {envelope:'Envelope (Ch. 28)',directional:'Directional (Ch. 27)',cc:'C&C (Ch. 30)'};
     var pk = s.mode === 'cc' ? 'cc' : s.mwfrsProcedure;
     cap.textContent = (sh[s.roofShape] || 'Building') + ' — ' + (pr[pk] || '');
@@ -432,13 +431,13 @@ function renderProjectSummary(r, s) {
     row('K<sub>zt</sub>', r ? (r.kh ? (s.kzt||1.0).toFixed(3) : '—') : '—') +
     '</div>';
   var B = s.minDim||40, L = s.buildingL||60, h = s.h||20, th = s.theta||0;
-  var roofNames = {gable:'Gable',hip:'Hip',flat:'Flat',monoslope:'Monoslope',stepped:'Stepped',multispan:'Multispan',sawtooth:'Sawtooth',dome:'Dome'};
+  var roofNames = {gable:'Gable',hip:'Hip',monoslope:'Monoslope',stepped:'Stepped',multispan:'Multispan',sawtooth:'Sawtooth',dome:'Dome'};
   html += '<div class="proj-sum-card"><div class="proj-sum-card-title">Building Geometry</div>' +
     row('Width B', B+' ft') + row('Length L', L+' ft') +
     row('Eave Height h<sub>e</sub>', (s.hEave || h).toFixed(1)+' ft') +
     row('Mean Roof Height h', h.toFixed(1)+' ft') +
     row('Roof Shape', escHtml(roofNames[s.roofShape]||s.roofShape||'—')) +
-    (s.roofShape !== 'flat' ? row('Roof Pitch &theta;', th.toFixed(1)+'°') : '') +
+    row('Roof Pitch &theta;', th.toFixed(1)+'°') +
     '</div>';
   html += '<div class="proj-sum-card"><div class="proj-sum-card-title">Calculation</div>' +
     row('Procedure', escHtml(procMap[proc]||proc)) +
@@ -621,7 +620,7 @@ function buildCCStepReport(r, s) {
   var gcpiStr  = {enclosed:'\xb10.18', partiallyEnclosed:'\xb10.55', partiallyOpen:'0.00', open:'0.00'}[enc] || ('\xb1' + fv(gcpiObj.pos, 2));
   var addrEl   = document.getElementById('wind-address');
   var addr     = addrEl ? addrEl.value.trim() : '';
-  var roofNames = {gable:'Gable', hip:'Hip', flat:'Flat', monoslope:'Monoslope', stepped:'Stepped', multispan:'Multispan Gable', sawtooth:'Sawtooth', dome:'Domed'};
+  var roofNames = {gable:'Gable', hip:'Hip', monoslope:'Monoslope', stepped:'Stepped', multispan:'Multispan Gable', sawtooth:'Sawtooth', dome:'Domed'};
   var roofLabel = roofNames[s.roofShape] || s.roofShape || '—';
   var a    = r.a || 0;
   var Aw   = s.areaWall || 20;
@@ -2070,13 +2069,13 @@ function updateCCDependentUI() {
 
 /* Rebuild Roof Profile select to match enclosure type:
    Open → monoslope-free / pitched-free / troughed-free only
-   Enclosed/Partial → gable, hip, flat, monoslope + special C&C shapes  */
+   Enclosed/Partial → gable, hip, monoslope + special C&C shapes  */
 function applyRoofProfileFilter(isOpen) {
   var roofSel = document.getElementById('wind-roofShape');
   if (!roofSel) return;
   var prev = roofSel.value;
   var freeTypes = ['monoslope-free', 'pitched-free', 'troughed-free'];
-  var encTypes  = ['gable','hip','flat','monoslope','stepped','multispan','sawtooth','dome'];
+  var encTypes  = ['gable','hip','monoslope','stepped','multispan','sawtooth','dome'];
 
   if (isOpen) {
     roofSel.innerHTML =
@@ -2088,7 +2087,6 @@ function applyRoofProfileFilter(isOpen) {
     roofSel.innerHTML =
       '<option value="gable">Gable</option>' +
       '<option value="hip">Hip</option>' +
-      '<option value="flat">Flat (≤ 7°)</option>' +
       '<option value="monoslope">Monoslope</option>' +
       '<optgroup label="Special — C&amp;C (Ch. 30)">' +
         '<option value="stepped">Stepped multi-level flat (Fig. 30.3-3)</option>' +
