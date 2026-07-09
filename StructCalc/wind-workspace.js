@@ -2944,11 +2944,12 @@ const WIND_INFO = {
     const content = document.getElementById('infoModalContent');
     if (!modal || !content) return;
     content.innerHTML = '<h3>' + entry.title + '</h3>' + entry.html;
+    modal.classList.remove('hidden');
     modal.classList.add('open');
   }
   function closeInfoModal() {
     const modal = document.getElementById('infoModal');
-    if (modal) modal.classList.remove('open');
+    if (modal) { modal.classList.remove('open'); modal.classList.add('hidden'); }
   }
   // Use direct listener — with defer, DOM is ready; DOMContentLoaded may already have fired
   function setup() {
