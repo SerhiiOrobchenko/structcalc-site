@@ -1577,8 +1577,8 @@ class Wind3DRenderer {
 
     // dim-a3/dim-a4 (base floor a= dims) removed — redundant with eave-level dims
 
-    // ── Zone 3: 0.6h facade dims at EAVE LEVEL — gable / flat only (θ ≤ 7°) ─
-    if (roofShape !== 'hip' && roofShape !== 'monoslope') {
+    // ── Zone 3: 0.6h facade dims at EAVE LEVEL — flat/low-pitch gable only (θ ≤ 7°) ─
+    if (roofShape !== 'hip' && roofShape !== 'monoslope' && theta <= 7) {
       const h_m    = hEaveLabel ?? (hEave / 1.8);
       const d06str = (+h_m * 0.6).toFixed(1);
       const z3_06h = 0.6 * h_m;
