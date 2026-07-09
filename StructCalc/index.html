@@ -438,27 +438,33 @@
                 <div id="ws-extra-stepped" class="hidden">
                   <div class="field-row">
                     <div class="field">
-                      <label>W<sub>1</sub> &ndash; lower width <span class="unit">(ft)</span></label>
+                      <label>W<sub>1</sub> &ndash; lower width <span class="unit">(ft)</span>
+                        <button type="button" class="info-btn" data-info="stepped" aria-label="Learn more">i</button></label>
                       <input class="num" id="wind-steppedW1" value="20" min="0" step="any">
                     </div>
                     <div class="field">
-                      <label>h<sub>s2</sub> &ndash; lower section height <span class="unit">(ft)</span></label>
+                      <label>h<sub>s2</sub> &ndash; W2 height from ground <span class="unit">(ft)</span>
+                        <button type="button" class="info-btn" data-info="steppedHs" aria-label="Learn more">i</button></label>
                       <input class="num" id="wind-steppedHz1" value="12" min="0" step="any">
                     </div>
                   </div>
                   <div class="field-row">
                     <div class="field">
-                      <label>W<sub>2</sub> &ndash; mid width <span class="unit">(ft)</span></label>
+                      <label>W<sub>2</sub> &ndash; mid width <span class="unit">(ft)</span>
+                        <button type="button" class="info-btn" data-info="stepped" aria-label="Learn more">i</button></label>
                       <input class="num" id="wind-steppedW2" value="20" min="0" step="any">
                     </div>
                     <div class="field">
-                      <label>W<sub>3</sub> &ndash; upper width <span class="unit">(ft)</span> <span class="hint">(0 = 2-level)</span></label>
+                      <label>W<sub>3</sub> &ndash; upper width <span class="unit">(ft)</span>
+                        <button type="button" class="info-btn" data-info="stepped3" aria-label="Learn more">i</button></label>
                       <input class="num" id="wind-steppedW3" value="0" min="0" step="any">
+                      <div class="field-hint">0 = 2-level building</div>
                     </div>
                   </div>
                   <div class="field-row" id="ws-stepped-hz2-row" style="display:none">
                     <div class="field">
-                      <label>h<sub>3</sub> &ndash; third section height <span class="unit">(ft)</span></label>
+                      <label>h<sub>3</sub> &ndash; third section height <span class="unit">(ft)</span>
+                        <button type="button" class="info-btn" data-info="stepped3" aria-label="Learn more">i</button></label>
                       <input class="num" id="wind-steppedHz2" value="0" min="0" step="any">
                     </div>
                   </div>
@@ -997,5 +1003,14 @@
 <script src="workspace.js" defer onerror="console.error('[SC] FATAL: workspace.js failed')"></script>
 <script src="wind-workspace.js?v=21" defer onerror="console.error('[SC] FATAL: wind-workspace.js failed')"></script>
 <script src="shell-init.js" defer onerror="console.error('[SC] FATAL: shell-init.js failed')"></script>
+
+<!-- Info modal -->
+<div class="modal-overlay hidden" id="infoModal">
+  <div class="modal-box">
+    <button class="modal-close" id="infoModalClose">&times;</button>
+    <div id="infoModalContent" class="info-modal-body"></div>
+  </div>
+</div>
+
 </body>
 </html>

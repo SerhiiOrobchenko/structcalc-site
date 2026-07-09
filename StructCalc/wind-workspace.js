@@ -2646,6 +2646,87 @@ function renderPrintPreview(r, s) {
   area.innerHTML = html;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   INFO MODAL — stepped-roof parameter explanations
+   ═══════════════════════════════════════════════════════════════════════════ */
+const WIND_INFO = {
+  stepped: {
+    title: 'Stepped Roof — Sec. 30.3.2.1, Fig. 30.3-3',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, Sec. 30.3.2.1, Fig. 30.3-3</span> — applies to flat
+      roofs (θ ≤ 7°) with one or more lower sections adjacent to a taller main section.</p>
+      <p><b>W<sub>1</sub></b> — width of the tallest (left/main) building section measured in the
+      direction perpendicular to the ridge line (i.e., the horizontal span of the elevated part).</p>
+      <p><b>W<sub>2</sub></b> — width of the middle (lower) section in the same direction. Zone widths
+      adjacent to the step are based on h<sub>s1</sub> (the step height = h − h<sub>s2</sub>):
+      1.5·h<sub>s1</sub> wide along the step wall, 0.6·h deep from the step toward the far edge.</p>
+      <p>Per the figure's own note: <em>"On the lower level of flat, stepped roofs shown here, the zone
+      designations and pressure coefficients shown in Fig. 30.3-2A shall apply."</em> — i.e. the same
+      Zone 1/2/3 GC<sub>p</sub> values are used everywhere; only the zone <em>geometry</em> changes near
+      the step.</p>`
+  },
+  steppedHs: {
+    title: 'Stepped Roof Heights — h<sub>s2</sub> and h<sub>s1</sub>',
+    html: `<p><span class="src-tag">Fig. 30.3-3 Notation</span></p>
+      <p><b>h<sub>s2</sub></b> (this field) — <em>absolute</em> height of the W<sub>2</sub> (lower/middle)
+      section measured from ground to its roof surface. Enter the actual eave height of the shorter
+      building section.</p>
+      <p><b>h<sub>s1</sub></b> (computed automatically) — the <em>step height</em>, i.e. the vertical
+      distance between the W<sub>2</sub> roof and the W<sub>1</sub> roof:
+      h<sub>s1</sub> = h − h<sub>s2</sub>, where h is the main building height entered above in
+      Building Dimensions.</p>
+      <p>This step height h<sub>s1</sub> controls the zone widths on the lower roof adjacent to the
+      step wall: the edge strip width is 1.5·h<sub>s1</sub> (Fig. 30.3-3).</p>`
+  },
+  stepped3: {
+    title: 'Three-Section Stepped Roof — W<sub>3</sub> / h<sub>3</sub>',
+    html: `<p><span class="src-tag">ASCE/SEI 7-22, Fig. 30.3-3</span></p>
+      <p><b>W<sub>3</sub></b> — width of the third (rightmost) building section. Set to <b>0</b> for a
+      two-level building (W<sub>1</sub> + W<sub>2</sub> only).</p>
+      <p>When W<sub>3</sub> &gt; 0, the building has three sections: W<sub>1</sub> (tallest, left),
+      W<sub>2</sub> (middle, lower), W<sub>3</sub> (rightmost, same height as W<sub>1</sub>).
+      This is the symmetric stepped configuration shown in Fig. 30.3-3.</p>
+      <p><b>h<sub>3</sub></b> — height of the W<sub>3</sub> section (defaults to h = W<sub>1</sub>
+      height). For symmetric buildings leave as is; override only if W<sub>3</sub> has a different
+      eave height.</p>
+      <p>In the 3-section case, the W<sub>2</sub> lower roof is enclosed on both sides by taller
+      walls, so only <b>Zone 1</b> and <b>Zone 2</b> apply on it. Zone 2 is П-shaped on front and back:
+      corner strips of width 1.5·h<sub>s1</sub> (along the step), depth 0.6·h; middle bar depth
+      0.6·h<sub>s2</sub>.</p>`
+  }
+};
+
+(function _initInfoModal() {
+  function openInfoModal(key) {
+    const entry = WIND_INFO[key];
+    if (!entry) return;
+    const modal = document.getElementById('infoModal');
+    const content = document.getElementById('infoModalContent');
+    if (!modal || !content) return;
+    content.innerHTML = '<h3>' + entry.title + '</h3>' + entry.html;
+    modal.classList.remove('hidden');
+  }
+  function closeInfoModal() {
+    const modal = document.getElementById('infoModal');
+    if (modal) modal.classList.add('hidden');
+  }
+  document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('click', function(e) {
+      const btn = e.target.closest('.info-btn');
+      if (btn) { e.stopPropagation(); openInfoModal(btn.dataset.info); }
+    });
+    const closeBtn = document.getElementById('infoModalClose');
+    if (closeBtn) closeBtn.addEventListener('click', closeInfoModal);
+    const modal = document.getElementById('infoModal');
+    if (modal) modal.addEventListener('click', function(e) {
+      if (e.target === modal) closeInfoModal();
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeInfoModal();
+    });
+  });
+})();
+
+
 function windPrintReport() {
   var r = window._windLastR, s = window._windLastS;
   if (!r || !s) { alert('Calculate first (enter inputs and switch to any tab).'); return; }
