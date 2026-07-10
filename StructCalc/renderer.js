@@ -1651,12 +1651,12 @@ class Wind3DRenderer {
         : Math.atan2(hRidge - hEave, hB);        // gable: half-span
       // monoslope: corner at LOW eave (x=+hB), horizontal goes left (−x), slope goes left+up
       const ax = isMono ? +hB : -hB;
-      const ay = hEave, az = hL + 2;  // 2 ft outside front gable wall
+      const ay = hEave, az = hL + 0.15;  // minimal offset to clear wall z-fighting
       const hSign = isMono ? -1 : +1;   // direction of horizontal leg
       const arcR   = 0.75 * hB;
       const ALEN   = 2.5;
       const HALFW  = ALEN * Math.tan(THREE.MathUtils.degToRad(15));
-      const ATAIL  = 5;
+      const ATAIL  = 2;   // overshoot past arrowhead — matches _buildDim ext=aLen*0.8
       const legLen = arcR + ALEN + ATAIL;
       const lineMat = new THREE.LineBasicMaterial({ color: 0x000000 });
 
