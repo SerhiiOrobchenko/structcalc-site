@@ -1507,80 +1507,95 @@ class Wind3DRenderer {
     ));
     this._dimHighlight['dim-B'] = grp.children[grp.children.length - 1];
 
-    // ── L (Length) — Right face, parallel to Z ─────────────────────────────
-    const lX = hB + 16;   // second dim: 16 ft from right face
+    // ── L (Length) ─────────────────────────────────────────────────────────
+    // monoslope: LEFT face (HIGH eave, x=-hB);  others: RIGHT face (x=+hB)
+    const _monoD = (roofShape === 'monoslope');
+    const lX    = _monoD ? (-hB - 16) : (hB + 16);
+    const lXsrc = _monoD ? -hB : hB;
     grp.add(this._buildDim(
       new THREE.Vector3(lX, EPS_Y, -hL),
       new THREE.Vector3(lX, EPS_Y,  hL),
-      new THREE.Vector3(1, 0, 1).normalize(),
+      _monoD ? new THREE.Vector3(-1, 0, 1).normalize() : new THREE.Vector3(1, 0, 1).normalize(),
       [
-        [new THREE.Vector3(hB, EPS_Y, -hL), new THREE.Vector3(lX, EPS_Y, -hL)],
-        [new THREE.Vector3(hB, EPS_Y,  hL), new THREE.Vector3(lX, EPS_Y,  hL)],
+        [new THREE.Vector3(lXsrc, EPS_Y, -hL), new THREE.Vector3(lX, EPS_Y, -hL)],
+        [new THREE.Vector3(lXsrc, EPS_Y,  hL), new THREE.Vector3(lX, EPS_Y,  hL)],
       ],
-      `L=${fmt(L)}ft`, 'dim-L', 'wind-L', new THREE.Vector3(1,0,0)
+      `L=${fmt(L)}ft`, 'dim-L', 'wind-L',
+      _monoD ? new THREE.Vector3(-1,0,0) : new THREE.Vector3(1,0,0)
     ));
     this._dimHighlight['dim-L'] = grp.children[grp.children.length - 1];
 
-    // ── h_eave — Left face centre (z=0), y=0→hEave ───────────────────────
-    const hXhe = -hB - 8;    // first vertical dim: 8 ft from left face
-    const hZhe = 0;   // midpoint of building length
+    // ── h_eave ────────────────────────────────────────────────────────────
+    // monoslope: RIGHT face (LOW eave, x=+hB);  others: LEFT face (x=-hB)
+    const hZhe  = 0;
+    const hXhe  = _monoD ? (hB + 8) : (-hB - 8);
+    const hXheSrc = _monoD ? hB : -hB;
     grp.add(this._buildDim(
       new THREE.Vector3(hXhe, EPS_Y,  hZhe),
       new THREE.Vector3(hXhe, hEave,  hZhe),
-      new THREE.Vector3(-1, 1, 0).normalize(),
+      _monoD ? new THREE.Vector3(1, 1, 0).normalize() : new THREE.Vector3(-1, 1, 0).normalize(),
       [
-        [new THREE.Vector3(-hB, EPS_Y,  hZhe), new THREE.Vector3(hXhe, EPS_Y,  hZhe)],
-        [new THREE.Vector3(-hB, hEave,  hZhe), new THREE.Vector3(hXhe, hEave,  hZhe)],
+        [new THREE.Vector3(hXheSrc, EPS_Y,  hZhe), new THREE.Vector3(hXhe, EPS_Y,  hZhe)],
+        [new THREE.Vector3(hXheSrc, hEave,  hZhe), new THREE.Vector3(hXhe, hEave,  hZhe)],
       ],
-      `h<sub>e</sub>=${fmt(hEaveLabel ?? hEave)}ft`, 'dim-h-eave', 'wind-h', new THREE.Vector3(-1,0,0)
+      `h<sub>e</sub>=${fmt(hEaveLabel ?? hEave)}ft`, 'dim-h-eave', 'wind-h',
+      _monoD ? new THREE.Vector3(1,0,0) : new THREE.Vector3(-1,0,0)
     ));
     this._dimHighlight['dim-h-eave'] = grp.children[grp.children.length - 1];
 
-    // ── h (mean roof height) — Left face, further out, y=0→hMean ──────────
-    const hXh   = -hB - 16;  // second vertical dim: 16 ft from left face
-    const hZh   = 0;   // midpoint of building length
-    const hMean = (hEave + hRidge) / 2;   // mean roof height (scaled)
+    // ── h (mean roof height) ──────────────────────────────────────────────
+    // monoslope: RIGHT face further out (x=+hB+16);  others: LEFT face
+    const hZh   = 0;
+    const hXh   = _monoD ? (hB + 16) : (-hB - 16);
+    const hMean = (hEave + hRidge) / 2;
     const hMeanFt = (hEaveLabel != null && hLabel != null)
       ? (hEaveLabel + hLabel) / 2 : null;
     grp.add(this._buildDim(
       new THREE.Vector3(hXh, EPS_Y,  hZh),
       new THREE.Vector3(hXh, hMean,  hZh),
-      new THREE.Vector3(-1, 1, 0).normalize(),
+      _monoD ? new THREE.Vector3(1, 1, 0).normalize() : new THREE.Vector3(-1, 1, 0).normalize(),
       [
         [new THREE.Vector3(hXhe, EPS_Y,  hZh), new THREE.Vector3(hXh, EPS_Y,  hZh)],
-        [new THREE.Vector3(-hB/2, hMean,  hZh), new THREE.Vector3(hXh, hMean,  hZh)],
+        [new THREE.Vector3(_monoD ? hB/2 : -hB/2, hMean, hZh), new THREE.Vector3(hXh, hMean, hZh)],
       ],
-      `h=${fmt(hMeanFt ?? hMean)}ft`, 'dim-h', 'wind-h', new THREE.Vector3(-1,0,0)
+      `h=${fmt(hMeanFt ?? hMean)}ft`, 'dim-h', 'wind-h',
+      _monoD ? new THREE.Vector3(1,0,0) : new THREE.Vector3(-1,0,0)
     ));
     this._dimHighlight['dim-h'] = grp.children[grp.children.length - 1];
 
-    const aEY  = EPS_Y;   // horizontal arrows — wings in XZ plane, no below-ground issue
+    const aEY  = EPS_Y;
 
-    // ── Eave "a" — Front face right side (zone 3 strip from Back toward front right) ──
-    const aFZ = hL + 8;    // first dim: 8 ft from front face
+    // ── Eave "a" — Front face corner ──────────────────────────────────────
+    // monoslope: LEFT/HIGH-eave corner (x=-hB);  others: RIGHT corner (x=+hB)
+    const aFZ  = hL + 8;
+    const a2x0 = _monoD ? -hB           : (hB - zone_a);
+    const a2x1 = _monoD ? (-hB + zone_a) : hB;
     grp.add(this._buildDim(
-      new THREE.Vector3(hB - zone_a, aEY, aFZ),
-      new THREE.Vector3(hB,          aEY, aFZ),
-      new THREE.Vector3(1, 0, -1).normalize(), // horizontal perpDir — matches B dim
+      new THREE.Vector3(a2x0, aEY, aFZ),
+      new THREE.Vector3(a2x1, aEY, aFZ),
+      _monoD ? new THREE.Vector3(-1, 0, -1).normalize() : new THREE.Vector3(1, 0, -1).normalize(),
       [
-        [new THREE.Vector3(hB - zone_a, EPS_Y, hL), new THREE.Vector3(hB - zone_a, aEY, aFZ)],
-        [new THREE.Vector3(hB,          EPS_Y, hL), new THREE.Vector3(hB,          aEY, aFZ)],
+        [new THREE.Vector3(a2x0, EPS_Y, hL), new THREE.Vector3(a2x0, aEY, aFZ)],
+        [new THREE.Vector3(a2x1, EPS_Y, hL), new THREE.Vector3(a2x1, aEY, aFZ)],
       ],
       `a=${fmt(zone_a)}ft`, 'dim-a2', null, new THREE.Vector3(0,0,1)
     ));
     this._dimHighlight['dim-a2'] = grp.children[grp.children.length - 1];
 
-    // ── Eave "a" — Right face front corner (zone 3/5 strip z=hL-zone_a to hL) ──
-    const aRX = hB + 8;    // first dim: 8 ft from right face
+    // ── Eave "a" — Side face front corner ────────────────────────────────
+    // monoslope: LEFT face (x=-hB);  others: RIGHT face (x=+hB)
+    const aRX    = _monoD ? (-hB - 8) : (hB + 8);
+    const aRXsrc = _monoD ? -hB : hB;
     grp.add(this._buildDim(
       new THREE.Vector3(aRX, aEY, hL - zone_a),
       new THREE.Vector3(aRX, aEY, hL),
-      new THREE.Vector3(1, 0, 1).normalize(), // horizontal perpDir — matches L dim
+      _monoD ? new THREE.Vector3(-1, 0, 1).normalize() : new THREE.Vector3(1, 0, 1).normalize(),
       [
-        [new THREE.Vector3(hB, EPS_Y, hL - zone_a), new THREE.Vector3(aRX, aEY, hL - zone_a)],
-        [new THREE.Vector3(hB, EPS_Y, hL),          new THREE.Vector3(aRX, aEY, hL)],
+        [new THREE.Vector3(aRXsrc, EPS_Y, hL - zone_a), new THREE.Vector3(aRX, aEY, hL - zone_a)],
+        [new THREE.Vector3(aRXsrc, EPS_Y, hL),          new THREE.Vector3(aRX, aEY, hL)],
       ],
-      `a=${fmt(zone_a)}ft`, 'dim-a', null, new THREE.Vector3(1,0,0)
+      `a=${fmt(zone_a)}ft`, 'dim-a', null,
+      _monoD ? new THREE.Vector3(-1,0,0) : new THREE.Vector3(1,0,0)
     ));
     this._dimHighlight['dim-a'] = grp.children[grp.children.length - 1];
 
