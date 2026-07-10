@@ -19,7 +19,7 @@
   window.ZONE_DESCRIPTORS = window.ZONE_DESCRIPTORS || {};
   window.ZONE_DESCRIPTORS['cc-monoslope'] = {
     drawZones(ctx) {
-      const { addZone, mkSlopeDim, THEME, THREE,
+      const { addZone, mkSlopeDim, mkSlopeDimExt, THEME, THREE,
               u_zone, v_zone, zone_a, hB, hL, hEave, hRidge,
               ptFn, norm, doLabel } = ctx;
 
@@ -74,31 +74,59 @@
         const a2_s = (2 * zone_a).toFixed(1);
         const a4_s = (4 * zone_a).toFixed(1);
 
-        /* Zone 3' at HIGH eave, FRONT corner:
-           — 2a depth from HIGH eave (u direction), at v=v_lo4 boundary */
-        mkSlopeDim('2a=' + a2_s + 'ft',
-          ptFn(0,      v_lo4, hB, hEave, hRidge, hL),
-          ptFn(u_hi2,  v_lo4, hB, hEave, hRidge, hL),
-          norm);
-        /* — 4a width along front gable (v direction, at mid of 2a strip) */
-        mkSlopeDim('4a=' + a4_s + 'ft',
-          ptFn(u_hi2/2, v_lo4, hB, hEave, hRidge, hL),
-          ptFn(u_hi2/2, 1,     hB, hEave, hRidge, hL),
+        // Offset to place dim line just outside zone boundary (ext-line pattern)
+        const vIn = Math.min(0.10, v_4a * 0.45);   // v-step outside zone (into roof field)
+        const uIn = Math.min(0.10, u_hi2 * 0.45);  // u-step outside zone (into zone 2')
+
+        /* ── Zone 3' (HIGH eave corners, 2a × 4a) ─────────────────────── */
+
+        /* 2a eave-strip width (u direction) — dim OUTSIDE zone at v = v_lo4 - vIn */
+        const vDim3p = Math.max(0.02, v_lo4 - vIn);
+        mkSlopeDimExt('2a=' + a2_s + 'ft',
+          ptFn(0,     vDim3p, hB, hEave, hRidge, hL),
+          ptFn(u_hi2, vDim3p, hB, hEave, hRidge, hL),
+          [
+            [ptFn(0,     v_lo4, hB, hEave, hRidge, hL), ptFn(0,     vDim3p, hB, hEave, hRidge, hL)],
+            [ptFn(u_hi2, v_lo4, hB, hEave, hRidge, hL), ptFn(u_hi2, vDim3p, hB, hEave, hRidge, hL)],
+          ],
           norm);
 
-        /* Zone 3 at LOW eave, FRONT corner:
-           — 2a depth from LOW eave (u direction), at v=v_lo2 boundary  */
-        mkSlopeDim('2a=' + a2_s + 'ft',
-          ptFn(u_lo2, v_lo2, hB, hEave, hRidge, hL),
-          ptFn(1,     v_lo2, hB, hEave, hRidge, hL),
-          norm);
-        /* — 2a width along front gable (v direction, at LOW eave)       */
-        mkSlopeDim('2a=' + a2_s + 'ft',
-          ptFn(1, v_lo2, hB, hEave, hRidge, hL),
-          ptFn(1, 1,     hB, hEave, hRidge, hL),
+        /* 4a gable depth (v direction) — dim OUTSIDE zone at u = u_hi2 + uIn */
+        const uDim3p = Math.min(0.98, u_hi2 + uIn);
+        mkSlopeDimExt('4a=' + a4_s + 'ft',
+          ptFn(uDim3p, v_lo4, hB, hEave, hRidge, hL),
+          ptFn(uDim3p, 1,     hB, hEave, hRidge, hL),
+          [
+            [ptFn(u_hi2, v_lo4, hB, hEave, hRidge, hL), ptFn(uDim3p, v_lo4, hB, hEave, hRidge, hL)],
+            [ptFn(u_hi2, 1,     hB, hEave, hRidge, hL), ptFn(uDim3p, 1,     hB, hEave, hRidge, hL)],
+          ],
           norm);
 
-        /* Zone 2 middle at LOW eave: a depth at midpoint of 2a strip    */
+        /* ── Zone 3 (LOW eave corners, 2a × 2a) ────────────────────────── */
+
+        /* 2a eave-strip width (u direction) — dim OUTSIDE zone at v = v_lo2 - vIn */
+        const vDim3 = Math.max(0.02, v_lo2 - vIn);
+        mkSlopeDimExt('2a=' + a2_s + 'ft',
+          ptFn(u_lo2, vDim3, hB, hEave, hRidge, hL),
+          ptFn(1,     vDim3, hB, hEave, hRidge, hL),
+          [
+            [ptFn(u_lo2, v_lo2, hB, hEave, hRidge, hL), ptFn(u_lo2, vDim3, hB, hEave, hRidge, hL)],
+            [ptFn(1,     v_lo2, hB, hEave, hRidge, hL), ptFn(1,     vDim3, hB, hEave, hRidge, hL)],
+          ],
+          norm);
+
+        /* 2a gable depth (v direction) — dim OUTSIDE zone at u = u_lo2 - uIn */
+        const uDim3 = Math.max(0.02, u_lo2 - uIn);
+        mkSlopeDimExt('2a=' + a2_s + 'ft',
+          ptFn(uDim3, v_lo2, hB, hEave, hRidge, hL),
+          ptFn(uDim3, 1,     hB, hEave, hRidge, hL),
+          [
+            [ptFn(u_lo2, v_lo2, hB, hEave, hRidge, hL), ptFn(uDim3, v_lo2, hB, hEave, hRidge, hL)],
+            [ptFn(u_lo2, 1,     hB, hEave, hRidge, hL), ptFn(uDim3, 1,     hB, hEave, hRidge, hL)],
+          ],
+          norm);
+
+        /* ── Zone 2 (LOW eave middle strip, depth a) ────────────────────── */
         const vMid = (v_2a + v_lo2) / 2;
         mkSlopeDim('a=' + a_s + 'ft',
           ptFn(u_lo1, vMid, hB, hEave, hRidge, hL),
