@@ -68,40 +68,41 @@
       addZone(0, u_hi2,     v_lo4, 1,
               THEME.zone3p, 0.85, 'zone-3p', 0.18, ptFn, norm, doLabel);   // FRONT — label here
 
-      /* ── Dimension lines on BACK face (v=0) — opposite to labels ──── */
+      /* ── Dimension lines on FRONT face (v=1) — same side as labels ─── */
       if (doLabel && mkSlopeDim && THREE && THREE.CSS2DObject) {
         const a_s  = zone_a.toFixed(1);
         const a2_s = (2 * zone_a).toFixed(1);
         const a4_s = (4 * zone_a).toFixed(1);
 
-        /* Zone 3' at HIGH eave, BACK corner:
-           — 2a depth from HIGH eave (u direction), at v=v_4a boundary  */
+        /* Zone 3' at HIGH eave, FRONT corner:
+           — 2a depth from HIGH eave (u direction), at v=v_lo4 boundary */
         mkSlopeDim('2a=' + a2_s + 'ft',
-          ptFn(0,      v_4a, hB, hEave, hRidge, hL),
-          ptFn(u_hi2,  v_4a, hB, hEave, hRidge, hL),
+          ptFn(0,      v_lo4, hB, hEave, hRidge, hL),
+          ptFn(u_hi2,  v_lo4, hB, hEave, hRidge, hL),
           norm);
-        /* — 4a width along back gable (v direction, at mid of 2a strip) */
+        /* — 4a width along front gable (v direction, at mid of 2a strip) */
         mkSlopeDim('4a=' + a4_s + 'ft',
-          ptFn(u_hi2/2, 0,    hB, hEave, hRidge, hL),
-          ptFn(u_hi2/2, v_4a, hB, hEave, hRidge, hL),
+          ptFn(u_hi2/2, v_lo4, hB, hEave, hRidge, hL),
+          ptFn(u_hi2/2, 1,     hB, hEave, hRidge, hL),
           norm);
 
-        /* Zone 3 at LOW eave, BACK corner:
-           — 2a depth from LOW eave (u direction), at v=v_2a boundary   */
+        /* Zone 3 at LOW eave, FRONT corner:
+           — 2a depth from LOW eave (u direction), at v=v_lo2 boundary  */
         mkSlopeDim('2a=' + a2_s + 'ft',
-          ptFn(u_lo2, v_2a, hB, hEave, hRidge, hL),
-          ptFn(1,     v_2a, hB, hEave, hRidge, hL),
+          ptFn(u_lo2, v_lo2, hB, hEave, hRidge, hL),
+          ptFn(1,     v_lo2, hB, hEave, hRidge, hL),
           norm);
-        /* — 2a width along back gable (v direction, at LOW eave)        */
+        /* — 2a width along front gable (v direction, at LOW eave)       */
         mkSlopeDim('2a=' + a2_s + 'ft',
-          ptFn(1, 0,    hB, hEave, hRidge, hL),
-          ptFn(1, v_2a, hB, hEave, hRidge, hL),
+          ptFn(1, v_lo2, hB, hEave, hRidge, hL),
+          ptFn(1, 1,     hB, hEave, hRidge, hL),
           norm);
 
-        /* Zone 2 middle at LOW eave: a depth at v_2a boundary           */
+        /* Zone 2 middle at LOW eave: a depth at midpoint of 2a strip    */
+        const vMid = (v_2a + v_lo2) / 2;
         mkSlopeDim('a=' + a_s + 'ft',
-          ptFn(u_lo1, v_2a, hB, hEave, hRidge, hL),
-          ptFn(1,     v_2a, hB, hEave, hRidge, hL),
+          ptFn(u_lo1, vMid, hB, hEave, hRidge, hL),
+          ptFn(1,     vMid, hB, hEave, hRidge, hL),
           norm);
       }
     },

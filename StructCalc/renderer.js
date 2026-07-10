@@ -1630,8 +1630,10 @@ class Wind3DRenderer {
     // ── θ angle dim — monoslope: LOW eave corner (right), angle opens left+up
     //                  others:    front-left eave corner, angle opens right+up ──────
     if (theta > 0) {
-      const thRad  = Math.atan2(hRidge - hEave, hB);
       const isMono = (roofShape === 'monoslope');
+      const thRad  = isMono
+        ? Math.atan2(hRidge - hEave, 2 * hB)   // monoslope: full span
+        : Math.atan2(hRidge - hEave, hB);        // gable: half-span
       // monoslope: corner at LOW eave (x=+hB), horizontal goes left (−x), slope goes left+up
       const ax = isMono ? +hB : -hB;
       const ay = hEave, az = hL;
