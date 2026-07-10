@@ -1584,7 +1584,7 @@ class Wind3DRenderer {
 
     // ── Eave "a" — Side face front corner ────────────────────────────────
     // monoslope: LEFT face (x=-hB);  others: RIGHT face (x=+hB)
-    const aRX    = _monoD ? (-hB - 8) : (hB + 8);
+    const aRX    = _monoD ? (-hB - 12) : (hB + 12);   // +4 ft clear of 0.6h dim
     const aRXsrc = _monoD ? -hB : hB;
     grp.add(this._buildDim(
       new THREE.Vector3(aRX, aEY, hL - zone_a),
@@ -1651,7 +1651,7 @@ class Wind3DRenderer {
         : Math.atan2(hRidge - hEave, hB);        // gable: half-span
       // monoslope: corner at LOW eave (x=+hB), horizontal goes left (−x), slope goes left+up
       const ax = isMono ? +hB : -hB;
-      const ay = hEave, az = hL;
+      const ay = hEave, az = hL + 2;  // 2 ft outside front gable wall
       const hSign = isMono ? -1 : +1;   // direction of horizontal leg
       const arcR   = 0.75 * hB;
       const ALEN   = 2.5;
@@ -2329,10 +2329,10 @@ class Wind3DRenderer {
       makeZoneLabelFlat: (zt,pt,n,td) =>
         this._makeZoneLabelFlat(zt,pt,n,td),
       leftNormal:     (b,e,r,l)       => this._leftNormal(b,e,r,l),
-      mkSlopeDim:      (lbl,ptA,ptB,n)                   => this._mkSlopeDim(lbl,ptA,ptB,n,0.10),
-      mkSlopeDimExt:   (lbl,ptA,ptB,extPairs,n)          => this._mkSlopeDim(lbl,ptA,ptB,n,0.10,extPairs),
-      mkSlopeDimZ3:    (lbl,ptA,ptB,n)                   => this._mkSlopeDim(lbl,ptA,ptB,n,0.10),
-      mkSlopeDimChain: (lbl,ptA,ptB,n,p1End,p2End)       => this._mkSlopeDim(lbl,ptA,ptB,n,0.10,[],p1End,p2End),
+      mkSlopeDim:      (lbl,ptA,ptB,n)                   => this._mkSlopeDim(lbl,ptA,ptB,n,0.30),
+      mkSlopeDimExt:   (lbl,ptA,ptB,extPairs,n)          => this._mkSlopeDim(lbl,ptA,ptB,n,0.30,extPairs),
+      mkSlopeDimZ3:    (lbl,ptA,ptB,n)                   => this._mkSlopeDim(lbl,ptA,ptB,n,0.30),
+      mkSlopeDimChain: (lbl,ptA,ptB,n,p1End,p2End)       => this._mkSlopeDim(lbl,ptA,ptB,n,0.30,[],p1End,p2End),
       makeZone3Label: (pt,n)          => this._makeZone3ArrowLabel(pt,n,zone_a),
     };
 
