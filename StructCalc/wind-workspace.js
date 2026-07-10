@@ -1762,18 +1762,84 @@ function renderWindResults(r, s) {
       }
       html += '</div>';
     }
-    var roofLabel = {'1p':'Zone 1’ — field (low)','1':'Zone 1 — field','2':'Zone 2 — edge','2p':"Zone 2' — high-eave edge",'3':'Zone 3 — corner','3p':"Zone 3' — high-eave corner"};
-    var roofCls   = {'1p':'zone-low','1':'zone-low','2':'zone-mid','2p':'zone-mid','3':'zone-high','3p':'zone-high'};
-    if (r.ccRoof && r.ccRoof.length) {
-      var ccRoofZoneMap = {'1p':'zone-1p','1':'zone-1','2':'zone-2','2p':'zone-2p','3':'zone-3','3p':'zone-3p'};
-      html += '<div class="result-card"><div class="result-card-head">C&amp;C — Roof (Ch. 30)</div>';
-      r.ccRoof.forEach(function(z) {
-        var zt  = ccRoofZoneMap[z.zone] || '';
+    host.innerHTML = html;
+    return;
+  }
+
+
+
+  /* ── Building (Ch.27/28/30) summary ──────────────────────────────── */
+  var gcpiVal = r.gcpi && typeof r.gcpi === 'object' ? r.gcpi.pos : r.gcpi;
+  html += '<div class="result-card"><div class="result-card-head">Site &amp; Parameters</div>' +
+    '<div class="result-row"><span class="k">Risk Category</span><span class="v"><span class="badge-risk">' + escHtml(s.riskCategory) + '</span></span></div>' +
+    '<div class="result-row"><span class="k">Exposure</span><span class="v">' + escHtml(s.exposure) + '</span></div>' +
+    '<div class="result-row"><span class="k">Enclosure</span><span class="v">' + escHtml({enclosed:'Enclosed',partiallyEnclosed:'Part. Enclosed',open:'Open'}[s.enclosure] || s.enclosure) + '</span></div>' +
+    '<div class="result-row"><span class="k">Procedure</span><span class="v">' + escHtml(s.mode==='cc'?'C&C Ch.30':(s.mwfrsProcedure==='envelope'?'MWFRS Env Ch.28':'MWFRS Dir Ch.27')) + '</span></div></div>';
+
+  html += '<div class="result-card"><div class="result-card-head">Velocity Pressure</div>' +
+    '<div class="result-row"><span class="k">K<sub>h</sub></span><span class="v">' + fmt(r.kh,3) + '</span></div>' +
+    '<div class="result-row"><span class="k">K<sub>e</sub></span><span class="v">' + fmt(r.ke,3) + '</span></div>' +
+    '<div class="result-row"><span class="k">K<sub>d</sub></span><span class="v">' + fmt(r.kd,2) + '</span></div>' +
+    '<div class="result-row"><span class="k">q<sub>h</sub></span><span class="v">' + psf(r.qh) + '</span></div>' +
+    '<div class="result-row"><span class="k">(GC<sub>pi</sub>)</span><span class="v">±' + fmt(gcpiVal,2) + '</span></div>' +
+    '<div class="result-row"><span class="k">Zone a</span><span class="v">' + fmt(r.a,2) + ' ft</span></div></div>';
+
+  if (s.mode === 'mwfrs' && s.mwfrsProcedure === 'envelope' && r.mwfrsLC1 && r.mwfrsLC1.length) {
+    var all2 = (r.mwfrsLC1 || []).concat(r.mwfrsLC2 || []);
+    var seen = new Set();
+    var uniq = all2.filter(function(z){ return !seen.has(z.zone) && seen.add(z.zone); });
+    var mwZoneMap = {'1':'zone-1','1E':'zone-1','2':'zone-2','2E':'zone-2',
+                     '3':'zone-2','3E':'zone-3','4':'zone-4','4E':'zone-4',
+                     '5':'zone-5','5E':'zone-5','6':'zone-5','6E':'zone-5'};
+    html += '<div class="result-card"><div class="result-card-head">MWFRS — Envelope (Ch. 28)</div>';
+    uniq.forEach(function(z) {
+      var ma   = Math.max(Math.abs(z.pos||0), Math.abs(z.neg||0));
+      var cl   = ma>30?'zone-crit':ma>20?'zone-high':ma>12?'zone-mid':'zone-low';
+      var vstr = (z.pos!=null?'+'+fmt(z.pos):'') + (z.neg!=null?' / '+fmt(z.neg):'') + ' psf';
+      var zt   = mwZoneMap[z.zone] || '';
+      var bSt  = zt ? ' style="border-left:8px solid ' + ZONE_COLORS[zt] + ';padding-left:10px"' : '';
+      html += '<div class="result-row ' + cl + (zt?' zone-row-clickable':'') + '" ' + (zt?'data-zone="'+zt+'"':'') + bSt + '><span class="k">' + escHtml(z.zone) + '</span><span class="v">' + vstr + '</span></div>';
+    });
+    html += '</div>';
+  }
+
+  if (s.mode === 'mwfrs' && s.mwfrsProcedure === 'directional' && r.ch27) {
+    var d = r.ch27;
+    html += '<div class="result-card"><div class="result-card-head">MWFRS — Directional (Ch. 27)</div>';
+    if (d.pWW!=null) html += '<div class="result-row zone-mid"><span class="k">Windward wall</span><span class="v">+' + fmt(d.pWW) + ' psf</span></div>';
+    if (d.pLW!=null) html += '<div class="result-row zone-low"><span class="k">Leeward wall</span><span class="v">'  + fmt(d.pLW) + ' psf</span></div>';
+    if (Array.isArray(d.roof)) d.roof.forEach(function(rz) {
+      html += '<div class="result-row zone-mid"><span class="k">' + escHtml(rz.label||'Roof') + '</span><span class="v">' + fmt(rz.p) + ' psf</span></div>';
+    });
+    html += '</div>';
+  }
+
+  if (s.mode === 'cc') {
+    var wallLabel = {'4':'Zone 4 — field','5':'Zone 5 — corner'};
+    var wallCls   = {'4':'zone-low','5':'zone-high'};
+    if (r.ccWall && r.ccWall.length) {
+      var ccWallZoneMap = {'4':'zone-4','5':'zone-5'};
+      html += '<div class="result-card"><div class="result-card-head">C&amp;C — Walls (Ch. 30)</div>';
+      r.ccWall.forEach(function(z) {
+        var zt  = ccWallZoneMap[z.zone] || '';
         var bSt = zt ? ' style="border-left:8px solid ' + ZONE_COLORS[zt] + ';padding-left:10px"' : '';
-        html += '<div class="result-row ' + (roofCls[z.zone]||'zone-mid') + (zt?' zone-row-clickable':'') + '" ' + (zt?'data-zone="'+zt+'"':'') + bSt + '><span class="k">' + (roofLabel[z.zone]||'Zone '+z.zone) + '</span><span class="v">' + fmt(z.p.min) + ' / +' + fmt(z.p.max) + ' psf</span></div>';
+        html += '<div class="result-row ' + (wallCls[z.zone]||'zone-mid') + (zt?' zone-row-clickable':'') + '" ' + (zt?'data-zone="'+zt+'"':'') + bSt + '><span class="k">' + (wallLabel[z.zone]||'Zone '+z.zone) + '</span><span class="v">' + fmt(z.p.min) + ' / +' + fmt(z.p.max) + ' psf</span></div>';
       });
       html += '</div>';
     }
+  }
+
+  var roofLabel = {'1p':'Zone 1’ — field (low)','1':'Zone 1 — field','2':'Zone 2 — edge','2p':"Zone 2' — high-eave edge",'3':'Zone 3 — corner','3p':"Zone 3' — high-eave corner"};
+  var roofCls   = {'1p':'zone-low','1':'zone-low','2':'zone-mid','2p':'zone-mid','3':'zone-high','3p':'zone-high'};
+  if (r.ccRoof && r.ccRoof.length) {
+    var ccRoofZoneMap = {'1p':'zone-1p','1':'zone-1','2':'zone-2','2p':'zone-2p','3':'zone-3','3p':'zone-3p'};
+    html += '<div class="result-card"><div class="result-card-head">C&amp;C — Roof (Ch. 30)</div>';
+    r.ccRoof.forEach(function(z) {
+      var zt  = ccRoofZoneMap[z.zone] || '';
+      var bSt = zt ? ' style="border-left:8px solid ' + ZONE_COLORS[zt] + ';padding-left:10px"' : '';
+      html += '<div class="result-row ' + (roofCls[z.zone]||'zone-mid') + (zt?' zone-row-clickable':'') + '" ' + (zt?'data-zone="'+zt+'"':'') + bSt + '><span class="k">' + (roofLabel[z.zone]||'Zone '+z.zone) + '</span><span class="v">' + fmt(z.p.min) + ' / +' + fmt(z.p.max) + ' psf</span></div>';
+    });
+    html += '</div>';
   }
 
   /* ── Special C&C roof cards ───────────────────────────────────────── */
