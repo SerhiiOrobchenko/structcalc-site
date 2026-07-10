@@ -1627,17 +1627,19 @@ class Wind3DRenderer {
       this._dimHighlight['dim-z3-06h-f'] = grp.children[grp.children.length - 1];
     }
 
-    // ── θ angle dim — at front-left eave corner, in XY plane at z=hL ─────────
+    // ── θ angle dim — monoslope: LOW eave corner (right), angle opens left+up
+    //                  others:    front-left eave corner, angle opens right+up ──────
     if (theta > 0) {
-      // thRad from world-space geometry so ext line 2 lies exactly on slope surface
       const thRad  = Math.atan2(hRidge - hEave, hB);
-      const ax = -hB, ay = hEave, az = hL;
-      // arcR = 3/4 × hB → arc sits at 1/4 of slope length from ridge
+      const isMono = (roofShape === 'monoslope');
+      // monoslope: corner at LOW eave (x=+hB), horizontal goes left (−x), slope goes left+up
+      const ax = isMono ? +hB : -hB;
+      const ay = hEave, az = hL;
+      const hSign = isMono ? -1 : +1;   // direction of horizontal leg
       const arcR   = 0.75 * hB;
       const ALEN   = 2.5;
       const HALFW  = ALEN * Math.tan(THREE.MathUtils.degToRad(15));
       const ATAIL  = 5;
-      // Extension line: corner → arc tip → arrowhead base → tail end
       const legLen = arcR + ALEN + ATAIL;
       const lineMat = new THREE.LineBasicMaterial({ color: 0x000000 });
 
@@ -1653,39 +1655,50 @@ class Wind3DRenderer {
         return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide }));
       };
 
-      // Extension line 1: horizontal
+      // Extension line 1: horizontal (right for gable, left for mono)
       grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(ax,          ay, az),
-        new THREE.Vector3(ax + legLen, ay, az),
+        new THREE.Vector3(ax,                  ay, az),
+        new THREE.Vector3(ax + hSign * legLen, ay, az),
       ]), lineMat));
 
-      // Extension line 2: in slope plane (direction = (cos θ, sin θ, 0))
-      const sDir = new THREE.Vector3(Math.cos(thRad), Math.sin(thRad), 0);
+      // Extension line 2: slope direction
+      // gable: (cosθ, sinθ, 0)   mono: (−cosθ, sinθ, 0)
+      const sDir = new THREE.Vector3(hSign * Math.cos(thRad), Math.sin(thRad), 0);
       grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(ax,                   ay,                   az),
         new THREE.Vector3(ax + sDir.x * legLen, ay + sDir.y * legLen, az),
       ]), lineMat));
 
-      // Arc dimension line (20 segments, in XY plane at z=az)
+      // Arc: gable sweeps 0→θ (CCW); mono sweeps π−θ→π (CCW)
+      const arcStart = isMono ? (Math.PI - thRad) : 0;
       const N = 20;
       const arcPts = [];
       for (let i = 0; i <= N; i++) {
-        const a = (i / N) * thRad;
+        const a = arcStart + (i / N) * thRad;
         arcPts.push(new THREE.Vector3(ax + arcR * Math.cos(a), ay + arcR * Math.sin(a), az));
       }
       grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(arcPts), lineMat));
 
-      // Arrowheads: tangential to arc, pointing toward each other (perpendicular to extension lines)
-      // pt1: angle = 0 (horizontal leg) — arrow points CCW (+Y), wings radial (1,0,0)
-      const pt1 = new THREE.Vector3(ax + arcR, ay, az);
-      grp.add(mkArcArrow(pt1, new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0)));
+      if (isMono) {
+        // Slope end (angle=π−θ): CCW tangent = (−sinθ, −cosθ), wings = sDir
+        const pt2 = new THREE.Vector3(ax + arcR * Math.cos(Math.PI - thRad),
+                                      ay + arcR * Math.sin(Math.PI - thRad), az);
+        grp.add(mkArcArrow(pt2, new THREE.Vector3(-Math.sin(thRad), -Math.cos(thRad), 0), sDir.clone()));
+        // Horizontal end (angle=π): CW into arc = (0,+1,0), wings = (−1,0,0)
+        const pt1 = new THREE.Vector3(ax - arcR, ay, az);
+        grp.add(mkArcArrow(pt1, new THREE.Vector3(0, 1, 0), new THREE.Vector3(-1, 0, 0)));
+      } else {
+        // pt1: angle=0 (horizontal) — CCW (+Y), wings (1,0,0)
+        const pt1 = new THREE.Vector3(ax + arcR, ay, az);
+        grp.add(mkArcArrow(pt1, new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0)));
+        // pt2: angle=θ (slope) — CW (sinθ,−cosθ,0), wings = sDir
+        const pt2 = new THREE.Vector3(ax + arcR * Math.cos(thRad), ay + arcR * Math.sin(thRad), az);
+        grp.add(mkArcArrow(pt2, new THREE.Vector3(Math.sin(thRad), -Math.cos(thRad), 0), sDir.clone()));
+      }
 
-      // pt2: angle = θ (slope leg) — arrow points CW into arc (sinθ,-cosθ,0), wings = sDir
-      const pt2 = new THREE.Vector3(ax + arcR * Math.cos(thRad), ay + arcR * Math.sin(thRad), az);
-      grp.add(mkArcArrow(pt2, new THREE.Vector3(Math.sin(thRad), -Math.cos(thRad), 0), sDir.clone()));
-      // CSS2D label — outside the arc at its midpoint
+      // CSS2D label — outside arc at its midpoint
       if (THREE.CSS2DObject) {
-        const midA = thRad / 2;
+        const midA = isMono ? (Math.PI - thRad / 2) : (thRad / 2);
         const midPt = new THREE.Vector3(
           ax + (arcR + 2.5) * Math.cos(midA),
           ay + (arcR + 2.5) * Math.sin(midA),
