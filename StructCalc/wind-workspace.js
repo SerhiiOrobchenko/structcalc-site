@@ -863,24 +863,6 @@ function buildCCStepReport(r, s) {
   }
 
   /* 7e: Stepped roof */
-  if (r.monoslopeRoof && r.monoslopeRoof.applicable) {
-    var mr = r.monoslopeRoof;
-    var mzMap  = {'1':'zone-1','2':'zone-2','2p':'zone-2p','3':'zone-3','3p':'zone-3p'};
-    var mzLbl  = {'1':'Zone 1 — field','2':'Zone 2 — low-eave','2p':"Zone 2’ — high-eave",'3':'Zone 3 — low corner','3p':"Zone 3’ — high corner"};
-    var mzCls  = {'1':'zone-low','2':'zone-mid','2p':'zone-mid','3':'zone-high','3p':'zone-high'};
-    html += '<div class="result-card"><div class="result-card-head">C&amp;C — Monoslope Roof <span class="ref">Fig. 30.3-' + (mr.is5A ? '5A' : '5B') + '</span></div>';
-    var mzArr = [{z:'1',d:mr.zone1},{z:'2',d:mr.zone2}];
-    if (mr.zone2p) mzArr.push({z:'2p',d:mr.zone2p});
-    mzArr.push({z:'3',d:mr.zone3});
-    if (mr.zone3p) mzArr.push({z:'3p',d:mr.zone3p});
-    mzArr.forEach(function(x) {
-      if (!x.d) return;
-      var zt  = mzMap[x.z] || '';
-      var bSt = zt ? ' style="border-left:8px solid ' + ZONE_COLORS[zt] + ';padding-left:10px"' : '';
-      html += '<div class="result-row ' + (mzCls[x.z]||'zone-mid') + (zt?' zone-row-clickable':'') + '" ' + (zt?'data-zone="'+zt+'"':'') + bSt + '><span class="k">' + (mzLbl[x.z]||'Zone '+x.z) + '</span><span class="v">' + fmt(x.d.pMin) + ' / +' + fmt(x.d.pMax) + ' psf</span></div>';
-    });
-    html += '</div>';
-  }
   if (r.steppedRoof) {
     var sr = r.steppedRoof;
     s7 += '<p style="margin-top:12px"><strong>Stepped Roof C&amp;C — Fig. 30.3-3</strong></p>';
@@ -1798,6 +1780,26 @@ function renderWindResults(r, s) {
   function zoneRow(label, neg, pos, cls) {
     return '<div class="result-row ' + (cls||'zone-mid') + '"><span class="k">' + label +
            '</span><span class="v">' + fmt(neg) + ' / +' + fmt(pos) + ' psf</span></div>';
+  }
+
+  
+  if (r.monoslopeRoof && r.monoslopeRoof.applicable) {
+    var mr = r.monoslopeRoof;
+    var mzMap  = {'1':'zone-1','2':'zone-2','2p':'zone-2p','3':'zone-3','3p':'zone-3p'};
+    var mzLbl  = {'1':'Zone 1 — field','2':'Zone 2 — low-eave','2p':"Zone 2' — high-eave",'3':'Zone 3 — low corner','3p':"Zone 3' — high corner"};
+    var mzCls  = {'1':'zone-low','2':'zone-mid','2p':'zone-mid','3':'zone-high','3p':'zone-high'};
+    html += '<div class="result-card"><div class="result-card-head">C&amp;C — Monoslope Roof <span class="ref">Fig. 30.3-' + (mr.is5A ? '5A' : '5B') + '</span></div>';
+    var mzArr = [{z:'1',d:mr.zone1},{z:'2',d:mr.zone2}];
+    if (mr.zone2p) mzArr.push({z:'2p',d:mr.zone2p});
+    mzArr.push({z:'3',d:mr.zone3});
+    if (mr.zone3p) mzArr.push({z:'3p',d:mr.zone3p});
+    mzArr.forEach(function(x) {
+      if (!x.d) return;
+      var zt  = mzMap[x.z] || '';
+      var bSt = zt ? ' style="border-left:8px solid ' + ZONE_COLORS[zt] + ';padding-left:10px"' : '';
+      html += '<div class="result-row ' + (mzCls[x.z]||'zone-mid') + (zt?' zone-row-clickable':'') + '" ' + (zt?'data-zone="'+zt+'"':'') + bSt + '><span class="k">' + (mzLbl[x.z]||'Zone '+x.z) + '</span><span class="v">' + fmt(x.d.pMin) + ' / +' + fmt(x.d.pMax) + ' psf</span></div>';
+    });
+    html += '</div>';
   }
 
   if (r.steppedRoof) {
