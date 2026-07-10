@@ -42,10 +42,14 @@ const THEME = {
   zone3      : 0xdc2626,   // red-600    — corners (deeper red)
   zone4      : 0x7dd3fc,   // sky-300    — wall field
   zone5      : 0xa78bfa,   // violet-400 — wall corner strip
+  zone2p     : 0xf97316,   // orange-500 — Zone 2' (enhanced edge, high eave)
+  zone3p     : 0x991b1b,   // red-800    — Zone 3' (worst corner, high eave)
   zoneLabel1p : { bg:'rgba(74,222,128,0.92)',  fg:'#14532d' },  // green-400  — Zone 1'
   zoneLabel1  : { bg:'rgba(253,224,71,0.92)',  fg:'#713f12' },  // yellow-300 — Zone 1
   zoneLabel2  : { bg:'rgba(251,146,60,0.92)',  fg:'#7c2d12' },  // orange-400 — Zone 2
-  zoneLabel3 : { bg:'rgba(220,38,38,0.92)',   fg:'#fff' },     // red-600
+  zoneLabel2p : { bg:'rgba(249,115,22,0.92)',  fg:'#fff' },     // orange-500 — Zone 2'
+  zoneLabel3  : { bg:'rgba(220,38,38,0.92)',   fg:'#fff' },     // red-600    — Zone 3
+  zoneLabel3p : { bg:'rgba(153,27,27,0.92)',   fg:'#fff' },     // red-800    — Zone 3'
   zoneLabel4 : { bg:'rgba(125,211,252,0.92)', fg:'#0c4a6e' },  // sky-300
   zoneLabel5 : { bg:'rgba(167,139,250,0.92)', fg:'#2e1065' },  // violet-400
 };
@@ -963,10 +967,12 @@ class Wind3DRenderer {
   /** Offset quad mesh for zone patches (hip main slopes). */
   _addQuadMesh(matZ, p0, p1, p2, p3, norm, zt, op, eps) {
     const off  = norm.clone().multiplyScalar(eps);
-    const col  = zt === 'zone-1' ? THEME.zone1
-               : zt === 'zone-2' ? THEME.zone2
-               : zt === 'zone-3' ? THEME.zone3
-               : zt === 'zone-4' ? THEME.zone4 : THEME.zone5;
+    const col  = zt === 'zone-1'  ? THEME.zone1
+               : zt === 'zone-2'  ? THEME.zone2
+               : zt === 'zone-2p' ? THEME.zone2p
+               : zt === 'zone-3'  ? THEME.zone3
+               : zt === 'zone-3p' ? THEME.zone3p
+               : zt === 'zone-4'  ? THEME.zone4 : THEME.zone5;
     const mesh = new THREE.Mesh(
       this._quad(p0.clone().add(off), p1.clone().add(off),
                  p2.clone().add(off), p3.clone().add(off)),
@@ -1071,14 +1077,14 @@ class Wind3DRenderer {
         const ha  = hAtX(-hB + a);
         const hBa = hAtX( hB - a);
         const fz5L = [
-          new THREE.Vector3(-hB,   0,      z), new THREE.Vector3(-hB+a, 0,  z),
-          new THREE.Vector3(-hB+a, ha,     z), new THREE.Vector3(-hB,   hEave, z),
+          new THREE.Vector3(-hB,   0,       z), new THREE.Vector3(-hB+a, 0,  z),
+          new THREE.Vector3(-hB+a, ha,      z), new THREE.Vector3(-hB,   hRidge, z), // HIGH side → hRidge
         ];
         addWallQ(fz5L, 'zone-5', Z5_OP);
         wallLabel('zone-5', fz5L[0], fz5L[1], fz5L[2], fz5L[3], nF, tD);
         const fz5R = [
-          new THREE.Vector3(hB-a, 0,      z), new THREE.Vector3(hB,   0,      z),
-          new THREE.Vector3(hB,   hRidge, z), new THREE.Vector3(hB-a, hBa,    z),
+          new THREE.Vector3(hB-a, 0,      z), new THREE.Vector3(hB,   0,     z),
+          new THREE.Vector3(hB,   hEave,  z), new THREE.Vector3(hB-a, hBa,   z), // LOW side → hEave
         ];
         addWallQ(fz5R, 'zone-5', Z5_OP);
         wallLabel('zone-5', fz5R[0], fz5R[1], fz5R[2], fz5R[3], nF, tD);
@@ -1159,14 +1165,14 @@ class Wind3DRenderer {
         const hBa = hAtX( hB - a);
         // viewed from -Z: left side = x=+hB (high), right side = x=-hB (low)
         const bz5L = [
-          new THREE.Vector3(hB-a, 0,      z), new THREE.Vector3(hB,   0,      z),
-          new THREE.Vector3(hB,   hRidge, z), new THREE.Vector3(hB-a, hBa,    z),
+          new THREE.Vector3(hB-a, 0,      z), new THREE.Vector3(hB,   0,     z),
+          new THREE.Vector3(hB,   hEave,  z), new THREE.Vector3(hB-a, hBa,   z), // LOW side → hEave
         ];
         addWallQ(bz5L, 'zone-5', Z5_OP);
         wallLabel('zone-5', bz5L[0], bz5L[1], bz5L[2], bz5L[3], nB, tD);
         const bz5R = [
-          new THREE.Vector3(-hB,   0,     z), new THREE.Vector3(-hB+a, 0,   z),
-          new THREE.Vector3(-hB+a, ha,    z), new THREE.Vector3(-hB,   hEave, z),
+          new THREE.Vector3(-hB,   0,      z), new THREE.Vector3(-hB+a, 0,   z),
+          new THREE.Vector3(-hB+a, ha,     z), new THREE.Vector3(-hB,   hRidge, z), // HIGH side → hRidge
         ];
         addWallQ(bz5R, 'zone-5', Z5_OP);
         wallLabel('zone-5', bz5R[0], bz5R[1], bz5R[2], bz5R[3], nB, tD);
@@ -2105,10 +2111,12 @@ class Wind3DRenderer {
     if (!THREE.CSS2DObject) return;
 
     const cfgMap = {
-      'zone-1p':{ ...THEME.zoneLabel1p, text: "Zone 1'" },
-      'zone-1': { ...THEME.zoneLabel1,  text: 'Zone 1' },
-      'zone-2': { ...THEME.zoneLabel2,  text: 'Zone 2' },
-      'zone-3': { ...THEME.zoneLabel3, text: 'Zone 3' },
+      'zone-1p':{ ...THEME.zoneLabel1p,  text: "Zone 1'" },
+      'zone-1': { ...THEME.zoneLabel1,   text: 'Zone 1' },
+      'zone-2': { ...THEME.zoneLabel2,   text: 'Zone 2' },
+      'zone-2p':{ ...THEME.zoneLabel2p,  text: "Zone 2'" },
+      'zone-3': { ...THEME.zoneLabel3,   text: 'Zone 3' },
+      'zone-3p':{ ...THEME.zoneLabel3p,  text: "Zone 3'" },
     };
     const cfg = cfgMap[zoneType];
     if (!cfg) return;
@@ -2154,7 +2162,9 @@ class Wind3DRenderer {
       "zone-1p":{ bg:'rgba(74,222,128,0.80)',  fg:'#14532d', text:"Zone 1'" },
       'zone-1': { bg:'rgba(253,224,71,0.92)',  fg:'#713f12', text:'Zone 1' },
       'zone-2': { bg:'rgba(251,146,60,0.92)',  fg:'#7c2d12', text:'Zone 2' },
+      'zone-2p':{ bg:'rgba(249,115,22,0.92)',  fg:'#fff',    text:"Zone 2'" },
       'zone-3': { bg:'rgba(220,38,38,0.92)',   fg:'#fff',    text:'Zone 3' },
+      'zone-3p':{ bg:'rgba(153,27,27,0.92)',   fg:'#fff',    text:"Zone 3'" },
       'zone-4': { bg:'rgba(125,211,252,0.92)', fg:'#0c4a6e', text:'Zone 4' },
       'zone-5': { bg:'rgba(167,139,250,0.92)', fg:'#2e1065', text:'Zone 5' },
     };
