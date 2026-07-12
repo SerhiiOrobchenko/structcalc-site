@@ -1831,7 +1831,8 @@ function renderWindResults(r, s) {
 
   var roofLabel = {'1p':'Zone 1’ — field (low)','1':'Zone 1 — field','2':'Zone 2 — edge','2p':"Zone 2' — high-eave edge",'3':'Zone 3 — corner','3p':"Zone 3' — high-eave corner"};
   var roofCls   = {'1p':'zone-low','1':'zone-low','2':'zone-mid','2p':'zone-mid','3':'zone-high','3p':'zone-high'};
-  if (r.ccRoof && r.ccRoof.length) {
+  var hasSpecialRoof = (r.monoslopeRoof && r.monoslopeRoof.applicable) || r.steppedRoof || r.multispanRoof || r.sawtoothRoof || r.domeRoof;
+  if (r.ccRoof && r.ccRoof.length && !hasSpecialRoof) {
     var ccRoofZoneMap = {'1p':'zone-1p','1':'zone-1','2':'zone-2','2p':'zone-2p','3':'zone-3','3p':'zone-3p'};
     html += '<div class="result-card"><div class="result-card-head">C&amp;C — Roof (Ch. 30)</div>';
     r.ccRoof.forEach(function(z) {
