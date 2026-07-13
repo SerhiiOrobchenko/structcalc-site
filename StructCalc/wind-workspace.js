@@ -37,7 +37,7 @@ async function loadWindScripts() {
   await loadScriptTag('zones-cc-gable-steep.js?v=1');
   await loadScriptTag('zones-cc-hip.js?v=1');
   await loadScriptTag('zones-cc-monoslope.js?v=2');
-  await loadScriptTag('renderer.js?v=40');
+  await loadScriptTag('renderer.js?v=41');
   await loadScriptTag('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
   await loadScriptTag('map-module.js?v=3');
   windScriptsLoaded = true;
@@ -309,7 +309,7 @@ function recalcWind() {
 
   var cap = document.getElementById('windDiagramCaption');
   if (cap) {
-    var sh = {gable:'Gable Roof',hip:'Hip Roof',monoslope:'Monoslope Roof',stepped:'Stepped Roof',multispan:'Multispan Gable',sawtooth:'Sawtooth Roof',dome:'Domed Roof'};
+    var sh = {gable:'Gable Roof',hip:'Hip Roof',monoslope:'Monoslope Roof',stepped:'Stepped Roof',multispan:'Multispan Gable',sawtooth:'Sawtooth Roof',dome:'Domed Roof','monoslope-free':'Monoslope Free Roof','pitched-free':'Pitched Free Roof','troughed-free':'Troughed Roof'};
     var pr = {envelope:'Envelope (Ch. 28)',directional:'Directional (Ch. 27)',cc:'C&C (Ch. 30)'};
     var pk = s.mode === 'cc' ? 'cc' : s.mwfrsProcedure;
     cap.textContent = (sh[s.roofShape] || 'Building') + ' — ' + (pr[pk] || '');

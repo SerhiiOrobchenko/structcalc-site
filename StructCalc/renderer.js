@@ -954,6 +954,132 @@ class Wind3DRenderer {
     return grp;
   }
 
+  /* ── Monoslope Free Roof (open building — 4 corner columns, no walls) ──────
+     hLow = low eave (right, X=+hB), hHigh = high eave (left, X=-hB)         */
+  _buildStructureMonoslopeFree(B, L, hLow, hHigh, wo = 0) {
+    const hB = B / 2, hL = L / 2;
+    const grp = new THREE.Group();
+    const EDGE_R = 0.11, COL_S = 0.9;
+    const addCol = (x, z, height) => {
+      if (height < 0.01) return;
+      const d = COL_S / 2;
+      const geo = new THREE.BoxGeometry(COL_S, height, COL_S);
+      const m   = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: THEME.wallFill, roughness: 0.7 }));
+      m.position.set(x, height / 2, z); grp.add(m);
+      [[x-d,z-d],[x+d,z-d],[x-d,z+d],[x+d,z+d]].forEach(([ex,ez]) => {
+        const t = this._tube(new THREE.Vector3(ex, 0, ez), new THREE.Vector3(ex, height, ez), THEME.wallEdge, 0.08);
+        if (t) grp.add(t);
+      });
+    };
+    addCol(-hB, -hL, hHigh);  addCol(-hB,  hL, hHigh);
+    addCol( hB, -hL, hLow);   addCol( hB,  hL, hLow);
+    /* Sloped roof panel */
+    const slopeM  = (2 * hB) > 0 ? (hHigh - hLow) / (2 * hB) : 0;
+    const hHighOh = hHigh + wo * slopeM;
+    const hLowOh  = hLow  - wo * slopeM;
+    const hBo = hB + wo, hLo = hL + wo;
+    const roofMat = new THREE.MeshStandardMaterial({ color: THEME.roofFill, side: THREE.DoubleSide });
+    const roofGeo = this._quad(
+      new THREE.Vector3(-hBo, hHighOh, -hLo), new THREE.Vector3(-hBo, hHighOh,  hLo),
+      new THREE.Vector3( hBo, hLowOh,   hLo), new THREE.Vector3( hBo, hLowOh,  -hLo),
+    );
+    grp.add(new THREE.Mesh(roofGeo, roofMat));
+    this._tubeEdges(new THREE.EdgesGeometry(roofGeo), THEME.roofEdge, EDGE_R, grp);
+    /* High-eave accent tube */
+    const tH = this._tube(new THREE.Vector3(-hBo,hHighOh,-hLo), new THREE.Vector3(-hBo,hHighOh,hLo), THEME.ridge, EDGE_R);
+    if (tH) grp.add(tH);
+    return grp;
+  }
+
+  /* ── Pitched Free Roof (open building — 4 corner columns, gable profile) ── */
+  _buildStructurePitchedFree(B, L, hEave, hRidge, wo = 0) {
+    const hB = B / 2, hL = L / 2;
+    const grp = new THREE.Group();
+    const EDGE_R = 0.11, COL_S = 0.9;
+    const addCol = (x, z, height) => {
+      if (height < 0.01) return;
+      const d = COL_S / 2;
+      const geo = new THREE.BoxGeometry(COL_S, height, COL_S);
+      const m   = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: THEME.wallFill, roughness: 0.7 }));
+      m.position.set(x, height / 2, z); grp.add(m);
+      [[x-d,z-d],[x+d,z-d],[x-d,z+d],[x+d,z+d]].forEach(([ex,ez]) => {
+        const t = this._tube(new THREE.Vector3(ex, 0, ez), new THREE.Vector3(ex, height, ez), THEME.wallEdge, 0.08);
+        if (t) grp.add(t);
+      });
+    };
+    addCol(-hB, -hL, hEave);  addCol(-hB,  hL, hEave);
+    addCol( hB, -hL, hEave);  addCol( hB,  hL, hEave);
+    /* Two gable slope panels */
+    const slopeM  = hB > 0 ? (hRidge - hEave) / hB : 0;
+    const hEaveOh = hEave - wo * slopeM;
+    const hBo = hB + wo, hLo = hL + wo;
+    const roofMat = new THREE.MeshStandardMaterial({ color: THEME.roofFill, side: THREE.DoubleSide });
+    /* Left slope */
+    const lGeo = this._quad(
+      new THREE.Vector3(-hBo, hEaveOh, -hLo), new THREE.Vector3(-hBo, hEaveOh,  hLo),
+      new THREE.Vector3(   0, hRidge,   hLo), new THREE.Vector3(   0, hRidge,  -hLo),
+    );
+    grp.add(new THREE.Mesh(lGeo, roofMat));
+    this._tubeEdges(new THREE.EdgesGeometry(lGeo), THEME.roofEdge, EDGE_R, grp);
+    /* Right slope */
+    const rGeo = this._quad(
+      new THREE.Vector3(   0, hRidge,  -hLo), new THREE.Vector3(   0, hRidge,   hLo),
+      new THREE.Vector3( hBo, hEaveOh,  hLo), new THREE.Vector3( hBo, hEaveOh, -hLo),
+    );
+    grp.add(new THREE.Mesh(rGeo, roofMat));
+    this._tubeEdges(new THREE.EdgesGeometry(rGeo), THEME.roofEdge, EDGE_R, grp);
+    /* Ridge tube */
+    const tR = this._tube(new THREE.Vector3(0,hRidge,-hLo), new THREE.Vector3(0,hRidge,hLo), THEME.ridge, EDGE_R);
+    if (tR) grp.add(tR);
+    return grp;
+  }
+
+  /* ── Troughed Free Roof (open building — 2 center columns at valley) ───────
+     hValley = valley (center, lower) = hEave from update3DModel
+     hSide   = outer eave (sides, higher) = hRidge from update3DModel         */
+  _buildStructureTroughed(B, L, hValley, hSide, wo = 0) {
+    const hB = B / 2, hL = L / 2;
+    const grp = new THREE.Group();
+    const EDGE_R = 0.11, COL_S = 0.9;
+    const addCol = (x, z, height) => {
+      if (height < 0.01) return;
+      const d = COL_S / 2;
+      const geo = new THREE.BoxGeometry(COL_S, height, COL_S);
+      const m   = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: THEME.wallFill, roughness: 0.7 }));
+      m.position.set(x, height / 2, z); grp.add(m);
+      [[x-d,z-d],[x+d,z-d],[x-d,z+d],[x+d,z+d]].forEach(([ex,ez]) => {
+        const t = this._tube(new THREE.Vector3(ex, 0, ez), new THREE.Vector3(ex, height, ez), THEME.wallEdge, 0.08);
+        if (t) grp.add(t);
+      });
+    };
+    /* 2 center columns at valley */
+    addCol(0, -hL, hValley);
+    addCol(0,  hL, hValley);
+    /* Two inverted-slope roof panels */
+    const slopeM  = hB > 0 ? (hSide - hValley) / hB : 0;
+    const hSideOh = hSide + wo * slopeM;
+    const hBo = hB + wo, hLo = hL + wo;
+    const roofMat = new THREE.MeshStandardMaterial({ color: THEME.roofFill, side: THREE.DoubleSide });
+    /* Left panel: outer high side → valley */
+    const lGeo = this._quad(
+      new THREE.Vector3(-hBo, hSideOh, -hLo), new THREE.Vector3(-hBo, hSideOh,  hLo),
+      new THREE.Vector3(   0, hValley,  hLo), new THREE.Vector3(   0, hValley, -hLo),
+    );
+    grp.add(new THREE.Mesh(lGeo, roofMat));
+    this._tubeEdges(new THREE.EdgesGeometry(lGeo), THEME.roofEdge, EDGE_R, grp);
+    /* Right panel: valley → outer high side */
+    const rGeo = this._quad(
+      new THREE.Vector3(   0, hValley, -hLo), new THREE.Vector3(   0, hValley,  hLo),
+      new THREE.Vector3( hBo, hSideOh,  hLo), new THREE.Vector3( hBo, hSideOh, -hLo),
+    );
+    grp.add(new THREE.Mesh(rGeo, roofMat));
+    this._tubeEdges(new THREE.EdgesGeometry(rGeo), THEME.roofEdge, EDGE_R, grp);
+    /* Valley accent tube */
+    const tV = this._tube(new THREE.Vector3(0,hValley,-hLo), new THREE.Vector3(0,hValley,hLo), THEME.ridge, EDGE_R);
+    if (tV) grp.add(tV);
+    return grp;
+  }
+
 
   /* ── dimension system ───────────────────────────────────────────────────── */
 
@@ -2274,6 +2400,12 @@ class Wind3DRenderer {
         so.W1 || 20, so.W2 || 20, so.W3 || 0, L,
         so.h1 || h, so.hs2 || 12, so.h3 || (so.h1 || h)
       );
+    } else if (_shape === 'monoslope-free') {
+      this._building = this._buildStructureMonoslopeFree(B, L, hEave, hRidge, _wo);
+    } else if (_shape === 'pitched-free') {
+      this._building = this._buildStructurePitchedFree(B, L, hEave, hRidge, _wo);
+    } else if (_shape === 'troughed-free') {
+      this._building = this._buildStructureTroughed(B, L, hEave, hRidge, _wo);
     } else {
       /* gable or flat (flat = gable with theta=0, already handled by caller) */
       this._building = this._buildStructure(B, L, hEave, hRidge, _wo);
