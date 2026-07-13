@@ -37,7 +37,7 @@ async function loadWindScripts() {
   await loadScriptTag('zones-cc-gable-steep.js?v=1');
   await loadScriptTag('zones-cc-hip.js?v=1');
   await loadScriptTag('zones-cc-monoslope.js?v=2');
-  await loadScriptTag('renderer.js?v=41');
+  await loadScriptTag('renderer.js?v=42');
   await loadScriptTag('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
   await loadScriptTag('map-module.js?v=3');
   windScriptsLoaded = true;
@@ -1817,7 +1817,8 @@ function renderWindResults(r, s) {
   if (s.mode === 'cc') {
     var wallLabel = {'4':'Zone 4 — field','5':'Zone 5 — corner'};
     var wallCls   = {'4':'zone-low','5':'zone-high'};
-    if (r.ccWall && r.ccWall.length) {
+    var isFreeRoof = ['monoslope-free','pitched-free','troughed-free'].indexOf(s.roofShape) !== -1;
+  if (r.ccWall && r.ccWall.length && !isFreeRoof) {
       var ccWallZoneMap = {'4':'zone-4','5':'zone-5'};
       html += '<div class="result-card"><div class="result-card-head">C&amp;C — Walls (Ch. 30)</div>';
       r.ccWall.forEach(function(z) {

@@ -959,20 +959,7 @@ class Wind3DRenderer {
   _buildStructureMonoslopeFree(B, L, hLow, hHigh, wo = 0) {
     const hB = B / 2, hL = L / 2;
     const grp = new THREE.Group();
-    const EDGE_R = 0.11, COL_S = 0.9;
-    const addCol = (x, z, height) => {
-      if (height < 0.01) return;
-      const d = COL_S / 2;
-      const geo = new THREE.BoxGeometry(COL_S, height, COL_S);
-      const m   = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: THEME.wallFill, roughness: 0.7 }));
-      m.position.set(x, height / 2, z); grp.add(m);
-      [[x-d,z-d],[x+d,z-d],[x-d,z+d],[x+d,z+d]].forEach(([ex,ez]) => {
-        const t = this._tube(new THREE.Vector3(ex, 0, ez), new THREE.Vector3(ex, height, ez), THEME.wallEdge, 0.08);
-        if (t) grp.add(t);
-      });
-    };
-    addCol(-hB, -hL, hHigh);  addCol(-hB,  hL, hHigh);
-    addCol( hB, -hL, hLow);   addCol( hB,  hL, hLow);
+    const EDGE_R = 0.11;
     /* Sloped roof panel */
     const slopeM  = (2 * hB) > 0 ? (hHigh - hLow) / (2 * hB) : 0;
     const hHighOh = hHigh + wo * slopeM;
@@ -995,20 +982,7 @@ class Wind3DRenderer {
   _buildStructurePitchedFree(B, L, hEave, hRidge, wo = 0) {
     const hB = B / 2, hL = L / 2;
     const grp = new THREE.Group();
-    const EDGE_R = 0.11, COL_S = 0.9;
-    const addCol = (x, z, height) => {
-      if (height < 0.01) return;
-      const d = COL_S / 2;
-      const geo = new THREE.BoxGeometry(COL_S, height, COL_S);
-      const m   = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: THEME.wallFill, roughness: 0.7 }));
-      m.position.set(x, height / 2, z); grp.add(m);
-      [[x-d,z-d],[x+d,z-d],[x-d,z+d],[x+d,z+d]].forEach(([ex,ez]) => {
-        const t = this._tube(new THREE.Vector3(ex, 0, ez), new THREE.Vector3(ex, height, ez), THEME.wallEdge, 0.08);
-        if (t) grp.add(t);
-      });
-    };
-    addCol(-hB, -hL, hEave);  addCol(-hB,  hL, hEave);
-    addCol( hB, -hL, hEave);  addCol( hB,  hL, hEave);
+    const EDGE_R = 0.11;
     /* Two gable slope panels */
     const slopeM  = hB > 0 ? (hRidge - hEave) / hB : 0;
     const hEaveOh = hEave - wo * slopeM;
@@ -1040,21 +1014,7 @@ class Wind3DRenderer {
   _buildStructureTroughed(B, L, hValley, hSide, wo = 0) {
     const hB = B / 2, hL = L / 2;
     const grp = new THREE.Group();
-    const EDGE_R = 0.11, COL_S = 0.9;
-    const addCol = (x, z, height) => {
-      if (height < 0.01) return;
-      const d = COL_S / 2;
-      const geo = new THREE.BoxGeometry(COL_S, height, COL_S);
-      const m   = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: THEME.wallFill, roughness: 0.7 }));
-      m.position.set(x, height / 2, z); grp.add(m);
-      [[x-d,z-d],[x+d,z-d],[x-d,z+d],[x+d,z+d]].forEach(([ex,ez]) => {
-        const t = this._tube(new THREE.Vector3(ex, 0, ez), new THREE.Vector3(ex, height, ez), THEME.wallEdge, 0.08);
-        if (t) grp.add(t);
-      });
-    };
-    /* 2 center columns at valley */
-    addCol(0, -hL, hValley);
-    addCol(0,  hL, hValley);
+    const EDGE_R = 0.11;
     /* Two inverted-slope roof panels */
     const slopeM  = hB > 0 ? (hSide - hValley) / hB : 0;
     const hSideOh = hSide + wo * slopeM;
