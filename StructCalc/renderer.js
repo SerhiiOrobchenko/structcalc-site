@@ -2451,6 +2451,29 @@ class Wind3DRenderer {
       window.ZONE_DESCRIPTORS['cc-monoslope']
         .drawZones({ ...ctx, addZone: addZoneM, ptFn: ptMono, norm: monoNorm, doLabel: true });
 
+    } else if (_shape === 'monoslope-free' && window.ZONE_DESCRIPTORS['cc-monoslope-free']) {
+      const slopeM   = (2*hB) > 0 ? (hRidge - hEave) / (2*hB) : 0;
+      const hHighVis = hRidge + _wo * slopeM;
+      const hLowVis  = hEave  - _wo * slopeM;
+      const addZoneM = (u0,uu1,v0,vv1,col,op,zt,eps,ptFn,norm,label) => {
+        const m = this._zoneQuad(u0,uu1,v0,vv1,ptFn,hB_vis,hLowVis,hHighVis,hL_vis,norm,eps,matZ(col,op),zt);
+        this._zones.add(m);
+        this._zoneMeshes.push(m);
+        if (label) {
+          const ctr = this._zoneCentroid(u0,uu1,v0,vv1,ptFn,hB_vis,hLowVis,hHighVis,hL_vis);
+          ctr.addScaledVector(norm, eps + 0.5);
+          this._makeZoneLabel(zt, ctr, norm, hB_vis, zone_a, L + 2*_wo);
+        }
+      };
+      const ptMono = (u,v,_b,_e,_r,_l) =>
+        new THREE.Vector3(-_b + u*2*_b, _r - u*(_r-_e), v*2*_l - _l);
+      const _e1 = new THREE.Vector3(2*hB_vis, hLowVis-hHighVis, 0);
+      const _e2 = new THREE.Vector3(0, 0, 2*hL_vis);
+      const monoNorm = new THREE.Vector3().crossVectors(_e2, _e1).normalize();
+      if (monoNorm.y < 0) monoNorm.negate();
+      window.ZONE_DESCRIPTORS['cc-monoslope-free']
+        .drawZones({ ...ctx, addZone: addZoneM, ptFn: ptMono, norm: monoNorm, doLabel: true });
+
     } else if (_shape === 'hip') {
       window.ZONE_DESCRIPTORS['cc-hip'].drawZones(ctx);
 
