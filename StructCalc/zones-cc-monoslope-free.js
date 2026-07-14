@@ -1,4 +1,4 @@
-/* zones-cc-monoslope-free.js  v2
+/* zones-cc-monoslope-free.js  v3
  * C&C Open Building — Monoslope Free Roof
  * ASCE 7-22 Fig. 30.5-1  (0.25 ≤ h/L ≤ 1.0, θ ≤ 45°)
  *
@@ -75,35 +75,21 @@
       if (doLabel && mkSlopeDim && THREE && THREE.CSS2DObject) {
         const a_s = zone_a.toFixed(1);
 
-        /* v-position for "along B" dims — slightly inside the front gable edge */
-        const vF = Math.max(v_a + 0.01, 1 - v_a * 0.15);
-
-        /* u-position for "along L" dims — at HIGH eave side edge */
-        const uE = Math.min(u_a * 0.15, 0.04);
-
-        /* Zone 3 along B — eave strip width, shown at front gable */
+        /* Along B at center of L (v=0.5) */
         mkSlopeDim('a=' + a_s + 'ft',
-          ptFn(0,   vF, hB, hEave, hRidge, hL),
-          ptFn(u_a, vF, hB, hEave, hRidge, hL),
-          norm);
-
-        /* Zone 2 along B — second strip, same "a" width */
+          ptFn(0,    0.5, hB, hEave, hRidge, hL),
+          ptFn(u_a,  0.5, hB, hEave, hRidge, hL), norm);
         mkSlopeDim('a=' + a_s + 'ft',
-          ptFn(u_a,  vF, hB, hEave, hRidge, hL),
-          ptFn(u_2a, vF, hB, hEave, hRidge, hL),
-          norm);
+          ptFn(u_a,  0.5, hB, hEave, hRidge, hL),
+          ptFn(u_2a, 0.5, hB, hEave, hRidge, hL), norm);
 
-        /* Zone 3 along L — gable strip depth, at HIGH-eave side */
+        /* Along L at center of B (u=0.5) */
         mkSlopeDim('a=' + a_s + 'ft',
-          ptFn(uE, 1 - v_a, hB, hEave, hRidge, hL),
-          ptFn(uE, 1,       hB, hEave, hRidge, hL),
-          norm);
-
-        /* Zone 2 along L — next strip inward */
+          ptFn(0.5, 1 - v_a,  hB, hEave, hRidge, hL),
+          ptFn(0.5, 1,         hB, hEave, hRidge, hL), norm);
         mkSlopeDim('a=' + a_s + 'ft',
-          ptFn(uE, 1 - v_2a, hB, hEave, hRidge, hL),
-          ptFn(uE, 1 - v_a,  hB, hEave, hRidge, hL),
-          norm);
+          ptFn(0.5, 1 - v_2a, hB, hEave, hRidge, hL),
+          ptFn(0.5, 1 - v_a,  hB, hEave, hRidge, hL), norm);
       }
     },
   };

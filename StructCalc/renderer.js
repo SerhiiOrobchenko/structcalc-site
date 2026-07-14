@@ -1712,7 +1712,7 @@ class Wind3DRenderer {
     // dim-a3/dim-a4 (base floor a= dims) removed — redundant with eave-level dims
 
     // ── Zone 3: 0.6h facade dims at EAVE LEVEL — flat/low-pitch gable only (θ ≤ 7°) ─
-    if (roofShape !== 'hip' && roofShape !== 'monoslope' && theta <= 7) {
+    if (roofShape !== 'hip' && roofShape !== 'monoslope' && !_isFreeRoofDim && theta <= 7) {
       const h_m    = hEaveLabel ?? (hEave / 1.8);
       const d06str = (+h_m * 0.6).toFixed(1);
       const z3_06h = 0.6 * h_m;
@@ -2497,6 +2497,12 @@ class Wind3DRenderer {
       if (monoNorm.y < 0) monoNorm.negate();
       window.ZONE_DESCRIPTORS['cc-monoslope-free']
         .drawZones({ ...ctx, addZone: addZoneM, ptFn: ptMono, norm: monoNorm, doLabel: true });
+
+    } else if (_shape === 'pitched-free' && window.ZONE_DESCRIPTORS['cc-pitched-free']) {
+      window.ZONE_DESCRIPTORS['cc-pitched-free'].drawZones({ ...ctx, doLabel: true });
+
+    } else if (_shape === 'troughed-free' && window.ZONE_DESCRIPTORS['cc-troughed-free']) {
+      window.ZONE_DESCRIPTORS['cc-troughed-free'].drawZones({ ...ctx, doLabel: true });
 
     } else if (_shape === 'hip') {
       window.ZONE_DESCRIPTORS['cc-hip'].drawZones(ctx);
