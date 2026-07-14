@@ -2719,8 +2719,10 @@ class Wind3DRenderer {
                 : theta > 7  ? 'cc-gable-mid'
                 :               'cc-gable-flat';
       const desc = window.ZONE_DESCRIPTORS[key];
-      desc.drawZones({ ...ctx, ptFn: this._ptL.bind(this), norm: _leftNorm,  doLabel: true  });
-      desc.drawZones({ ...ctx, ptFn: this._ptR.bind(this), norm: _rightNorm, doLabel: false });
+      if (desc) {
+        desc.drawZones({ ...ctx, ptFn: this._ptL.bind(this), norm: _leftNorm,  doLabel: true  });
+        desc.drawZones({ ...ctx, ptFn: this._ptR.bind(this), norm: _rightNorm, doLabel: false });
+      }
     }
     /* ── Wall C&C zones 4 and 5 (ASCE 7-22 §30.3-2A) ──────────────────────────
        Zone 5: vertical end strip width 'a' at each corner of every facade
