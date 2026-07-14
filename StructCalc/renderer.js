@@ -1662,7 +1662,7 @@ class Wind3DRenderer {
       new THREE.Vector3(hXh, hMean,  hZh),
       _monoD ? new THREE.Vector3(1, 1, 0).normalize() : new THREE.Vector3(-1, 1, 0).normalize(),
       [
-        [new THREE.Vector3(hXhe, EPS_Y,  hZh), new THREE.Vector3(hXh, EPS_Y,  hZh)],
+        [new THREE.Vector3(_monoD ? hB : -hB, EPS_Y, hZh), new THREE.Vector3(hXh, EPS_Y, hZh)],
         [new THREE.Vector3(_monoD ? hB/2 : -hB/2, hMean, hZh), new THREE.Vector3(hXh, hMean, hZh)],
       ],
       `h=${fmt(hMeanFt ?? hMean)}ft`, 'dim-h', 'wind-h',
