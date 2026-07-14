@@ -975,11 +975,14 @@ class Wind3DRenderer {
     /* High-eave accent tube */
     const tH = this._tube(new THREE.Vector3(-hBo,hHighOh,-hLo), new THREE.Vector3(-hBo,hHighOh,hLo), THEME.ridge, EDGE_R);
     if (tH) grp.add(tH);
-    /* 4 corner columns (ground → roof eave at each corner) */
+    /* 4 corner columns (ground → roof eave at each corner, inset by COL_R) */
     const COL_R = EDGE_R * 2.5;
+    const slopeU = (2*hB) > 0 ? (hHigh - hLow) / (2*hB) : 0;
     const addCol1 = (x, z, ht) => { const c = this._tube(new THREE.Vector3(x,0,z), new THREE.Vector3(x,ht,z), THEME.wallEdge, COL_R); if (c) grp.add(c); };
-    addCol1(-hB, -hL, hHigh);  addCol1(-hB,  hL, hHigh);
-    addCol1( hB, -hL, hLow);   addCol1( hB,  hL, hLow);
+    const cxHi = -hB + COL_R, cxLo = hB - COL_R;
+    const czF = hL - COL_R, czB = -hL + COL_R;
+    addCol1(cxHi, czB, hHigh - COL_R * slopeU);  addCol1(cxHi, czF, hHigh - COL_R * slopeU);
+    addCol1(cxLo, czB, hLow  + COL_R * slopeU);  addCol1(cxLo, czF, hLow  + COL_R * slopeU);
     return grp;
   }
 
@@ -1010,11 +1013,11 @@ class Wind3DRenderer {
     /* Ridge tube */
     const tR = this._tube(new THREE.Vector3(0,hRidge,-hLo), new THREE.Vector3(0,hRidge,hLo), THEME.ridge, EDGE_R);
     if (tR) grp.add(tR);
-    /* 4 corner columns (ground → eave height) */
+    /* 4 corner columns (ground → eave height, inset by COL_R) */
     const COL_R2 = EDGE_R * 2.5;
     const addCol2 = (x, z) => { const c = this._tube(new THREE.Vector3(x,0,z), new THREE.Vector3(x,hEave,z), THEME.wallEdge, COL_R2); if (c) grp.add(c); };
-    addCol2(-hB, -hL);  addCol2(-hB,  hL);
-    addCol2( hB, -hL);  addCol2( hB,  hL);
+    addCol2(-hB + COL_R2, -hL + COL_R2);  addCol2(-hB + COL_R2,  hL - COL_R2);
+    addCol2( hB - COL_R2, -hL + COL_R2);  addCol2( hB - COL_R2,  hL - COL_R2);
     return grp;
   }
 
@@ -1047,10 +1050,10 @@ class Wind3DRenderer {
     /* Valley accent tube */
     const tV = this._tube(new THREE.Vector3(0,hValley,-hLo), new THREE.Vector3(0,hValley,hLo), THEME.ridge, EDGE_R);
     if (tV) grp.add(tV);
-    /* 2 center columns at valley ends (ground → valley height) */
+    /* 2 center columns at valley ends (ground → valley height, inset by COL_R) */
     const COL_R3 = EDGE_R * 2.5;
-    const cF = this._tube(new THREE.Vector3(0,0,-hL), new THREE.Vector3(0,hValley,-hL), THEME.wallEdge, COL_R3);
-    const cB = this._tube(new THREE.Vector3(0,0, hL), new THREE.Vector3(0,hValley, hL), THEME.wallEdge, COL_R3);
+    const cF = this._tube(new THREE.Vector3(0,0,-hL+COL_R3), new THREE.Vector3(0,hValley,-hL+COL_R3), THEME.wallEdge, COL_R3);
+    const cB = this._tube(new THREE.Vector3(0,0, hL-COL_R3), new THREE.Vector3(0,hValley, hL-COL_R3), THEME.wallEdge, COL_R3);
     if (cF) grp.add(cF);  if (cB) grp.add(cB);
     return grp;
   }
@@ -1595,6 +1598,7 @@ class Wind3DRenderer {
     }
 
     // ── B (Width) — Front face (z = +hL) ──────────────────────────────────
+    const _isFreeRoofDim = (roofShape === 'monoslope-free' || roofShape === 'pitched-free' || roofShape === 'troughed-free');
     const bZ = hL + 16;   // second dim: 16 ft from front face
     grp.add(this._buildDim(
       new THREE.Vector3(-hB, EPS_Y, bZ),
@@ -1626,8 +1630,9 @@ class Wind3DRenderer {
     ));
     this._dimHighlight['dim-L'] = grp.children[grp.children.length - 1];
 
-    // ── h_eave ────────────────────────────────────────────────────────────
+    // ── h_eave (skip for free roofs) ──────────────────────────────────────
     // monoslope: RIGHT face (LOW eave, x=+hB);  others: LEFT face (x=-hB)
+    if (!_isFreeRoofDim) {
     const hZhe  = 0;
     const hXhe  = _monoD ? (hB + 8) : (-hB - 8);
     const hXheSrc = _monoD ? hB : -hB;
@@ -1643,9 +1648,10 @@ class Wind3DRenderer {
       _monoD ? new THREE.Vector3(1,0,0) : new THREE.Vector3(-1,0,0)
     ));
     this._dimHighlight['dim-h-eave'] = grp.children[grp.children.length - 1];
+    } // end if !_isFreeRoofDim (h_eave)
 
-    // ── h (mean roof height) ──────────────────────────────────────────────
-    // monoslope: RIGHT face further out (x=+hB+16);  others: LEFT face
+    // ── h (mean roof height, skip for free roofs) ───────────────────────────
+    if (!_isFreeRoofDim) {
     const hZh   = 0;
     const hXh   = _monoD ? (hB + 16) : (-hB - 16);
     const hMean = (hEave + hRidge) / 2;
@@ -1663,11 +1669,12 @@ class Wind3DRenderer {
       _monoD ? new THREE.Vector3(1,0,0) : new THREE.Vector3(-1,0,0)
     ));
     this._dimHighlight['dim-h'] = grp.children[grp.children.length - 1];
+    } // end if !_isFreeRoofDim (h_mean)
 
     const aEY  = EPS_Y;
 
-    // ── Eave "a" — Front face corner ──────────────────────────────────────
-    // monoslope: LEFT/HIGH-eave corner (x=-hB);  others: RIGHT corner (x=+hB)
+    // ── Eave "a" dims (skip for free roofs — zone descriptor provides them) ──
+    if (!_isFreeRoofDim) {
     const aFZ  = hL + 8;
     const a2x0 = _monoD ? -hB           : (hB - zone_a);
     const a2x1 = _monoD ? (-hB + zone_a) : hB;
@@ -1685,6 +1692,7 @@ class Wind3DRenderer {
 
     // ── Eave "a" — Side face front corner ────────────────────────────────
     // monoslope: LEFT face (x=-hB);  others: RIGHT face (x=+hB)
+    // (still inside !_isFreeRoofDim block)
     const aRX    = _monoD ? (-hB - 12) : (hB + 12);   // +4 ft clear of 0.6h dim
     const aRXsrc = _monoD ? -hB : hB;
     grp.add(this._buildDim(
@@ -1699,6 +1707,7 @@ class Wind3DRenderer {
       _monoD ? new THREE.Vector3(-1,0,0) : new THREE.Vector3(1,0,0)
     ));
     this._dimHighlight['dim-a'] = grp.children[grp.children.length - 1];
+    } // end if !_isFreeRoofDim (a dims)
 
     // dim-a3/dim-a4 (base floor a= dims) removed — redundant with eave-level dims
 

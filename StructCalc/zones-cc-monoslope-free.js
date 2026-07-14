@@ -1,4 +1,4 @@
-/* zones-cc-monoslope-free.js  v1
+/* zones-cc-monoslope-free.js  v2
  * C&C Open Building — Monoslope Free Roof
  * ASCE 7-22 Fig. 30.5-1  (0.25 ≤ h/L ≤ 1.0, θ ≤ 45°)
  *
@@ -65,49 +65,47 @@
       addZone(u_a, 1 - u_a, 1 - v_a, 1,
               THEME.zone3, 0.65, 'zone-3', 0.12, ptFn, norm, doLabel);
 
-      /* ── Dimension lines (front face, v=1) ──────────────────────────── */
-      if (doLabel && mkSlopeDim && mkSlopeDimExt && THREE && THREE.CSS2DObject) {
-        const a_s  = zone_a.toFixed(1);
-        const a2_s = (2 * zone_a).toFixed(1);
+      /* ── Dimension lines — exactly 4 zone-strip "a" dims ───────────────
+         Along B (eave, u direction): strip widths at the front-gable face (v≈1)
+           Zone 3 along B: u  ∈ [0, u_a]        (HIGH-eave side strip)
+           Zone 2 along B: u  ∈ [u_a, u_2a]     (second strip inward)
+         Along L (gable, v direction): strip depths at the HIGH-eave edge (u≈0)
+           Zone 3 along L: v  ∈ [1-v_a, 1]      (front-gable strip)
+           Zone 2 along L: v  ∈ [1-v_2a, 1-v_a] (next strip inward)          */
+      if (doLabel && mkSlopeDim && THREE && THREE.CSS2DObject) {
+        const a_s = zone_a.toFixed(1);
 
-        /* Small inward offsets so dim line sits just outside the zone boundary */
-        const vIn  = Math.min(0.06, v_a  * 0.4);
-        const uIn  = Math.min(0.06, u_a  * 0.4);
+        /* v-position for "along B" dims — slightly inside the front gable edge */
+        const vF = Math.max(v_a + 0.01, 1 - v_a * 0.15);
 
-        /* ── "a" zone-3 gable depth (v direction), on HIGH-eave side ──── */
-        /* Dim outside zone-3 top strip (above v = 1 - v_a) */
-        const vDim3 = Math.max(0.02, 1 - v_a - vIn);
-        mkSlopeDimExt('a=' + a_s + 'ft',
-          ptFn(uIn,     vDim3, hB, hEave, hRidge, hL),
-          ptFn(uIn,     1,     hB, hEave, hRidge, hL),
-          [
-            [ptFn(0,    1 - v_a, hB, hEave, hRidge, hL), ptFn(uIn, 1 - v_a, hB, hEave, hRidge, hL)],
-            [ptFn(0,    1,       hB, hEave, hRidge, hL), ptFn(uIn, 1,       hB, hEave, hRidge, hL)],
-          ],
+        /* u-position for "along L" dims — at HIGH eave side edge */
+        const uE = Math.min(u_a * 0.15, 0.04);
+
+        /* Zone 3 along B — eave strip width, shown at front gable */
+        mkSlopeDim('a=' + a_s + 'ft',
+          ptFn(0,   vF, hB, hEave, hRidge, hL),
+          ptFn(u_a, vF, hB, hEave, hRidge, hL),
           norm);
 
-        /* ── "a" zone-3 eave strip width (u direction), on front gable ── */
-        const vFront = Math.max(0.96, 1 - v_a * 0.20);
-        mkSlopeDimExt('a=' + a_s + 'ft',
-          ptFn(0,    vFront, hB, hEave, hRidge, hL),
-          ptFn(u_a,  vFront, hB, hEave, hRidge, hL),
-          [
-            [ptFn(0,   1 - v_a, hB, hEave, hRidge, hL), ptFn(0,   vFront, hB, hEave, hRidge, hL)],
-            [ptFn(u_a, 1 - v_a, hB, hEave, hRidge, hL), ptFn(u_a, vFront, hB, hEave, hRidge, hL)],
-          ],
+        /* Zone 2 along B — second strip, same "a" width */
+        mkSlopeDim('a=' + a_s + 'ft',
+          ptFn(u_a,  vF, hB, hEave, hRidge, hL),
+          ptFn(u_2a, vF, hB, hEave, hRidge, hL),
           norm);
 
-        /* ── "2a" total (zone-3 + zone-2) gable depth on HIGH-eave side ─ */
-        const vDim2 = Math.max(0.02, 1 - v_2a - vIn);
-        mkSlopeDimExt('2a=' + a2_s + 'ft',
-          ptFn(u_2a + uIn, vDim2, hB, hEave, hRidge, hL),
-          ptFn(u_2a + uIn, 1,     hB, hEave, hRidge, hL),
-          [
-            [ptFn(u_2a, 1 - v_2a, hB, hEave, hRidge, hL), ptFn(u_2a + uIn, 1 - v_2a, hB, hEave, hRidge, hL)],
-            [ptFn(u_2a, 1,        hB, hEave, hRidge, hL), ptFn(u_2a + uIn, 1,        hB, hEave, hRidge, hL)],
-          ],
+        /* Zone 3 along L — gable strip depth, at HIGH-eave side */
+        mkSlopeDim('a=' + a_s + 'ft',
+          ptFn(uE, 1 - v_a, hB, hEave, hRidge, hL),
+          ptFn(uE, 1,       hB, hEave, hRidge, hL),
+          norm);
+
+        /* Zone 2 along L — next strip inward */
+        mkSlopeDim('a=' + a_s + 'ft',
+          ptFn(uE, 1 - v_2a, hB, hEave, hRidge, hL),
+          ptFn(uE, 1 - v_a,  hB, hEave, hRidge, hL),
           norm);
       }
     },
   };
 })();
+
