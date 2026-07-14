@@ -1,4 +1,4 @@
-/* zones-cc-pitched-free.js  v3
+/* zones-cc-pitched-free.js  v4
  * C&C Open Building — Pitched Free Roof
  * ASCE 7-22 Fig. 30.5-2  (0.25 <= h/L <= 1.0, theta <= 45 deg)
  *
@@ -16,12 +16,10 @@
   window.ZONE_DESCRIPTORS['cc-pitched-free'] = {
     drawZones(ctx) {
       const { addZone, mkSlopeDim, THEME, THREE,
-              u_zone, v_zone, zone_a, hB, hL, hEave, hRidge, doLabel } = ctx;
+              u_zone, v_zone, zone_a, hB, hL, hEave, hRidge, theta, doLabel } = ctx;
 
-      /* Slope angle from geometry */
-      const theta_deg = hB > 0
-        ? Math.atan2(Math.abs(hRidge - hEave), hB) * 180 / Math.PI
-        : 0;
+      /* Slope angle — use user input directly to avoid min(hB,hL) distortion */
+      const theta_deg = theta;
 
       /* ── Per-slope ptFn — same for both theta branches ────────────────── */
       /* Left slope: u=0 = left eave (low), u=1 = ridge (high)              */

@@ -2433,6 +2433,7 @@ class Wind3DRenderer {
     const ctx = {
       B: B + 2*_wo, L: L + 2*_wo, hB: hB_vis, hL: hL_vis,
       hEave_ft, hRidge_ft, hEave: hEave_vis, hRidge,
+      theta,
       zone_a, u_zone, u1, v_zone, v1,
       THEME, THREE,
       addZone,
