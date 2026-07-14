@@ -38,8 +38,8 @@ async function loadWindScripts() {
   await loadScriptTag('zones-cc-hip.js?v=1');
   await loadScriptTag('zones-cc-monoslope.js?v=2');
   await loadScriptTag('zones-cc-monoslope-free.js?v=3');
-  try { await loadScriptTag('zones-cc-pitched-free.js?v=2'); } catch(e) { console.warn('zones-cc-pitched-free load failed:', e); }
-  try { await loadScriptTag('zones-cc-troughed-free.js?v=2'); } catch(e) { console.warn('zones-cc-troughed-free load failed:', e); }
+  try { await loadScriptTag('zones-cc-pitched-free.js?v=3'); } catch(e) { console.warn('zones-cc-pitched-free load failed:', e); }
+  try { await loadScriptTag('zones-cc-troughed-free.js?v=3'); } catch(e) { console.warn('zones-cc-troughed-free load failed:', e); }
   await loadScriptTag('renderer.js?v=44');
   await loadScriptTag('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
   await loadScriptTag('map-module.js?v=3');
