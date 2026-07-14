@@ -1,4 +1,4 @@
-/* zones-cc-troughed-free.js  v1
+/* zones-cc-troughed-free.js  v2
  * C&C Open Building — Troughed Free Roof
  * ASCE 7-22 Fig. 30.5-3  (0.25 ≤ h/L ≤ 1.0, θ ≤ 45°)
  *
@@ -18,7 +18,7 @@
   window.ZONE_DESCRIPTORS['cc-troughed-free'] = {
     drawZones(ctx) {
       const { addZone, mkSlopeDim, THEME, THREE,
-              u_zone, v_zone, zone_a, hB, hL, hEave, hRidge, doLabel } = ctx;
+              u_zone, v_zone, zone_a, hB, hL, hEave, hRidge, ptFn, norm, doLabel } = ctx;
 
       /* hEave = hValley (low), hRidge = hSide (high outer) */
       const theta_deg = hB > 0
@@ -26,21 +26,14 @@
         : 0;
 
       if (theta_deg < 10) {
-        /* ── Full-roof treatment ─────────────────────────────────────────── */
-        /* u=0: left outer (high), u=0.5: valley (low), u=1: right outer (high) */
-        const ptTrough = (u, v, _b, _e, _r, _l) => {
-          const x = -_b + u * 2 * _b;
-          const y = (u <= 0.5) ? _r + u * 2 * (_e - _r) : _e + (u - 0.5) * 2 * (_r - _e);
-          return new THREE.Vector3(x, y, v * 2 * _l - _l);
-        };
-        const fNorm = new THREE.Vector3(0, 1, 0);
-
+        /* ── Full-roof treatment — same layout as monoslope-free ────────── */
+        /* ptFn and norm come from the dispatcher (renderer.js)             */
         const u_a  = Math.min(u_zone / 2, 0.30);
         const u_2a = Math.min(u_zone,     0.45);
         const v_a  = Math.min(v_zone,     0.30);
         const v_2a = Math.min(2 * v_zone, 0.45);
         _rings(addZone, mkSlopeDim, THEME, THREE, zone_a,
-               hB, hL, hEave, hRidge, u_a, u_2a, v_a, v_2a, ptTrough, fNorm, doLabel);
+               hB, hL, hEave, hRidge, u_a, u_2a, v_a, v_2a, ptFn, norm, doLabel);
 
       } else {
         /* ── Per-slope treatment ─────────────────────────────────────────── */

@@ -2499,10 +2499,26 @@ class Wind3DRenderer {
         .drawZones({ ...ctx, addZone: addZoneM, ptFn: ptMono, norm: monoNorm, doLabel: true });
 
     } else if (_shape === 'pitched-free' && window.ZONE_DESCRIPTORS['cc-pitched-free']) {
-      window.ZONE_DESCRIPTORS['cc-pitched-free'].drawZones({ ...ctx, doLabel: true });
+      /* Full-roof ptFn for θ<10° flat treatment (same UV math as monoslope-free):
+         u=0: left eave, u=0.5: ridge, u=1: right eave                           */
+      const ptPF = (u,v,_b,_e,_r,_l) => {
+        const x = -_b + u*2*_b;
+        const y = (u <= 0.5) ? _e + u*2*(_r-_e) : _r + (u-0.5)*2*(_e-_r);
+        return new THREE.Vector3(x, y, v*2*_l - _l);
+      };
+      const pfNorm = new THREE.Vector3(0, 1, 0);
+      window.ZONE_DESCRIPTORS['cc-pitched-free'].drawZones({ ...ctx, ptFn: ptPF, norm: pfNorm, doLabel: true });
 
     } else if (_shape === 'troughed-free' && window.ZONE_DESCRIPTORS['cc-troughed-free']) {
-      window.ZONE_DESCRIPTORS['cc-troughed-free'].drawZones({ ...ctx, doLabel: true });
+      /* Full-roof ptFn for θ<10° flat treatment:
+         u=0: left outer (high), u=0.5: valley (low), u=1: right outer (high)     */
+      const ptTF = (u,v,_b,_e,_r,_l) => {
+        const x = -_b + u*2*_b;
+        const y = (u <= 0.5) ? _r + u*2*(_e-_r) : _e + (u-0.5)*2*(_r-_e);
+        return new THREE.Vector3(x, y, v*2*_l - _l);
+      };
+      const tfNorm = new THREE.Vector3(0, 1, 0);
+      window.ZONE_DESCRIPTORS['cc-troughed-free'].drawZones({ ...ctx, ptFn: ptTF, norm: tfNorm, doLabel: true });
 
     } else if (_shape === 'hip') {
       window.ZONE_DESCRIPTORS['cc-hip'].drawZones(ctx);
