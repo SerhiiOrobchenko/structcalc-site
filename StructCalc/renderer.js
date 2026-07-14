@@ -975,6 +975,11 @@ class Wind3DRenderer {
     /* High-eave accent tube */
     const tH = this._tube(new THREE.Vector3(-hBo,hHighOh,-hLo), new THREE.Vector3(-hBo,hHighOh,hLo), THEME.ridge, EDGE_R);
     if (tH) grp.add(tH);
+    /* 4 corner columns (ground → roof eave at each corner) */
+    const COL_R = EDGE_R * 2.5;
+    const addCol1 = (x, z, ht) => { const c = this._tube(new THREE.Vector3(x,0,z), new THREE.Vector3(x,ht,z), THEME.wallEdge, COL_R); if (c) grp.add(c); };
+    addCol1(-hB, -hL, hHigh);  addCol1(-hB,  hL, hHigh);
+    addCol1( hB, -hL, hLow);   addCol1( hB,  hL, hLow);
     return grp;
   }
 
@@ -1005,6 +1010,11 @@ class Wind3DRenderer {
     /* Ridge tube */
     const tR = this._tube(new THREE.Vector3(0,hRidge,-hLo), new THREE.Vector3(0,hRidge,hLo), THEME.ridge, EDGE_R);
     if (tR) grp.add(tR);
+    /* 4 corner columns (ground → eave height) */
+    const COL_R2 = EDGE_R * 2.5;
+    const addCol2 = (x, z) => { const c = this._tube(new THREE.Vector3(x,0,z), new THREE.Vector3(x,hEave,z), THEME.wallEdge, COL_R2); if (c) grp.add(c); };
+    addCol2(-hB, -hL);  addCol2(-hB,  hL);
+    addCol2( hB, -hL);  addCol2( hB,  hL);
     return grp;
   }
 
@@ -1037,6 +1047,11 @@ class Wind3DRenderer {
     /* Valley accent tube */
     const tV = this._tube(new THREE.Vector3(0,hValley,-hLo), new THREE.Vector3(0,hValley,hLo), THEME.ridge, EDGE_R);
     if (tV) grp.add(tV);
+    /* 2 center columns at valley ends (ground → valley height) */
+    const COL_R3 = EDGE_R * 2.5;
+    const cF = this._tube(new THREE.Vector3(0,0,-hL), new THREE.Vector3(0,hValley,-hL), THEME.wallEdge, COL_R3);
+    const cB = this._tube(new THREE.Vector3(0,0, hL), new THREE.Vector3(0,hValley, hL), THEME.wallEdge, COL_R3);
+    if (cF) grp.add(cF);  if (cB) grp.add(cB);
     return grp;
   }
 
@@ -2696,7 +2711,8 @@ class Wind3DRenderer {
        Zone 5: vertical end strip width 'a' at each corner of every facade
        Zone 4: rest of wall field
        Drawn as flat quads offset 0.05 ft from each wall face.              */
-    if (_shape !== 'stepped') {
+    const _isFreeRoof3D = ['monoslope-free','pitched-free','troughed-free'].indexOf(_shape) !== -1;
+    if (_shape !== 'stepped' && !_isFreeRoof3D) {
       this._drawWallZones(B, L, hEave, hRidge, zone_a, matZ, _shape);
     }
 
