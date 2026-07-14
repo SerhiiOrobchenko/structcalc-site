@@ -193,11 +193,16 @@ const CP_ROOF_NTR = {
 
 // Figure 30.3-2A, Roof (theta <= 7 deg) — GCp vs effective wind area A (sf), log-linear A=10..500
 const GCP_ROOF_LE7 = {
+  // Figure 30.3-2A (gable/flat roof, theta <= 7 deg, h <= 60 ft)
+  // Anchor points verified against uploaded Fig. 30.3-2A digitized chart data.
+  // Neg: log-linear from Alo to Ahi=500; Pos: log-linear from Alo=10 to Ahi=100.
+  // Zone 1' neg is flat -0.9 from A=1 to A=100, then decreases to -0.4 at A=500.
   Alo: 10, Ahi: 500,
-  '1p': { neg: { lo: -0.9, hi: -1.0 }, pos: { lo: 0.3, hi: 0.2 } },
-  '1': { neg: { lo: -1.7, hi: -0.4 }, pos: { lo: 0.3, hi: 0.2 } },
-  '2': { neg: { lo: -2.3, hi: -1.0 }, pos: { lo: 0.3, hi: 0.2 } },
-  '3': { neg: { lo: -3.2, hi: -1.4 }, pos: { lo: 0.3, hi: 0.2 } }
+  posAhi: 100,  // positive GCp reaches 0.2 at A=100 (flat from 100 to 1000)
+  '1p': { neg: { lo: -0.9, hi: -0.4, Alo: 100 }, pos: { lo: 0.3, hi: 0.2 } },
+  '1':  { neg: { lo: -1.7, hi: -1.0 },            pos: { lo: 0.3, hi: 0.2 } },
+  '2':  { neg: { lo: -2.3, hi: -1.4 },            pos: { lo: 0.3, hi: 0.2 } },
+  '3':  { neg: { lo: -3.2, hi: -1.4 },            pos: { lo: 0.3, hi: 0.2 } }
 };
 
 // Figures 30.3-2B (gable, 7° < theta <= 20°) and 30.3-2C (gable, 20° < theta <= 27°)
@@ -618,10 +623,11 @@ function gcpWall(zone, A) {
   };
 }
 function gcpRoof(zone, A) {
-  const z = GCP_ROOF_LE7[zone];
+  const z   = GCP_ROOF_LE7[zone];
+  const nAlo = z.neg.Alo || GCP_ROOF_LE7.Alo;  // Zone 1' starts at A=100
   return {
-    neg: logLerpA(A, GCP_ROOF_LE7.Alo, GCP_ROOF_LE7.Ahi, z.neg.lo, z.neg.hi),
-    pos: logLerpA(A, GCP_ROOF_LE7.Alo, GCP_ROOF_LE7.Ahi, z.pos.lo, z.pos.hi)
+    neg: logLerpA(A, nAlo,              GCP_ROOF_LE7.Ahi,    z.neg.lo, z.neg.hi),
+    pos: logLerpA(A, GCP_ROOF_LE7.Alo, GCP_ROOF_LE7.posAhi, z.pos.lo, z.pos.hi)
   };
 }
 
