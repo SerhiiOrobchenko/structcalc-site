@@ -219,7 +219,7 @@ const GCP_ROOF_LE7 = {
 // label, since 7°<theta<=20° was the band used for cross-validation).
 const GCP_ROOF_GABLE = {
   Alo: 10,
-  maxTheta: 27, // figures do not extend past 27°; theta > 27° is capped at the 2C (20°-27°) values
+  maxTheta: 45, // theta > 45° is capped at the 2D (27°-45°) values
   bands: [
     { // Fig. 30.3-2B, 7° < theta <= 20°
       thetaMax: 20, fig: '30.3-2B',
@@ -232,11 +232,17 @@ const GCP_ROOF_GABLE = {
       '1': { neg: { lo: -1.5, hi: -0.8, Ahi: 200 }, pos: { lo: 0.6, hi: 0.3, Ahi: 200 } },
       '2': { neg: { lo: -2.5, hi: -1.2, Ahi: 100 }, pos: { lo: 0.6, hi: 0.3, Ahi: 200 } },
       '3': { neg: { lo: -3.0, hi: -1.4, Ahi: 100 }, pos: { lo: 0.6, hi: 0.3, Ahi: 200 } }
+    },
+    { // Fig. 30.3-2D, 27° < theta <= 45°
+      thetaMax: 45, fig: '30.3-2D',
+      '1': { neg: { lo: -1.8, hi: -0.8, Ahi: 100 }, pos: { lo: 0.9, hi: 0.5, Ahi: 200 } },
+      '2': { neg: { lo: -2.0, hi: -1.0, Ahi: 200 }, pos: { lo: 0.9, hi: 0.5, Ahi: 200 } },
+      '3': { neg: { lo: -2.5, hi: -1.0, Ahi: 200 }, pos: { lo: 0.9, hi: 0.5, Ahi: 200 } }
     }
   ]
 };
 
-// Figures 30.3-2D-2G (hip roof, 7° < theta <= 45°), Roof Zones 1, 2, 3 — GCp vs effective
+// Figures 30.3-2E-2G (hip roof, 7° < theta <= 45°), Roof Zones 1, 2, 3 — GCp vs effective
 // wind area A (sf), log-linear A=Alo..Ahi. Alo = 10 sf throughout; positive GCp is shared
 // across all zones and all theta > 7° (Ahi = 100 sf).
 //
@@ -251,13 +257,13 @@ const GCP_ROOF_HIP = {
   maxTheta: 45, // theta > 45° is capped at the theta=45° endpoint values
   pos: { lo: 0.7, hi: 0.3, Ahi: 100 }, // shared for all zones, all theta > 7°
   bands: [
-    { // Figs. 30.3-2D/2E equivalent, 7° < theta <= 20° (7°-10° and 10°-20° bands are identical for zones 1-3)
+    { // Figs. 30.3-2E/2F equivalent, 7° < theta <= 20° (7°-10° and 10°-20° bands are identical for zones 1-3)
       thetaMax: 20,
       '1': { neg: { lo: -1.8, hi: -0.8, Ahi: 200 } },
       '2': { neg: { lo: -2.4, hi: -1.3, Ahi: 200 } },
       '3': { neg: { lo: -2.6, hi: -1.4, Ahi: 200 } }
     },
-    { // Fig. 30.3-2F equivalent, 20° < theta <= 27°
+    { // Fig. 30.3-2F/2G equivalent, 20° < theta <= 27°
       thetaMax: 27,
       '1': { neg: { lo: -1.4, hi: -0.8, Ahi: 100 } },
       '2': { neg: { lo: -2.0, hi: -1.0, Ahi: 100 } },
@@ -632,9 +638,9 @@ function gcpRoof(zone, A) {
 }
 
 // Roof C&C for theta > 7 deg, zones 1/2/3 only (no zone 1' on Figs. 30.3-2B-G).
-// roofShape: 'gable' -> Figs. 30.3-2B (7°-20°) / 2C (20°-27°); 'hip' -> Figs. 30.3-2D-G
+// roofShape: 'gable' -> Figs. 30.3-2B (7°-20°) / 2C (20°-27°) / 2D (27°-45°); 'hip' -> Figs. 30.3-2E-G
 // equivalent (7°-20° / 20°-27° / 27°-45° interpolated). theta beyond the figure's range
-// (27° gable, 45° hip) is capped at the last band's values and flagged via `capped`.
+// (45° gable, 45° hip) is capped at the last band's values and flagged via `capped`.
 function gcpRoofSloped(zone, A, theta, roofShape) {
   const Alo = GCP_ROOF_GABLE.Alo; // = 10 sf for both gable and hip tables
   let capped = false;
@@ -664,9 +670,11 @@ function gcpRoofSloped(zone, A, theta, roofShape) {
     let band;
     if (theta <= 20) {
       band = t.bands[0];
-    } else {
+    } else if (theta <= 27) {
       band = t.bands[1];
-      if (theta > 27) capped = true;
+    } else {
+      band = t.bands[2];
+      if (theta > 45) capped = true;
     }
     negDef = band[zone].neg;
     posDef = band[zone].pos;
