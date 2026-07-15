@@ -147,29 +147,29 @@ const GCP_WALL = {
 //
 // GCp source: ASCE 7-16 Fig. 30.6-1 → renumbered ASCE 7-22 Fig. 30.4-1.
 // ⚠️ Fig. 30.4-1 revised in Errata 1 (2024-09-20) — verify against current ASCE 7-22.
-// Wall   Zone 4: GCp+ +0.9→+0.6, GCp− −2.3→−1.6  (A = 10→500 sf; [1,−0.9] ignored)
+// Wall   Zone 4: GCp+ +0.9→+0.6, GCp− −0.9→−0.7  (A = 20→500 sf)
 // Wall   Zone 5: GCp+ +0.9→+0.6, GCp− −1.8→−1.0  (A = 20→500 sf)
-// Roof   Zone 1: GCp+ +0.3 (const), GCp− −0.9→−0.7  (A = 20→500 sf)
+// Roof   Zone 1: GCp+ +0.3 (const), GCp− −1.4→−0.9  (A = 10→500 sf)
 // Roof   Zone 2: GCp+ +0.3 (const), GCp− −2.3→−1.6  (A = 10→500 sf)
 // Roof   Zone 3: GCp+ +0.3 (const), GCp− −3.2→−2.3  (A = 10→500 sf)
 // ─────────────────────────────────────────────────────────────────────────────
 const GCP_WALL_P2 = {
   Alo: 20, Ahi: 500,
   // Fig. 30.4-1 (ASCE 7-22, verified against digitized anchor points).
-  // Zone 4 neg: Alo=10 (chart breakpoint); [1,−0.9] is below min. area and ignored.
+  // Zone 4 neg: Alo=20, flat A=1→20 at −0.9, log-linear to −0.7 at A=500.
+  // Zone 5 neg: Alo=20, flat A=1→20 at −1.8, log-linear to −1.0 at A=500.
   // Positive: Zones 4 & 5 share one curve (lo at Alo=20, hi at Ahi=500).
-  '4': { neg: { lo: -2.3, hi: -1.6, Alo: 10 }, pos: { lo: 0.9, hi: 0.6 } },
-  '5': { neg: { lo: -1.8, hi: -1.0 },           pos: { lo: 0.9, hi: 0.6 } }
+  '4': { neg: { lo: -0.9, hi: -0.7 }, pos: { lo: 0.9, hi: 0.6 } },
+  '5': { neg: { lo: -1.8, hi: -1.0 }, pos: { lo: 0.9, hi: 0.6 } }
 };
 const GCP_ROOF_P2_FLAT = {
   Alo: 10, Ahi: 500,
   // Fig. 30.4-1 (ASCE 7-22, verified against digitized anchor points).
-  // Zone 1 neg: Alo=20 (curve changes from A=1 to A=20; use A=20 as minimum).
-  // Zones 2 & 3 neg: flat A=1→10, then log-linear to A=500; Alo=10.
+  // All roof zones: flat A=1→10 at lo value, log-linear to hi at A=500; Alo=10.
   // Positive GCp for roof zones not separately digitized; retained from prior version.
-  '1': { neg: { lo: -0.9, hi: -0.7, Alo: 20 }, pos: { lo: 0.3, hi: 0.3 } },
-  '2': { neg: { lo: -2.3, hi: -1.6 },           pos: { lo: 0.3, hi: 0.3 } },
-  '3': { neg: { lo: -3.2, hi: -2.3 },           pos: { lo: 0.3, hi: 0.3 } }
+  '1': { neg: { lo: -1.4, hi: -0.9 }, pos: { lo: 0.3, hi: 0.3 } },
+  '2': { neg: { lo: -2.3, hi: -1.6 }, pos: { lo: 0.3, hi: 0.3 } },
+  '3': { neg: { lo: -3.2, hi: -2.3 }, pos: { lo: 0.3, hi: 0.3 } }
 };
 
 // ── Ch.27 / Fig. 27.3-1 — Sloped Roof Cp, Wind Normal to Ridge (θ ≥ 10°) ──────────────────────────
