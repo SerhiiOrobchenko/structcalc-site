@@ -716,7 +716,7 @@ function buildCCStepReport(r, s) {
     if (s.theta <= 7) {
       figRows.push(["Flat/low-slope roof (θ ≤ 7°, Zones 1', 1, 2, 3)", 'Fig. 30.3-2A', '']);
     } else if (s.roofShape === 'gable') {
-      figRows.push(['Gable roof (θ > 7°, Zones 1, 2, 3)', 'Figs. 30.3-2B/2C', 'θ ≤ 27° from figures' + (r.roofCapped ? '; ⚠ capped' : '')]);
+      figRows.push(['Gable roof (θ > 7°, Zones 1, 2, 3)', 'Figs. 30.3-2B/2C/2D', 'θ ≤ 45° from figures' + (r.roofCapped ? '; ⚠ capped at 45°' : '')]);
     } else if (s.roofShape === 'hip') {
       figRows.push(['Hip roof (θ > 7°, Zones 1, 2, 3)', 'Figs. 30.3-2D–2G', r.roofCapped ? '⚠ capped at max θ' : '']);
     }
@@ -2873,7 +2873,7 @@ const WIND_INFO = {
       <p>Key thresholds that change which figure and zone layout apply:</p>
       <p>• <b>θ ≤ 7°</b> — flat roof zone layout (Fig. 30.3-2A); (GC<sub>pf</sub>) from
       Fig. 28.3-1 Zone 2/3 with θ = 0 row.</p>
-      <p>• <b>7° &lt; θ ≤ 27°</b> — gable/hip zone layout with upwind corner intensification;
+      <p>• <b>7° &lt; θ ≤ 45°</b> — gable/hip zone layout with upwind corner intensification;
       Figs. 30.3-2B/C for gable, 30.3-2D–G for hip.</p>
       <p>• <b>θ &gt; 10°</b> — MWFRS Ch. 27 sloped roof Cp values (Fig. 27.3-1) apply in
       addition to envelope approach.</p>

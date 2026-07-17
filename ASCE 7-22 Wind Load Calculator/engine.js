@@ -250,6 +250,10 @@ const GCP_ROOF_GABLE = {
 };
 
 // Figures 30.3-2E-2G (hip roof, 7° < theta <= 45°), Roof Zones 1, 2, 3 — GCp vs effective
+// NOTE: ASCE 7-22 has no separate C&C figure for hip roofs at theta <= 7°.
+// For theta <= 7° the flat-roof Fig. 30.3-2A (gcpRoof()) is used regardless of
+// roof shape. This is consistent with Sec. 30.3.2's reference to Fig. 30.3-2A
+// for all roof types with theta <= 7° and is the standard engineering practice.
 // wind area A (sf), log-linear A=Alo..Ahi. Alo = 10 sf throughout; positive GCp is shared
 // across all zones and all theta > 7° (Ahi = 100 sf).
 //
@@ -646,6 +650,7 @@ function gcpRoof(zone, A) {
 
 // Roof C&C for theta > 7 deg, zones 1/2/3 only (no zone 1' on Figs. 30.3-2B-G).
 // roofShape: 'gable' -> Figs. 30.3-2B (7°-20°) / 2C (20°-27°) / 2D (27°-45°); 'hip' -> Figs. 30.3-2E-G
+// For theta <= 7°, both gable and hip use gcpRoof() (Fig. 30.3-2A) — callers handle this.
 // equivalent (7°-20° / 20°-27° / 27°-45° interpolated). theta beyond the figure's range
 // (45° gable, 45° hip) is capped at the last band's values and flagged via `capped`.
 function gcpRoofSloped(zone, A, theta, roofShape) {
@@ -1688,9 +1693,9 @@ function compute(s) {
 
   // --- C&C Roof ---
   // theta <= 7 deg: Fig. 30.3-2A, zones 1', 1, 2, 3.
-  // theta > 7 deg, roofShape gable/hip: Figs. 30.3-2B/2C (gable) or 2D-2G equivalent
+  // theta > 7 deg, roofShape gable/hip: Figs. 30.3-2B/2C/2D (gable) or 2E-2G equivalent
   // (hip), zones 1, 2, 3 (no zone 1' on the sloped-roof figures). theta beyond the
-  // figures' range (27° gable, 45° hip) is capped at the last band's values and
+  // figures' range (45° gable or hip) is capped at the last band's values and
   // flagged via roofCapped.
   // theta > 7 deg, roofShape monoslope: this generic gable/hip table does NOT apply
   // (a monoslope roof has no ridge) — left empty; the dedicated Fig. 30.3-5A/5B
@@ -3496,7 +3501,7 @@ function reportCC30P2HTML(r) {
     const figRef  = rs.shape === 'hip' ? 'Figs. 30.3-2D&ndash;G equiv.' : 'Figs. 30.3-2B/2C';
     const capMsg  = rs.shape === 'hip'
       ? 'Roof angle &theta; &gt; 45&deg;: Figs. 30.3-2D&ndash;G (hip) do not extend past &theta; = 45&deg;. The &theta; = 45&deg; coefficients are used as a capped approximation &mdash; verify against the Standard.'
-      : 'Roof angle &theta; &gt; 27&deg;: Figs. 30.3-2B/2C (gable) do not extend past &theta; = 27&deg;. The &theta; = 20&deg;&ndash;27&deg; (Fig. 30.3-2C) coefficients are used as a capped approximation &mdash; verify against the Standard.';
+      : 'Roof angle &theta; &gt; 45&deg;: Figs. 30.3-2B/2C/2D (gable) do not extend past &theta; = 45&deg;. The &theta; = 45&deg; (Fig. 30.3-2D) coefficients are used as a capped approximation &mdash; verify against the Standard.';
     html += '<h3>Roof C&amp;C &mdash; Zones 1, 2, 3 (&theta; &gt; 7&deg;) <span class="ref">' + figRef + ', per Fig. 30.4-1 Note 6</span></h3>';
     html += '<p class="muted" style="margin:0 0 8px;">' +
       'Fig. 30.4-1 Note 6: for &theta; &gt; 7&deg;, use GC<sub>p</sub> from Part 1 figures (Fig. 30.3-2A&ndash;I) with attendant q<sub>h</sub>. ' +
@@ -4382,7 +4387,7 @@ function reportCCHTML(r) {
     if (s.theta > 7 && r.roofCapped) {
       html += '<div class="alert warn">' + (s.roofShape === 'hip'
         ? 'Roof angle &theta; &gt; 45&deg;: Figures 30.3-2D&ndash;G (hip) do not extend past &theta; = 45&deg;. The &theta; = 45&deg; coefficients are used as a capped approximation &mdash; verify against the Standard for roofs steeper than 45&deg;.'
-        : 'Roof angle &theta; &gt; 27&deg;: Figures 30.3-2B/2C (gable) do not extend past &theta; = 27&deg;. The &theta; = 20&deg;&ndash;27&deg; (Fig. 30.3-2C) coefficients are used as a capped approximation &mdash; verify against the Standard for roofs steeper than 27&deg;.') + '</div>';
+        : 'Roof angle &theta; &gt; 45&deg;: Figures 30.3-2B/2C/2D (gable) do not extend past &theta; = 45&deg;. The &theta; = 45&deg; (Fig. 30.3-2D) coefficients are used as a capped approximation &mdash; verify against the Standard for roofs steeper than 45&deg;.') + '</div>';
     }
     html += zoneTableHTML(r.ccRoof, true);
   }
@@ -6937,7 +6942,7 @@ const INFO_CONTENT = {
     <p><strong>Interpolation formula</strong> &mdash; for &theta; between two tabulated rows &theta;<sub>1</sub> &lt; &theta; &lt; &theta;<sub>2</sub>:</p>
     <p>(GC<sub>pf</sub>)(&theta;) = (GC<sub>pf</sub>)(&theta;<sub>1</sub>) + [(&theta; &minus; &theta;<sub>1</sub>) / (&theta;<sub>2</sub> &minus; &theta;<sub>1</sub>)] &times; [(GC<sub>pf</sub>)(&theta;<sub>2</sub>) &minus; (GC<sub>pf</sub>)(&theta;<sub>1</sub>)]</p>
     <p>&theta; below the lowest tabulated row or above the highest is clamped to that row's value (no extrapolation).</p>
-    <p>&theta; &gt; 27&deg; (gable) or &gt; 45&deg; (hip) is beyond the range of the digitized figures; the calculator caps the roof C&amp;C coefficients at the highest tabulated &theta; band and flags this in a note above the roof C&amp;C table. MWFRS results remain valid for all &theta; up to 90&deg;.</p>`
+    <p>&theta; &gt; 45&deg; (gable or hip) is beyond the range of the digitized figures; the calculator caps the roof C&amp;C coefficients at the highest tabulated &theta; band (Fig. 30.3-2D for gable, Fig. 30.3-2G for hip) and flags this in a note above the roof C&amp;C table. MWFRS results remain valid for all &theta; up to 90&deg;.</p>`
   },
   roofShape: {
     title: 'Roof Shape — Figs. 30.3-2B/2C (gable) vs 30.3-2D–G (hip)',
