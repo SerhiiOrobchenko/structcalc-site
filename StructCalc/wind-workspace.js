@@ -2094,6 +2094,7 @@ function updateCCDependentUI() {
   /* Filter Roof Profile dropdown based on enclosure type (§26.2):
      Open building → only free-roof options; all others → standard profiles */
   applyRoofProfileFilter(isOpen);
+  updateThetaWarn();
 }
 
 /* Rebuild Roof Profile select to match enclosure type:
@@ -2371,6 +2372,15 @@ function wireWindInputs() {
 
 }
 
+/* ── θ > 45° warning for open building free roofs ───────────────────── */
+function updateThetaWarn() {
+  var el = document.getElementById('windThetaWarn');
+  if (!el) return;
+  var encEl = document.getElementById('wind-enclosure');
+  var isOpen = encEl ? (encEl.value === 'open') : false;
+  el.style.display = (isOpen && readThetaDegrees() > 45) ? '' : 'none';
+}
+
 /* ── Pitch toggle: deg ↔ X:12 with live conversion display ────────────── */
 /* ── Pitch toggle: deg ↔ X:12 with live conversion display ────────────── */
 function wirePitchToggle() {
@@ -2393,6 +2403,7 @@ function wirePitchToggle() {
       var deg = Math.atan(val / 12) * 180 / Math.PI;
       noteEl.textContent = '= ' + deg.toFixed(1) + '°';
     }
+    updateThetaWarn();
   }
 
   function setMode(mode) {
