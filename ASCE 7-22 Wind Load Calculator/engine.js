@@ -1152,6 +1152,7 @@ function computeCC30Sec305(s) {
   return {
     shape, obstr, theta, h, hL, Lmin, A, a, areaIdx, areaLabel,
     KD, G, kh, ke, kztObj, qh, coeff, zones, warnings,
+    thetaCapped: theta > 45,
     eqRef: 'Eq. 30.5-1', figRef: 'Figs. 30.5-1/2/3'
   };
 }
@@ -1174,7 +1175,9 @@ function reportCC30Sec305HTML(r) {
   html += '<table class="report-tbl"><thead><tr><th>Parameter</th><th>Value</th><th>Reference</th></tr></thead><tbody>';
   html += '<tr><td>Roof type</td><td>' + shapeLabel + ' free roof</td><td>Fig. 30.5-' + (c.shape==='monoslope'?'1':c.shape==='pitched'?'2':'3') + '</td></tr>';
   html += '<tr><td>Wind flow</td><td>' + (c.obstr ? 'Obstructed (&gt;50% blockage)' : 'Clear (&le;50% blockage)') + '</td><td>Fig. 30.5-1 Note 2</td></tr>';
-  html += '<tr><td>Roof angle, &theta;</td><td>' + fmt(c.theta,1) + '&deg;</td><td>—</td></tr>';
+  html += '<tr><td>Roof angle, &theta;</td><td>' + fmt(c.theta,1) + '&deg;'
+    + (c.thetaCapped ? ' <span style="color:var(--warn,#b45309);font-size:.85em">(capped at 45&deg; &mdash; outside Fig. 30.5 range; values for &theta;&nbsp;=&nbsp;45&deg; applied)</span>' : '')
+    + '</td><td>—</td></tr>';
   html += '<tr><td>Mean roof height, h</td><td>' + fmt(c.h,2) + ' ' + lenU + '</td><td>—</td></tr>';
   html += '<tr><td>h / L</td><td>' + fmt(c.hL,3) + '</td><td>0.25 &le; h/L &le; 1.0 required</td></tr>';
   html += '<tr><td>Least plan dimension, L<sub>min</sub></td><td>' + fmt(c.Lmin,2) + ' ' + lenU + '</td><td>Fig. 30.5-1 Notation</td></tr>';
@@ -6054,6 +6057,7 @@ function bindInputs() {
   document.getElementById('theta').addEventListener('input', e => {
     const v = parseFloat(e.target.value);
     state.theta = isNaN(v) ? 0 : v;
+    _updateOpenThetaWarn();
     renderResults();
   });
   document.getElementById('areaWall').addEventListener('input', e => {
@@ -6688,6 +6692,12 @@ function applyGenericRoofControlsVisibility() {
 // hide the normal MWFRS/C&C mode toggle and Cp/GCpi-based result sections (via the
 // 'enclosure-open' body class, see CSS), and show the Open Building geometry/wind-flow
 // inputs (#openRoofInputs) and results panel (#openRoofSection, toggled in renderOpenRoof).
+function _updateOpenThetaWarn() {
+  const el = document.getElementById('openThetaWarn');
+  if (!el) return;
+  el.style.display = (state.enclosure === 'openFreeRoof' && state.theta > 45) ? '' : 'none';
+}
+
 function applyEnclosureVisibility() {
   const isOpen = state.enclosure === 'openFreeRoof';
   document.body.classList.toggle('enclosure-open', isOpen);
@@ -6695,6 +6705,7 @@ function applyEnclosureVisibility() {
   modRoot.classList.toggle('enclosure-open', isOpen);
   const inputs = document.getElementById('openRoofInputs');
   if (inputs) inputs.style.display = isOpen ? '' : 'none';
+  _updateOpenThetaWarn();
 }
 
 function applyStructureCategoryVisibility() {
